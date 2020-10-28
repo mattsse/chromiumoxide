@@ -1,19 +1,26 @@
 [package]
 name = "chromeoxid"
 version = "0.1.0"
-authors = ["mattsse <matthias.seitz@tum.de>"]
+authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "MIT OR APACHE-2.0"
+readme = "README.md"
+repository = "https://github.com/mattsse/chromeoxid"
 
 [dependencies]
-async-tungstenite = "0.10.0"
-serde = "1.0.117"
-async-std = "1.6.5"
-anyhow = "1.0.33"
-regex = "1.4.1"
+async-tungstenite = "0.10"
+serde = "1.0"
+async-std = "1.6"
+anyhow = "1.0"
+regex = "1.4"
+futures = "0.3"
 
 [dev-dependencies]
-quote = "1.0.7"
-proc-macro2 = "1.0.24"
-chrono = "0.4.19"
+quote = "1.0"
+proc-macro2 = "1.0"
+chrono = "0.4"
+
+[workspace]
+members = [
+    "chromeoxid-pdl"
+]
