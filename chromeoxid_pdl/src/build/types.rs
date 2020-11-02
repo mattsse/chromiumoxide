@@ -116,6 +116,14 @@ impl<'a> DomainDatatype<'a> {
             _ => None,
         }
     }
+
+    pub fn raw_name(&self) -> &'a str {
+        match self {
+            DomainDatatype::Type(ty) => ty.raw_name.as_ref(),
+            DomainDatatype::Commnad(cmd) => cmd.raw_name.as_ref(),
+            DomainDatatype::Event(ev) => ev.raw_name.as_ref(),
+        }
+    }
 }
 
 impl<'a> DataType for DomainDatatype<'a> {

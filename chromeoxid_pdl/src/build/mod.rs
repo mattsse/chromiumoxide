@@ -1,6 +1,8 @@
-pub mod fixup;
+mod fixup;
 pub mod generator;
-pub mod types;
+mod types;
+
+pub use crate::build::generator::{compile_pdls, Generator, SerdeSupport};
 
 pub const CHROMIUM_BASE: &str = "https://chromium.googlesource.com/chromium/src";
 

@@ -5,6 +5,9 @@ chromeoxid
 [![Documentation](https://docs.rs/chromeoxid/badge.svg)](https://docs.rs/chromeoxid)
 
 
+## Generated Code
+`chromeoxid` generates Rust code from `*.pdl` files.
+
 ## License
 
 Licensed under either of these:
@@ -14,3 +17,8 @@ Licensed under either of these:
  * MIT license ([LICENSE-MIT](LICENSE-MIT) or
    https://opensource.org/licenses/MIT)
    
+
+## References
+
+* [chromedp](https://github.com/chromedp/chromedp)
+* [rust-headless-chrome](https://github.com/Edu4rdSHL/rust-headless-chrome)

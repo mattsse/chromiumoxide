@@ -7,13 +7,20 @@ license = "MIT OR APACHE-2.0"
 readme = "README.md"
 repository = "https://github.com/mattsse/chromeoxid"
 
+[build-dependencies]
+chromeoxid_pdl = { path = "chromeoxid_pdl", version = "0.1.0" }
+
 [dependencies]
 async-tungstenite = "0.10"
-serde = "1.0"
+serde = { version = "1.0", features = ["derive"] }
 async-std = "1.6"
 anyhow = "1.0"
 regex = "1.4"
 futures = "0.3"
+chromeoxid_pdl = { path = "chromeoxid_pdl", version = "0.1.0" }
+chromeoxid_types = { path = "chromeoxid_types", version = "0.1.0" }
+serde_json = "1.0"
+which = "4.0.2"
 
 [dev-dependencies]
 quote = "1.0"
@@ -22,5 +29,6 @@ chrono = "0.4"
 
 [workspace]
 members = [
-    "chromeoxid-pdl"
+    "chromeoxid_pdl",
+    "chromeoxid_types"
 ]

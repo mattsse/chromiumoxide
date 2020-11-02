@@ -145,14 +145,14 @@ pub fn parse_pdl(input: &str) -> Result<Protocol, Error> {
                 }
                 el.consume(domain);
             }
-            let id = borrowed!(caps.get(3)).unwrap();
+            let name = borrowed!(caps.get(3)).unwrap();
             let ty = TypeDef {
                 description: description.take().map(Cow::Owned),
                 experimental: caps.get(1).is_some(),
                 deprecated: caps.get(2).is_some(),
-                raw_name: Cow::Owned(format!("{}.{}", domain.name, id)),
-                is_circular_dep: is_circular_dep(&domain.name, id.as_ref()),
-                name: id,
+                raw_name: Cow::Owned(format!("{}.{}", domain.name, name)),
+                is_circular_dep: is_circular_dep(&domain.name, name.as_ref()),
+                name,
                 extends: Type::new(caps.get(5).unwrap().as_str(), caps.get(4).is_some()),
                 item: None,
             };

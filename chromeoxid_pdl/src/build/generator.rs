@@ -1,8 +1,8 @@
-use crate::gen::types::*;
+use crate::build::types::*;
 use crate::pdl::parser::parse_pdl;
 use crate::pdl::{DataType, Domain, Param, Type, Variant};
 use heck::*;
-use proc_macro2::TokenStream;
+use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -37,7 +37,7 @@ use std::path::{Path, PathBuf};
 /// ```rust,no_run
 /// # use std::io::Result;
 /// fn main() -> Result<()> {
-///   pdl_build::compile_protos(&["src/frontend.proto", "src/backend.proto"], &["src"])?;
+///   chromeoxid_pdl::build::compile_pdls(&["src/js.pdl", "src/browser.pdl"])?;
 ///   Ok(())
 /// }
 /// ```
@@ -161,15 +161,18 @@ impl Generator {
             protocols.push(pdl);
         }
 
+        // TODO create only a single file
         for (idx, pdl) in protocols.iter().enumerate() {
             let types = self.generate_types(&pdl.domains);
             let version = format!("{}.{}", pdl.version.major, pdl.version.minor);
+            let module_name = format_ident!("{}", self.protocol_mods[idx]);
             let module = quote! {
-                #![allow(clippy::too_many_arguments)]
-
-                /// The version of this protocol definition
-                pub const VERSION : &str = #version;
-                #types
+                #[allow(clippy::too_many_arguments)]
+                pub mod #module_name{
+                    /// The version of this protocol definition
+                    pub const VERSION : &str = #version;
+                    #types
+                }
             };
 
             let output = target.join(format!("{}.rs", &self.protocol_mods[idx]));
@@ -185,7 +188,7 @@ impl Generator {
     ///
     /// Each domain gets it's owon module
     pub fn generate_types(&self, domains: &[Domain]) -> TokenStream {
-        let mut lib = TokenStream::default();
+        let mut modules = TokenStream::default();
 
         for domain in domains
             .iter()
@@ -207,15 +210,14 @@ impl Generator {
                 desc.extend(quote! {#[deprecated]})
             }
 
-            lib.extend(quote! {
+            modules.extend(quote! {
                 #desc
                 pub mod #mod_name {
                     #domain_mod
                 }
             });
         }
-
-        lib
+        modules
     }
 
     /// Generates all types are not circular for a single domain
@@ -231,6 +233,8 @@ impl Generator {
         stream
     }
 
+    /// Generates all rust types for a PDL `DomainDatatype` (Command, Event,
+    /// Type)
     fn generate_type(&self, domain: &Domain, dt: DomainDatatype) -> TokenStream {
         let stream = if let Some(vars) = dt.as_enum() {
             self.generate_enum(&Variant::from(&dt), vars)
@@ -243,6 +247,32 @@ impl Generator {
                     .filter(|dt| self.with_deprecated || !dt.is_deprecated())
                     .filter(|dt| self.with_experimental || !dt.is_experimental()),
             );
+            let identifier = dt.raw_name();
+            let name = format_ident!("{}", dt.ident_name());
+            stream.extend(quote! {
+              impl #name {
+                  pub const IDENTIFIER : &'static str = #identifier;
+              }
+            });
+            if !dt.is_type() {
+
+                stream.extend(
+                    quote! {
+                    impl chromeoxid_types::Method for #name {
+
+                        fn identifier() -> ::std::borrow::Cow<'static, str> {
+                            Self::IDENTIFIER.into()
+                        }
+
+                        fn split() -> (::std::borrow::Cow<'static, str>, ::std::borrow::Cow<'static, str>) {
+                            let mut iter = Self::IDENTIFIER.split('.');
+                            (iter.next().unwrap().into(), iter.next().unwrap().into())
+                        }
+                    }
+                }
+                );
+            }
+
             if let DomainDatatype::Commnad(cmd) = dt {
                 let returns_name = format!("{}Returns", cmd.name().to_camel_case());
                 stream.extend(
@@ -256,6 +286,14 @@ impl Generator {
                             .filter(|p| self.with_experimental || !p.is_experimental()),
                     ),
                 );
+
+                // impl `Command` trait
+                let response = format_ident!("{}Returns", dt.name().to_camel_case());
+                stream.extend(quote! {
+                    impl chromeoxid_types::Command for #name {
+                        type Response = #response;
+                    }
+                });
             }
             stream
         };
@@ -342,37 +380,35 @@ impl Generator {
 
         let desc = dt.type_description_tokens(domain.name.as_ref());
 
+        let mut stream = quote! {
+            #desc
+            #derives
+            #serde_derives
+        };
+
         // create wrapper types if no fields present
         if field_definitions.is_empty() {
             if let DomainDatatype::Type(tydef) = dt {
                 let wrapped_ty =
                     self.generate_field_type(domain, dt.name(), dt.name(), &tydef.extends);
-                quote! {
-                    #desc
-                    #derives
-                    #serde_derives
+                stream.extend(quote! {
                     pub struct #name(#wrapped_ty);
-                }
+                });
             } else {
-                quote! {
-                    #desc
-                    #derives
-                    #serde_derives
+                stream.extend(quote! {
                     pub struct #name;
-                }
+                })
             }
         } else {
-            quote! {
-                #desc
-                #derives
-                #serde_derives
+            stream.extend(quote! {
                 pub struct #name {
                     #(#field_definitions),*
                 }
                 #impl_definition
                 #enum_definitions
-            }
+            });
         }
+        stream
     }
 
     /// Generate enum type with `as_str` and `FromStr` methods
@@ -417,29 +453,15 @@ impl Generator {
             .map(|s| (format_ident!("{}", s.name.to_camel_case()), s.name.as_ref()))
             .unzip();
 
+        let str_fns = generate_enum_str_fns(&name, &vars, &strs);
+
         quote! {
             #ty_def
-            impl #name {
-                pub fn as_str(&self) -> &'static str {
-                    match self {
-                        #( #name::#vars => #strs ),*
-                    }
-                }
-            }
-
-            impl ::std::str::FromStr for #name {
-                type Err = String;
-
-                fn from_str(s: &str) -> Result<Self, Self::Err> {
-                    match s {
-                        #(#strs => Ok(#name::#vars),)*
-                        _=> Err(s.to_string())
-                    }
-                }
-            }
+            #str_fns
         }
     }
 
+    /// Generates the Tokenstream for the field type (bool, f64, etc.)
     fn generate_field_type(
         &self,
         domain: &Domain,
@@ -541,6 +563,8 @@ impl Generator {
         }
     }
 
+    /// Generates the field definition like `pub number: f64`, including all
+    /// attributes
     fn generate_field(&self, domain: &Domain, dt_name: &str, param: &Param) -> TokenStream {
         let mut desc = if let Some(desc) = param.description() {
             quote! {
@@ -578,8 +602,114 @@ impl Generator {
             }
         }
     }
+
+    fn generate_cdp_types(&self) -> TokenStream {
+        // TODO generate event enum
+        quote! {
+            pub trait Method {
+                fn domain_name() -> &'static str;
+
+                fn method_name() -> &'static str;
+            }
+        }
+    }
+
+    /// Generates the `Message` block for the Chrome Protocol messages sent/read
+    /// over the websocket
+    fn generate_message_impl(&self, domains: &[Domain]) -> TokenStream {
+        // https://github.com/aslushnikov/getting-started-with-cdp/blob/master/README.md
+        let payload = quote! {
+           /// Holds the content of a message, whether it was included as [`Message::params`] or [`Message::result`]
+           pub enum MessagePayload {
+                Params,
+                Result
+           }
+        };
+
+        let msg = quote! {
+            ///
+            pub enum Messag {
+
+            }
+        };
+
+        todo!()
+    }
+
+    /// Generates the `MethodType` enum that bundles all commands and events
+    fn generate_method_impl(&self, domains: &[Domain]) -> TokenStream {
+        let (vars, strs): (Vec<_>, Vec<_>) = domains
+            .iter()
+            .flat_map(|domain| domain.into_iter().filter(|dt| !dt.is_type()))
+            .map(|dt| {
+                let name = dt.name().to_camel_case();
+                let name = if dt.is_command() {
+                    format_ident!("Command{}", name)
+                } else {
+                    format_ident!("Event{}", name)
+                };
+                (name, dt.raw_name())
+            })
+            .unzip();
+
+        let name = format_ident!("MethodType");
+        let str_fns = generate_enum_str_fns(&name, &vars, &strs);
+
+        let attr = self.serde_support.generate_derives();
+
+        quote! {
+            /// MethodType chrome DevTools Protocol method type (ie, event and command  names)
+            #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+            #attr
+            pub enum #name {
+                #(#vars),*
+            }
+            #str_fns
+            impl #name {
+                /// Returns the Chrome Devtools Domain this event/command
+                pub fn domain(&self) -> &str {
+                    self.split().0
+                }
+
+                /// Returns the identifier for the event/command
+                pub fn method(&self) -> &str {
+                    self.split().1
+                }
+
+                /// Returns the name of (Domain, Method)
+                pub fn split(&self) -> (&str, &str) {
+                    let mut s = self.as_ref().split('.');
+                    (s.next().unwrap(), s.next().unwrap())
+                }
+            }
+        }
+    }
 }
 
+pub fn generate_enum_str_fns(name: &Ident, vars: &[Ident], strs: &[&str]) -> TokenStream {
+    quote! {
+        impl #name {
+        pub fn as_str(&self) -> &'static str {
+            match self {
+                #( #name::#vars => #strs ),*
+            }
+        }
+    }
+
+    impl ::std::str::FromStr for #name {
+        type Err = String;
+
+        fn from_str(s: &str) -> Result<Self, Self::Err> {
+            match s {
+                #(#strs => Ok(#name::#vars),)*
+                _=> Err(s.to_string())
+            }
+        }
+    }
+    }
+}
+
+/// Escapes reserved rust keywords
 fn field_name(name: &str) -> String {
     let name = name.to_snake_case();
     match name.as_str() {
@@ -590,6 +720,7 @@ fn field_name(name: &str) -> String {
     }
 }
 
+/// Escapes reserved rust keywords
 fn type_name(name: &str) -> String {
     let name = name.to_camel_case();
     match name.as_str() {
@@ -600,6 +731,13 @@ fn type_name(name: &str) -> String {
     }
 }
 
+/// Creates the name for an enum defined inside a type
+///
+/// ```text
+/// type Parent
+///     enum type
+/// ```
+/// to `ParentType`
 fn subenum_name(parent: &str, inner: &str) -> String {
     format!("{}{}", parent.to_camel_case(), type_name(inner))
 }
