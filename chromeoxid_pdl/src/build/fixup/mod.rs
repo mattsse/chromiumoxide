@@ -1,13 +1,4 @@
-use crate::build::generator::generate_enum_str_fns;
-use crate::build::types::DomainDataTypeIter;
 use crate::pdl::*;
-use heck::*;
-use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
-
-// generate MethodType values
-
-// generate event and command raw constants
 
 /// Generates a domain that contains util and message types
 pub(crate) fn generate_util_domain() -> Domain<'static> {

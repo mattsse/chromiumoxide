@@ -1,6 +1,6 @@
 use crate::build::types::*;
 use crate::pdl::parser::parse_pdl;
-use crate::pdl::{DataType, Domain, Param, Type, Variant};
+use crate::pdl::{DataType, Domain, Param, Protocol, Type, Variant};
 use heck::*;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
@@ -54,6 +54,7 @@ pub struct Generator {
     out_dir: Option<PathBuf>,
     protocol_mods: Vec<String>,
     domains: HashMap<String, usize>,
+    target_mod: Option<String>,
 }
 
 impl Default for Generator {
@@ -65,6 +66,7 @@ impl Default for Generator {
             out_dir: None,
             protocol_mods: vec![],
             domains: Default::default(),
+            target_mod: Default::default(),
         }
     }
 }
@@ -103,6 +105,12 @@ impl Generator {
     /// Configures whether deprecated types and fields should be included.
     pub fn deprecated(&mut self, deprecated: bool) -> &mut Self {
         self.with_deprecated = deprecated;
+        self
+    }
+
+    /// Configures the name of the module and file generated.
+    pub fn target_mod(&mut self, mod_name: impl Into<String>) -> &mut Self {
+        self.target_mod = Some(mod_name.into());
         self
     }
 
@@ -161,7 +169,8 @@ impl Generator {
             protocols.push(pdl);
         }
 
-        // TODO create only a single file
+        let mut modules = TokenStream::default();
+
         for (idx, pdl) in protocols.iter().enumerate() {
             let types = self.generate_types(&pdl.domains);
             let version = format!("{}.{}", pdl.version.major, pdl.version.minor);
@@ -175,10 +184,25 @@ impl Generator {
                 }
             };
 
-            let output = target.join(format!("{}.rs", &self.protocol_mods[idx]));
-
-            fs::write(output, module.to_string()).unwrap();
+            modules.extend(module);
         }
+        let mod_name = self.target_mod.as_deref().unwrap_or_else(|| "cdp");
+        let mod_ident = format_ident!("{}", mod_name);
+        let events = self.generate_event_enums(&protocols);
+        let imports = self.serde_support.generate_serde_imports_deserialize();
+        let stream = quote! {
+            pub mod #mod_ident {
+                pub use events::*;
+                pub mod events {
+                    #imports
+                    #events
+                }
+                #modules
+            }
+        };
+
+        let output = target.join(format!("{}.rs", mod_name));
+        fs::write(output, stream.to_string())?;
 
         fmt(target);
         Ok(())
@@ -187,7 +211,7 @@ impl Generator {
     /// Generate the types for the domains.
     ///
     /// Each domain gets it's owon module
-    pub fn generate_types(&self, domains: &[Domain]) -> TokenStream {
+    fn generate_types(&self, domains: &[Domain]) -> TokenStream {
         let mut modules = TokenStream::default();
 
         for domain in domains
@@ -255,22 +279,14 @@ impl Generator {
               }
             });
             if !dt.is_type() {
-
-                stream.extend(
-                    quote! {
+                stream.extend(quote! {
                     impl chromeoxid_types::Method for #name {
 
-                        fn identifier() -> ::std::borrow::Cow<'static, str> {
+                        fn identifier(&self) -> ::std::borrow::Cow<'static, str> {
                             Self::IDENTIFIER.into()
                         }
-
-                        fn split() -> (::std::borrow::Cow<'static, str>, ::std::borrow::Cow<'static, str>) {
-                            let mut iter = Self::IDENTIFIER.split('.');
-                            (iter.next().unwrap().into(), iter.next().unwrap().into())
-                        }
                     }
-                }
-                );
+                });
             }
 
             if let DomainDatatype::Commnad(cmd) = dt {
@@ -436,7 +452,7 @@ impl Generator {
             TokenStream::default()
         };
 
-        let attr = self.serde_support.generate_derives();
+        let attr = self.serde_support.generate_enum_derives();
 
         let ty_def = quote! {
             #desc
@@ -603,90 +619,69 @@ impl Generator {
         }
     }
 
-    fn generate_cdp_types(&self) -> TokenStream {
-        // TODO generate event enum
-        quote! {
-            pub trait Method {
-                fn domain_name() -> &'static str;
+    fn generate_event_enums(&self, pdls: &[Protocol]) -> TokenStream {
+        let mut variants_stream = TokenStream::default();
+        let mut var_idents = vec![];
+        for domain in pdls.iter().flat_map(|p| {
+            p.domains
+                .iter()
+                .filter(|d| self.with_deprecated || !d.deprecated)
+                .filter(|d| self.with_experimental || !d.experimental)
+        }) {
+            for ev in domain
+                .into_iter()
+                .filter(DomainDatatype::is_event)
+                .filter(|d| self.with_deprecated || !d.is_deprecated())
+                .filter(|d| self.with_experimental || !d.is_experimental())
+            {
+                let rename = self.serde_support.generate_enum_rename(ev.raw_name());
 
-                fn method_name() -> &'static str;
+                let domain_idx = self.domains.get(domain.name.as_ref()).unwrap_or_else(|| {
+                    panic!(format!("No matching domain registered for {}", domain.name))
+                });
+                let protocol_mod = format_ident!("{}", self.protocol_mods[*domain_idx]);
+                let domain_mod = format_ident!("{}", domain.name.to_snake_case());
+
+                let ty_ident = format_ident!("{}", ev.ident_name());
+                let var_ident = format_ident!(
+                    "{}{}",
+                    domain.name.to_camel_case(),
+                    ev.name().to_camel_case()
+                );
+                let deprecated = if ev.is_deprecated() {
+                    quote! {[deprecated]}
+                } else {
+                    TokenStream::default()
+                };
+                variants_stream.extend(quote! {
+                    #rename
+                    #deprecated
+                    #var_ident(super::#protocol_mod::#domain_mod::#ty_ident),
+                });
+                var_idents.push(var_ident);
             }
         }
-    }
-
-    /// Generates the `Message` block for the Chrome Protocol messages sent/read
-    /// over the websocket
-    fn generate_message_impl(&self, domains: &[Domain]) -> TokenStream {
-        // https://github.com/aslushnikov/getting-started-with-cdp/blob/master/README.md
-        let payload = quote! {
-           /// Holds the content of a message, whether it was included as [`Message::params`] or [`Message::result`]
-           pub enum MessagePayload {
-                Params,
-                Result
-           }
-        };
-
-        let msg = quote! {
-            ///
-            pub enum Messag {
-
-            }
-        };
-
-        todo!()
-    }
-
-    /// Generates the `MethodType` enum that bundles all commands and events
-    fn generate_method_impl(&self, domains: &[Domain]) -> TokenStream {
-        let (vars, strs): (Vec<_>, Vec<_>) = domains
-            .iter()
-            .flat_map(|domain| domain.into_iter().filter(|dt| !dt.is_type()))
-            .map(|dt| {
-                let name = dt.name().to_camel_case();
-                let name = if dt.is_command() {
-                    format_ident!("Command{}", name)
-                } else {
-                    format_ident!("Event{}", name)
-                };
-                (name, dt.raw_name())
-            })
-            .unzip();
-
-        let name = format_ident!("MethodType");
-        let str_fns = generate_enum_str_fns(&name, &vars, &strs);
-
-        let attr = self.serde_support.generate_derives();
-
+        let tag = self.serde_support.tag("method");
         quote! {
-            /// MethodType chrome DevTools Protocol method type (ie, event and command  names)
-            #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-            #attr
-            pub enum #name {
-                #(#vars),*
+            #[derive(Serialize, Debug, Clone, PartialEq)]
+            #tag
+            pub enum Event {
+                #variants_stream
             }
-            #str_fns
-            impl #name {
-                /// Returns the Chrome Devtools Domain this event/command
-                pub fn domain(&self) -> &str {
-                    self.split().0
-                }
 
-                /// Returns the identifier for the event/command
-                pub fn method(&self) -> &str {
-                    self.split().1
-                }
+            impl chromeoxid_types::Method for Event {
 
-                /// Returns the name of (Domain, Method)
-                pub fn split(&self) -> (&str, &str) {
-                    let mut s = self.as_ref().split('.');
-                    (s.next().unwrap(), s.next().unwrap())
+                fn identifier(&self) -> ::std::borrow::Cow<'static, str> {
+                    match self {
+                        #(Event::#var_idents(inner) => inner.identifier()),*
+                    }
                 }
             }
         }
     }
 }
 
-pub fn generate_enum_str_fns(name: &Ident, vars: &[Ident], strs: &[&str]) -> TokenStream {
+fn generate_enum_str_fns(name: &Ident, vars: &[Ident], strs: &[&str]) -> TokenStream {
     quote! {
         impl #name {
         pub fn as_str(&self) -> &'static str {
@@ -754,8 +749,48 @@ impl SerdeSupport {
         SerdeSupport::Feature(feature.into())
     }
 
-    fn generate_enum_serde(&self) -> TokenStream {
-        todo!("impl custom serialize with")
+    fn tag(&self, name: &str) -> TokenStream {
+        match self {
+            SerdeSupport::None => TokenStream::default(),
+            SerdeSupport::Default => quote! {
+                 #[serde(tag = #name)]
+            },
+            SerdeSupport::Feature(feature) => {
+                quote! {
+                    #[cfg_attr(feature = #feature,  serde(tag = #name))]
+                }
+            }
+        }
+    }
+
+    fn generate_enum_derives(&self) -> TokenStream {
+        match self {
+            SerdeSupport::None => TokenStream::default(),
+            SerdeSupport::Default => quote! {
+                #[derive(Serialize, Deserialize)]
+                 #[serde(rename_all = "lowercase")]
+            },
+            SerdeSupport::Feature(feature) => {
+                quote! {
+                    #[cfg_attr(feature = #feature, derive(Serialize, Deserialize))]
+                    #[cfg_attr(feature = #feature,  serde(rename_all = "lowercase"))]
+                }
+            }
+        }
+    }
+
+    fn generate_enum_rename(&self, name: &str) -> TokenStream {
+        match self {
+            SerdeSupport::None => TokenStream::default(),
+            SerdeSupport::Default => quote! {
+                 #[serde(rename = #name)]
+            },
+            SerdeSupport::Feature(feature) => {
+                quote! {
+                   #[cfg_attr(feature = #feature,  serde(rename_all = #name))]
+                }
+            }
+        }
     }
 
     fn generate_serde_imports(&self) -> TokenStream {
@@ -768,6 +803,21 @@ impl SerdeSupport {
                 quote! {
                     #[cfg(feature = #feature)]
                     use serde::{Serialize, Deserialize};
+                }
+            }
+        }
+    }
+
+    fn generate_serde_imports_deserialize(&self) -> TokenStream {
+        match self {
+            SerdeSupport::None => TokenStream::default(),
+            SerdeSupport::Default => quote! {
+                 use serde::Deserialize;
+            },
+            SerdeSupport::Feature(feature) => {
+                quote! {
+                    #[cfg(feature = #feature)]
+                    use serde::Deserialize;
                 }
             }
         }

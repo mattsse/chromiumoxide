@@ -1,6 +1,5 @@
 pub mod proto {
-    include!(concat!(env!("OUT_DIR"), "/browser_protocol.rs"));
-    include!(concat!(env!("OUT_DIR"), "/js_protocol.rs"));
+    include!(concat!(env!("OUT_DIR"), "/cdp.rs"));
 }
 
 pub mod browser;

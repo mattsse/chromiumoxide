@@ -24,7 +24,7 @@ pub trait Command: serde::ser::Serialize + Method {
     fn create_call(&self, call_id: CallId) -> serde_json::Result<MethodCall> {
         Ok(MethodCall {
             id: call_id,
-            method_name: Self::method_name(),
+            method_name: self.method_name(),
             params: serde_json::to_value(self)?,
         })
     }
@@ -43,17 +43,35 @@ pub struct Event {
 }
 
 pub trait Method {
-    fn domain_name() -> Cow<'static, str> {
-        Self::split().0
+    /// The whole string identifier for this method like: `DOM.removeNode`
+    fn identifier(&self) -> Cow<'static, str>;
+
+    /// The name of the domain this method belongs to: `DOM`
+    fn domain_name(&self) -> Cow<'static, str> {
+        self.split().0
     }
 
-    fn method_name() -> Cow<'static, str> {
-        Self::split().1
+    /// The standalone identifier of the method inside the domain: `removeNode`
+    fn method_name(&self) -> Cow<'static, str> {
+        self.split().1
     }
 
-    fn identifier() -> Cow<'static, str>;
-
-    fn split() -> (Cow<'static, str>, Cow<'static, str>);
+    /// Tuple of (`domain_name`, `method_name`) : (`DOM`, `removeNode`)
+    fn split(&self) -> (Cow<'static, str>, Cow<'static, str>) {
+        match self.identifier() {
+            Cow::Borrowed(id) => {
+                let mut iter = id.split('.');
+                (iter.next().unwrap().into(), iter.next().unwrap().into())
+            }
+            Cow::Owned(id) => {
+                let mut iter = id.split('.');
+                (
+                    Cow::Owned(iter.next().unwrap().into()),
+                    Cow::Owned(iter.next().unwrap().into()),
+                )
+            }
+        }
+    }
 }
 
 /// A response to a [`MethodCall`] from the Chrome instance
