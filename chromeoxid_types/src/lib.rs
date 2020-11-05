@@ -17,6 +17,23 @@ pub struct MethodCall {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CallId(usize);
 
+impl CallId {
+
+    pub fn new(id: usize) -> Self {
+        CallId(id)
+    }
+
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize,)]
+pub struct SessionId(String);
+
+impl AsRef<str> for SessionId {
+    fn as_ref(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
 pub trait Command: serde::ser::Serialize + Method {
     type Response: serde::de::DeserializeOwned + std::fmt::Debug;
 
@@ -33,7 +50,7 @@ pub trait Command: serde::ser::Serialize + Method {
     }
 }
 /// An event produced by the Chrome instance
-#[derive(Deserialize, Debug, PartialEq, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct CdpEvent {
     /// Name of the method
     pub method: Cow<'static, str>,

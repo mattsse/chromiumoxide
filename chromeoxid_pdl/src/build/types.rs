@@ -59,6 +59,10 @@ impl<'a> DomainDatatype<'a> {
         matches!(self, DomainDatatype::Event(_))
     }
 
+    pub fn is_substituted(&self) -> bool {
+        ["SessionID"].contains(&self.name())
+    }
+
     pub fn type_description_tokens(&self, domain_name: &str) -> TokenStream {
         let base_url = "https://chromedevtools.github.io/devtools-protocol/tot/";
 

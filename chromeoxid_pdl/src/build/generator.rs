@@ -211,7 +211,7 @@ impl Generator {
 
     /// Generate the types for the domains.
     ///
-    /// Each domain gets it's owon module
+    /// Each domain gets it's own module
     fn generate_types(&self, domains: &[Domain]) -> TokenStream {
         let mut modules = TokenStream::default();
 
@@ -253,6 +253,7 @@ impl Generator {
                 .into_iter()
                 .filter(|dt| self.with_deprecated || !dt.is_deprecated())
                 .filter(|dt| self.with_experimental || !dt.is_experimental())
+                .filter(|dt| !dt.is_substituted())
                 .map(|ty| self.generate_type(domain, ty)),
         );
         stream
@@ -530,6 +531,10 @@ impl Generator {
                 }
             }
             Type::Ref(name) => {
+                // substituted types from `chromeoxid_types`
+                if name == "SessionID" {
+                    return quote! {chromeoxid_types::SessionId};
+                }
                 // consider recursive types
                 if name == parent {
                     let ident = format_ident!("{}", name.to_camel_case());
