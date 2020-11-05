@@ -1,6 +1,7 @@
 use crate::build::types::*;
 use crate::pdl::parser::parse_pdl;
 use crate::pdl::{DataType, Domain, Param, Protocol, Type, Variant};
+use chromeoxid_types::CdpEvent;
 use heck::*;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
@@ -189,7 +190,7 @@ impl Generator {
         let mod_name = self.target_mod.as_deref().unwrap_or_else(|| "cdp");
         let mod_ident = format_ident!("{}", mod_name);
         let events = self.generate_event_enums(&protocols);
-        let imports = self.serde_support.generate_serde_imports_deserialize();
+        let imports = self.serde_support.generate_serde_imports();
         let stream = quote! {
             pub mod #mod_ident {
                 pub use events::*;
@@ -653,6 +654,7 @@ impl Generator {
                 } else {
                     TokenStream::default()
                 };
+                // TODO check for large enums -> Box
                 variants_stream.extend(quote! {
                     #rename
                     #deprecated
@@ -662,8 +664,9 @@ impl Generator {
             }
         }
         let tag = self.serde_support.tag("method");
+        let event_json = self.serde_support.generate_event_json_support(&var_idents);
         quote! {
-            #[derive(Serialize, Debug, Clone, PartialEq)]
+            #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
             #tag
             pub enum Event {
                 #variants_stream
@@ -677,6 +680,7 @@ impl Generator {
                     }
                 }
             }
+            #event_json
         }
     }
 }
@@ -758,6 +762,58 @@ impl SerdeSupport {
             SerdeSupport::Feature(feature) => {
                 quote! {
                     #[cfg_attr(feature = #feature,  serde(tag = #name))]
+                }
+            }
+        }
+    }
+
+    fn event_impl() -> TokenStream {
+        quote! {
+           impl std::convert::TryInto<chromeoxid_types::CdpEvent> for Event {
+                type Error = serde_json::Error;
+
+                fn try_into(self) -> Result<chromeoxid_types::CdpEvent, Self::Error> {
+                    use chromeoxid_types::Method;
+                    Ok(chromeoxid_types::CdpEvent {
+                        method: self.identifier(),
+                        params: self.to_params()?
+                    })
+                }
+           }
+        }
+    }
+
+    fn event_try_into(var_idents: &[Ident]) -> TokenStream {
+        quote! {
+           impl Event {
+                pub fn to_params(&self) -> serde_json::Result<serde_json::Value> {
+                    match self {
+                        #(Event::#var_idents(inner) => serde_json::to_value(inner)),*
+                    }
+                }
+           }
+        }
+    }
+
+    fn generate_event_json_support(&self, var_idents: &[Ident]) -> TokenStream {
+        match self {
+            SerdeSupport::None => TokenStream::default(),
+            SerdeSupport::Default => {
+                let event_impl = Self::event_impl();
+                let event_try_into = Self::event_try_into(var_idents);
+                quote! {
+                    #event_impl
+                    #event_try_into
+                }
+            }
+            SerdeSupport::Feature(feature) => {
+                let event_impl = Self::event_impl();
+                let event_try_into = Self::event_try_into(var_idents);
+                quote! {
+                    #[cfg(feature = #feature )]
+                    #event_impl
+                    #[cfg(feature = #feature )]
+                    #event_try_into
                 }
             }
         }

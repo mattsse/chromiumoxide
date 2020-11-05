@@ -9,8 +9,7 @@ pub struct MethodCall {
     ///
     /// [`MethodCall`] id's must be unique for every session
     pub id: CallId,
-    #[serde(rename = "method")]
-    method_name: Cow<'static, str>,
+    method: Cow<'static, str>,
     /// Json byte vector
     params: serde_json::Value,
 }
@@ -24,7 +23,7 @@ pub trait Command: serde::ser::Serialize + Method {
     fn create_call(&self, call_id: CallId) -> serde_json::Result<MethodCall> {
         Ok(MethodCall {
             id: call_id,
-            method_name: self.method_name(),
+            method: self.method_name(),
             params: serde_json::to_value(self)?,
         })
     }
@@ -35,11 +34,12 @@ pub trait Command: serde::ser::Serialize + Method {
 }
 /// An event produced by the Chrome instance
 #[derive(Deserialize, Debug, PartialEq, Clone)]
-pub struct Event {
-    #[serde(rename = "method")]
-    method_name: Cow<'static, str>,
-    /// Json byte vector
-    params: serde_json::Value,
+pub struct CdpEvent {
+    /// Name of the method
+    pub method: Cow<'static, str>,
+    /// Json params
+    #[serde(flatten)]
+    pub params: serde_json::Value,
 }
 
 pub trait Method {
@@ -89,7 +89,7 @@ pub struct Response {
 #[serde(untagged)]
 #[allow(clippy::large_enum_variant)]
 pub enum Message {
-    Event(Event),
+    Event(CdpEvent),
     Response(Response),
     ConnectionShutdown,
 }
