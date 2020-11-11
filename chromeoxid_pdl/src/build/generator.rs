@@ -252,7 +252,6 @@ impl Generator {
                 .into_iter()
                 .filter(|dt| self.with_deprecated || !dt.is_deprecated())
                 .filter(|dt| self.with_experimental || !dt.is_experimental())
-                .filter(|dt| !dt.is_substituted())
                 .map(|ty| self.generate_type(domain, ty)),
         );
         stream
@@ -521,9 +520,7 @@ impl Generator {
             Type::ArrayOf(ty) => {
                 // recursive types don't need to be boxed in vec
                 let ty = if let Type::Ref(name) = ty.deref() {
-                    // substituted types from `chromeoxid_types`
-                    substitute_type(name.as_ref().rsplit('.').next().unwrap())
-                        .unwrap_or_else(|| self.projected_type(domain, name))
+                    self.projected_type(domain, name)
                 } else {
                     self.generate_field_type(domain, parent, param_name, &*ty)
                 };
@@ -532,10 +529,6 @@ impl Generator {
                 }
             }
             Type::Ref(name) => {
-                // substituted types from `chromeoxid_types`
-                if let Some(subst) = substitute_type(name.as_ref().rsplit('.').next().unwrap()) {
-                    return subst;
-                }
                 // consider recursive types
                 if name == parent {
                     let ident = format_ident!("{}", name.to_camel_case());
@@ -646,15 +639,6 @@ impl Generator {
                     domain.name.to_camel_case(),
                     ev.name().to_camel_case()
                 );
-
-                if let Some(ty_ident) = substitute_type(ev.name()) {
-                    // TODO check for large enums -> Box
-                    variants_stream.extend(quote! {
-                        #var_ident(#ty_ident),
-                    });
-                    var_idents.push(var_ident);
-                    continue;
-                }
 
                 let rename = self.serde_support.generate_enum_rename(ev.raw_name());
 
