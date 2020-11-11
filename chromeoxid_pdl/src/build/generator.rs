@@ -1,7 +1,6 @@
 use crate::build::types::*;
 use crate::pdl::parser::parse_pdl;
 use crate::pdl::{DataType, Domain, Param, Protocol, Type, Variant};
-use chromeoxid_types::CdpEvent;
 use heck::*;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
@@ -414,7 +413,7 @@ impl Generator {
                 });
             } else {
                 stream.extend(quote! {
-                    pub struct #name;
+                    pub struct #name {}
                 })
             }
         } else {
@@ -522,7 +521,9 @@ impl Generator {
             Type::ArrayOf(ty) => {
                 // recursive types don't need to be boxed in vec
                 let ty = if let Type::Ref(name) = ty.deref() {
-                    self.projected_type(domain, name)
+                    // substituted types from `chromeoxid_types`
+                    substitute_type(name.as_ref().rsplit('.').next().unwrap())
+                        .unwrap_or_else(|| self.projected_type(domain, name))
                 } else {
                     self.generate_field_type(domain, parent, param_name, &*ty)
                 };
@@ -532,8 +533,8 @@ impl Generator {
             }
             Type::Ref(name) => {
                 // substituted types from `chromeoxid_types`
-                if name == "SessionID" {
-                    return quote! {chromeoxid_types::SessionId};
+                if let Some(subst) = substitute_type(name.as_ref().rsplit('.').next().unwrap()) {
+                    return subst;
                 }
                 // consider recursive types
                 if name == parent {
@@ -640,6 +641,21 @@ impl Generator {
                 .filter(|d| self.with_deprecated || !d.is_deprecated())
                 .filter(|d| self.with_experimental || !d.is_experimental())
             {
+                let var_ident = format_ident!(
+                    "{}{}",
+                    domain.name.to_camel_case(),
+                    ev.name().to_camel_case()
+                );
+
+                if let Some(ty_ident) = substitute_type(ev.name()) {
+                    // TODO check for large enums -> Box
+                    variants_stream.extend(quote! {
+                        #var_ident(#ty_ident),
+                    });
+                    var_idents.push(var_ident);
+                    continue;
+                }
+
                 let rename = self.serde_support.generate_enum_rename(ev.raw_name());
 
                 let domain_idx = self.domains.get(domain.name.as_ref()).unwrap_or_else(|| {
@@ -649,11 +665,6 @@ impl Generator {
                 let domain_mod = format_ident!("{}", domain.name.to_snake_case());
 
                 let ty_ident = format_ident!("{}", ev.ident_name());
-                let var_ident = format_ident!(
-                    "{}{}",
-                    domain.name.to_camel_case(),
-                    ev.name().to_camel_case()
-                );
                 let deprecated = if ev.is_deprecated() {
                     quote! {[deprecated]}
                 } else {

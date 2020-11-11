@@ -1,8 +1,55 @@
 use crate::pdl::{Command, DataType, Domain, Event, Item, Param, TypeDef, Variant};
 use heck::CamelCase;
-use proc_macro2::TokenStream;
-use quote::quote;
+use once_cell::sync::Lazy;
+use proc_macro2::{Ident, TokenStream};
+use quote::{format_ident, quote};
+use std::collections::HashSet;
+use std::ops::Deref;
 use std::slice::Iter;
+
+/// All essential types that are already included in `chromeoxid_types` crate
+static SUBSTITUTED_TYPES: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+    [
+        "SessionID",
+        "TargetID",
+        "BrowserContextID",
+        "createTarget",
+        "attachToTarget",
+        "getDocument",
+        "Node",
+        "NodeId",
+        "BackendNodeId",
+        "BackendNode",
+        "FrameId",
+        "PseudoType",
+        "ShadowRootType",
+        "querySelectorAll",
+        "ShadowRootType",
+        "querySelector",
+        "resolveNode",
+        "ExecutionContextId",
+        "ScriptId",
+        "RemoteObjectId",
+        "UnserializableValue",
+        "RemoteObject",
+        "CustomPreview",
+        "ObjectPreview",
+        "PropertyPreview",
+        "EntryPreview",
+        "describeNode",
+    ]
+    .iter()
+    .map(Deref::deref)
+    .collect::<HashSet<_>>()
+});
+
+pub(crate) fn substitute_type(name: &str) -> Option<TokenStream> {
+    SUBSTITUTED_TYPES.get(&name).map(|s| {
+        let ident = format_ident!("{}", s.to_camel_case());
+        quote! {
+        chromeoxid_types::#ident}
+    })
+}
 
 pub struct DomainDataTypeIter<'a> {
     types: Iter<'a, TypeDef<'a>>,
@@ -60,7 +107,7 @@ impl<'a> DomainDatatype<'a> {
     }
 
     pub fn is_substituted(&self) -> bool {
-        ["SessionID"].contains(&self.name())
+        SUBSTITUTED_TYPES.contains(&self.name())
     }
 
     pub fn type_description_tokens(&self, domain_name: &str) -> TokenStream {

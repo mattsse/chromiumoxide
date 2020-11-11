@@ -1,6 +1,23 @@
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::fmt;
+
+pub mod target;
+pub use target::*;
+pub mod browser;
+pub use browser::*;
+
+pub mod dom;
+pub use dom::*;
+
+pub mod runtime;
+pub use runtime::*;
+
+pub mod page;
+
+pub use page::*;
+use std::ops::Deref;
 
 /// A Message sent by the client
 #[derive(Serialize, Debug, PartialEq)]
@@ -9,23 +26,21 @@ pub struct MethodCall {
     ///
     /// [`MethodCall`] id's must be unique for every session
     pub id: CallId,
-    method: Cow<'static, str>,
+    pub method: Cow<'static, str>,
     /// Json byte vector
-    params: serde_json::Value,
+    pub params: serde_json::Value,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CallId(usize);
 
 impl CallId {
-
     pub fn new(id: usize) -> Self {
         CallId(id)
     }
-
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize,)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SessionId(String);
 
 impl AsRef<str> for SessionId {
@@ -35,7 +50,7 @@ impl AsRef<str> for SessionId {
 }
 
 pub trait Command: serde::ser::Serialize + Method {
-    type Response: serde::de::DeserializeOwned + std::fmt::Debug;
+    type Response: serde::de::DeserializeOwned + fmt::Debug;
 
     fn create_call(&self, call_id: CallId) -> serde_json::Result<MethodCall> {
         Ok(MethodCall {
@@ -49,14 +64,49 @@ pub trait Command: serde::ser::Serialize + Method {
         serde_json::to_vec(&self.create_call(call_id)?)
     }
 }
+
+pub struct CommandResponse<T>
+where
+    T: fmt::Debug,
+{
+    pub id: CallId,
+    pub result: T,
+    pub method: Cow<'static, str>,
+}
+
+pub type CommandResult<T> = Result<CommandResponse<T>, Error>;
+
+impl<T: fmt::Debug> Deref for CommandResponse<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.result
+    }
+}
+
 /// An event produced by the Chrome instance
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct CdpEvent {
     /// Name of the method
     pub method: Cow<'static, str>,
     /// Json params
-    #[serde(flatten)]
     pub params: serde_json::Value,
+}
+
+impl Method for CdpEvent {
+    fn identifier(&self) -> Cow<'static, str> {
+        self.method.clone()
+    }
+}
+
+impl Event for CdpEvent {
+    fn session_id(&self) -> Option<&str> {
+        self.params.get("sessionId").and_then(|x| x.as_str())
+    }
+}
+
+pub trait Event: Method + DeserializeOwned {
+    fn session_id(&self) -> Option<&str>;
 }
 
 pub trait Method {
@@ -105,10 +155,9 @@ pub struct Response {
 #[derive(Deserialize, Debug, Clone)]
 #[serde(untagged)]
 #[allow(clippy::large_enum_variant)]
-pub enum Message {
-    Event(CdpEvent),
+pub enum Message<T = CdpEvent> {
+    Event(T),
     Response(Response),
-    ConnectionShutdown,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

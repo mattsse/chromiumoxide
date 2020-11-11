@@ -3,6 +3,7 @@ name = "chromeoxid_types"
 version = "0.1.0"
 authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
 edition = "2018"
+description = "Contains the essential types necessary for using chromeoxid"
 license = "MIT OR APACHE-2.0"
 readme = "README.md"
 repository = "https://github.com/mattsse/chromeoxid"

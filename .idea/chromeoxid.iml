@@ -52,6 +52,11 @@
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/chromeoxid-12990e7c8faa1d73/out" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/chromeoxid_types/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/target/debug/build/chromeoxid-9b8ecd2d1d04a43b/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/chromeoxid-05cea6c9c99463ac/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/native-tls-3171f775427cf2d8/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/bitflags-25685d09accc065b/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/target/debug/build/core-foundation-sys-c9bfff0f5da4d62c/out" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/examples" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
