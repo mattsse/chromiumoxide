@@ -102,6 +102,33 @@ impl Type<'_> {
             }
         }
     }
+
+    pub fn is_string(&self) -> bool {
+        matches!(self, Type::String)
+    }
+
+    pub fn is_integer(&self) -> bool {
+        matches!(self, Type::Integer)
+    }
+
+    pub fn size_hint(&self) -> Option<usize> {
+        use std::mem::size_of;
+        match self {
+            Type::Integer => Some(size_of::<i64>()),
+            Type::Number => Some(size_of::<f64>()),
+            Type::Boolean => Some(size_of::<bool>()),
+            Type::String => Some(size_of::<String>()),
+            Type::Object => Some(size_of::<serde_json::Value>()),
+            Type::Any => Some(size_of::<serde_json::Value>()),
+            Type::Binary => Some(size_of::<Vec<u8>>()),
+            Type::Enum(_) => None,
+            Type::ArrayOf(_) => {
+                // since vec is heap so actual type does not matter
+                Some(size_of::<Vec<()>>())
+            }
+            Type::Ref(_) => None,
+        }
+    }
 }
 
 #[cfg_attr(feature = "serde0", derive(Serialize, Deserialize))]

@@ -1,15 +1,18 @@
-use crate::build::types::*;
-use crate::pdl::parser::parse_pdl;
-use crate::pdl::{DataType, Domain, Param, Protocol, Type, Variant};
-use heck::*;
-use proc_macro2::{Ident, TokenStream};
-use quote::{format_ident, quote};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs;
 use std::io::{self, Error, ErrorKind};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
+
+use heck::*;
+use proc_macro2::{Ident, TokenStream};
+use quote::{format_ident, quote};
+
+use crate::build::builder::Builder;
+use crate::build::types::*;
+use crate::pdl::parser::parse_pdl;
+use crate::pdl::{DataType, Domain, Param, Protocol, Type, Variant};
 
 /// Compile `.pdl` files into Rust files during a Cargo build.
 ///
@@ -335,12 +338,10 @@ impl Generator {
     where
         T: Iterator<Item = &'a Param<'a>> + 'a,
     {
+        let name = format_ident!("{}", struct_ident);
         // also generate enums for inner enums
         let mut enum_definitions = TokenStream::default();
-        let mut field_definitions = vec![];
-        let mut mandatory_names = vec![];
-        let mut mandatory_types = vec![];
-        let mut optional_names = vec![];
+        let mut builder = Builder::new(name.clone());
 
         for param in params {
             if let Type::Enum(vars) = &param.r#type {
@@ -353,46 +354,28 @@ impl Generator {
                 }
                 enum_definitions.extend(self.generate_enum(&enum_ident, vars));
             }
+
             let field_name = format_ident!("{}", field_name(param.name()));
-            if !param.optional {
-                mandatory_names.push(field_name);
-                mandatory_types.push(self.generate_field_type(
-                    domain,
-                    dt.name(),
-                    param.name(),
-                    &param.r#type,
-                ));
-            } else {
-                optional_names.push(field_name);
-            }
-            field_definitions.push(self.generate_field(domain, dt.name(), param));
+
+            let field = FieldDefinition {
+                name: field_name,
+                ty: self.generate_field_type(domain, dt.name(), param.name(), &param.r#type),
+                optional: param.optional,
+                deprecated: param.is_deprecated(),
+            };
+
+            builder.fields.push((
+                field.generate_definition(&self.serde_support, &param),
+                field,
+            ));
         }
 
-        let name = format_ident!("{}", struct_ident);
-
-        let derives = if mandatory_types.is_empty() && !field_definitions.is_empty() {
+        let derives = if !builder.has_mandatory_types() {
             quote! { #[derive(Debug, Clone, PartialEq, Default)]}
         } else {
             quote! {#[derive(Debug, Clone, PartialEq)] }
         };
         let serde_derives = self.serde_support.generate_derives();
-
-        let impl_definition = if mandatory_types.is_empty() {
-            TokenStream::default()
-        } else {
-            quote! {
-                impl #name {
-                    pub fn new(
-                        #(#mandatory_names: #mandatory_types),*
-                    ) -> #name {
-                        Self {
-                            #(#mandatory_names,)*
-                            #(#optional_names: Default::default()),*
-                        }
-                    }
-                }
-            }
-        };
 
         let desc = dt.type_description_tokens(domain.name.as_ref());
 
@@ -402,27 +385,52 @@ impl Generator {
             #serde_derives
         };
 
-        // create wrapper types if no fields present
-        if field_definitions.is_empty() {
+        if builder.fields.is_empty() {
             if let DomainDatatype::Type(tydef) = dt {
+                // create wrapper types if no fields present
                 let wrapped_ty =
                     self.generate_field_type(domain, dt.name(), dt.name(), &tydef.extends);
-                stream.extend(quote! {
+
+                let struct_def = quote! {
                     pub struct #name(#wrapped_ty);
-                });
+                };
+
+                // add Hash +  Eq for integer and string types
+                if tydef.extends.is_integer() {
+                    stream.extend(quote! {
+                        #[derive(Eq, Hash)]
+                        #struct_def
+                    });
+                } else if tydef.extends.is_string() {
+                    // add AsRef<str> support
+                    stream.extend(quote! {
+                        #[derive(Eq, Hash)]
+                        #struct_def
+
+                        impl AsRef<str> for #name {
+                            fn as_ref(&self) -> &str {
+                                self.0.as_str()
+                            }
+                        }
+                    });
+                } else {
+                    stream.extend(struct_def);
+                }
             } else {
                 stream.extend(quote! {
                     pub struct #name {}
                 })
             }
         } else {
+            let struct_def = builder.generate_struct_def();
             stream.extend(quote! {
-                pub struct #name {
-                    #(#field_definitions),*
-                }
-                #impl_definition
+                #struct_def
                 #enum_definitions
             });
+
+            if dt.is_command() || dt.is_type() {
+                stream.extend(builder.generate_impl());
+            }
         }
         stream
     }
@@ -484,62 +492,54 @@ impl Generator {
         parent: &str,
         param_name: &str,
         ty: &Type,
-    ) -> TokenStream {
+    ) -> FieldType {
+        // TODO also return the size
         match ty {
-            Type::Integer => {
-                quote! {
-                    i64
-                }
-            }
-            Type::Number => {
-                quote! {
-                    f64
-                }
-            }
-            Type::Boolean => {
-                quote! {
-                    bool
-                }
-            }
-            Type::String => {
-                quote! {
-                    String
-                }
-            }
-            Type::Object | Type::Any => {
-                quote! {serde_json::Value}
-            }
-            Type::Binary => {
-                quote! {Vec<u8>}
-            }
+            Type::Integer => FieldType::new(quote! {
+                i64
+            }),
+            Type::Number => FieldType::new(quote! {
+                f64
+            }),
+            Type::Boolean => FieldType::new(quote! {
+                bool
+            }),
+            Type::String => FieldType::new(quote! {
+                String
+            }),
+            Type::Object | Type::Any => FieldType::new(quote! {serde_json::Value}),
+            Type::Binary => FieldType::new_vec(quote! {u8}),
             Type::Enum(_) => {
-                // TODO name resolution
                 let ty = format_ident!("{}", subenum_name(parent, param_name));
-                quote! {#ty}
+                FieldType::new(quote! {#ty})
             }
             Type::ArrayOf(ty) => {
                 // recursive types don't need to be boxed in vec
                 let ty = if let Type::Ref(name) = ty.deref() {
                     self.projected_type(domain, name)
                 } else {
-                    self.generate_field_type(domain, parent, param_name, &*ty)
+                    let ty = self.generate_field_type(domain, parent, param_name, &*ty);
+                    quote! {#ty}
                 };
-                quote! {
-                    Vec<#ty>
-                }
+                FieldType::new_vec(ty)
             }
             Type::Ref(name) => {
                 // consider recursive types
                 if name == parent {
                     let ident = format_ident!("{}", name.to_camel_case());
-                    quote! {
-                        Box<#ident>
-                    }
+                    FieldType::new_box(quote! {
+                       #ident
+                    })
                 } else {
-                    self.projected_type(domain, name)
+                    FieldType::new(self.projected_type(domain, name))
                 }
             }
         }
+    }
+
+    /// Adds support for builder pattern
+    pub fn generate_builder(&self, dt: DomainDatatype) -> TokenStream {
+        todo!()
     }
 
     /// Resolve projections: `Runtime.ScriptId` where `Runtime` is the
@@ -895,7 +895,7 @@ impl SerdeSupport {
         }
     }
 
-    fn generate_opt_field_attr(&self) -> TokenStream {
+    pub(crate) fn generate_opt_field_attr(&self) -> TokenStream {
         match self {
             SerdeSupport::None => TokenStream::default(),
             SerdeSupport::Default => quote! {
@@ -909,7 +909,7 @@ impl SerdeSupport {
         }
     }
 
-    fn generate_vec_field_attr(&self) -> TokenStream {
+    pub(crate) fn generate_vec_field_attr(&self) -> TokenStream {
         match self {
             SerdeSupport::None => TokenStream::default(),
             SerdeSupport::Default => quote! {
@@ -981,8 +981,9 @@ pub fn fmt(out_dir: impl AsRef<Path>) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::path::Path;
+
+    use super::*;
 
     #[test]
     fn test_serde_import() {

@@ -1,3 +1,4 @@
+mod builder;
 mod fixup;
 pub mod generator;
 mod types;
