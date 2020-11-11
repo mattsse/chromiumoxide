@@ -3,20 +3,6 @@ use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::fmt;
 
-pub mod target;
-pub use target::*;
-pub mod browser;
-pub use browser::*;
-
-pub mod dom;
-pub use dom::*;
-
-pub mod runtime;
-pub use runtime::*;
-
-pub mod page;
-
-pub use page::*;
 use std::ops::Deref;
 
 /// A Message sent by the client
@@ -37,15 +23,6 @@ pub struct CallId(usize);
 impl CallId {
     pub fn new(id: usize) -> Self {
         CallId(id)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct SessionId(String);
-
-impl AsRef<str> for SessionId {
-    fn as_ref(&self) -> &str {
-        self.0.as_str()
     }
 }
 
