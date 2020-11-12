@@ -1,9 +1,7 @@
-use heck::*;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 
-use crate::build::types::{DomainDatatype, FieldDefinition};
-use crate::build::SerdeSupport;
+use crate::build::types::FieldDefinition;
 
 const MIN_FIELDS: usize = 4;
 
@@ -24,7 +22,7 @@ impl Builder {
         self.mandatory().any(|f| !f.optional)
     }
 
-    fn mandatory<'a>(&'a self) -> impl Iterator<Item = &'a FieldDefinition> + 'a {
+    fn mandatory(&self) -> impl Iterator<Item = &FieldDefinition> + '_ {
         self.fields
             .iter()
             .filter(|(_, f)| !f.optional)
@@ -72,7 +70,7 @@ impl Builder {
             }
         }
 
-        // clippy allows up to 7 arguments
+        // clippy allows up to 7 arguments: https://rust-lang.github.io/rust-clippy/master/#too_many_arguments
         // let's limit this to 4, since all fields are public usual struct init is
         // always possible
         if mandatory_param_name.len() <= 4 {
@@ -108,7 +106,7 @@ impl Builder {
                 #field_name: Option<#builder_ty>,
             });
 
-            let mut ty_param = field.ty.param_type_def();
+            let ty_param = field.ty.param_type_def();
             let assign = if field.ty.is_vec {
                 quote! {#field_name}
             } else {
@@ -134,20 +132,18 @@ impl Builder {
                         #field_name : self.#field_name,
                     })
                 }
-            } else {
-                if field.ty.needs_box {
-                    build_fn_assigns.extend(
+            } else if field.ty.needs_box {
+                build_fn_assigns.extend(
                         quote!{
                             #field_name : Box::new(self.#field_name.ok_or_else(||std::stringify!("Field `{}` is mandatory.", std::stringify!(#field_name))))?,
                         }
                     )
-                } else {
-                    build_fn_assigns.extend(
+            } else {
+                build_fn_assigns.extend(
                         quote!{
                             #field_name : self.#field_name.ok_or_else(||format!("Field `{}` is mandatory.", std::stringify!(#field_name)))?,
                         }
                     )
-                }
             }
         }
 

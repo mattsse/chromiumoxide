@@ -5,6 +5,7 @@ use std::io::{self, Error, ErrorKind};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 
+use either::Either;
 use heck::*;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
@@ -58,6 +59,10 @@ pub struct Generator {
     protocol_mods: Vec<String>,
     domains: HashMap<String, usize>,
     target_mod: Option<String>,
+    /// Used to store the size of a specific type
+    type_size: HashMap<String, usize>,
+    /// Used to fix a type's size later if the ref was not processed yet
+    ref_sizes: Vec<(String, String)>,
 }
 
 impl Default for Generator {
@@ -70,6 +75,8 @@ impl Default for Generator {
             protocol_mods: vec![],
             domains: Default::default(),
             target_mod: Default::default(),
+            type_size: Default::default(),
+            ref_sizes: vec![],
         }
     }
 }
@@ -189,7 +196,19 @@ impl Generator {
 
             modules.extend(module);
         }
-        let mod_name = self.target_mod.as_deref().unwrap_or_else(|| "cdp");
+
+        // fix unresolved type sizes
+        let mut refs = vec![];
+        std::mem::swap(&mut refs, &mut self.ref_sizes);
+        for (name, reff) in refs {
+            let ref_size = *self
+                .type_size
+                .get(&reff)
+                .unwrap_or_else(|| panic!(format!("No type found for ref {}", reff)));
+            self.store_size(&name, Either::Left(ref_size));
+        }
+
+        let mod_name = self.target_mod.as_deref().unwrap_or("cdp");
         let mod_ident = format_ident!("{}", mod_name);
         let events = self.generate_event_enums(&protocols);
         let imports = self.serde_support.generate_serde_imports();
@@ -214,13 +233,14 @@ impl Generator {
     /// Generate the types for the domains.
     ///
     /// Each domain gets it's own module
-    fn generate_types(&self, domains: &[Domain]) -> TokenStream {
+    fn generate_types(&mut self, domains: &[Domain]) -> TokenStream {
         let mut modules = TokenStream::default();
-
+        let with_deprecated = self.with_deprecated;
+        let with_experimental = self.with_experimental;
         for domain in domains
             .iter()
-            .filter(|d| self.with_deprecated || !d.deprecated)
-            .filter(|d| self.with_experimental || !d.experimental)
+            .filter(|d| with_deprecated || !d.deprecated)
+            .filter(|d| with_experimental || !d.experimental)
         {
             let domain_mod = self.generate_domain(domain);
             let mod_name = format_ident!("{}", domain.name.to_snake_case());
@@ -248,13 +268,15 @@ impl Generator {
     }
 
     /// Generates all types are not circular for a single domain
-    pub fn generate_domain(&self, domain: &Domain) -> TokenStream {
+    pub fn generate_domain(&mut self, domain: &Domain) -> TokenStream {
         let mut stream = self.serde_support.generate_serde_imports();
+        let with_deprecated = self.with_deprecated;
+        let with_experimental = self.with_experimental;
         stream.extend(
             domain
                 .into_iter()
-                .filter(|dt| self.with_deprecated || !dt.is_deprecated())
-                .filter(|dt| self.with_experimental || !dt.is_experimental())
+                .filter(|dt| with_deprecated || !dt.is_deprecated())
+                .filter(|dt| with_experimental || !dt.is_experimental())
                 .map(|ty| self.generate_type(domain, ty)),
         );
         stream
@@ -262,18 +284,18 @@ impl Generator {
 
     /// Generates all rust types for a PDL `DomainDatatype` (Command, Event,
     /// Type)
-    fn generate_type(&self, domain: &Domain, dt: DomainDatatype) -> TokenStream {
+    fn generate_type(&mut self, domain: &Domain, dt: DomainDatatype) -> TokenStream {
         let stream = if let Some(vars) = dt.as_enum() {
             self.generate_enum(&Variant::from(&dt), vars)
         } else {
-            let mut stream = self.generate_struct(
-                domain,
-                &dt,
-                dt.ident_name(),
-                dt.params()
-                    .filter(|dt| self.with_deprecated || !dt.is_deprecated())
-                    .filter(|dt| self.with_experimental || !dt.is_experimental()),
-            );
+            let with_deprecated = self.with_deprecated;
+            let with_experimental = self.with_experimental;
+            let params = dt
+                .params()
+                .filter(|dt| with_deprecated || !dt.is_deprecated())
+                .filter(|dt| with_experimental || !dt.is_experimental());
+
+            let mut stream = self.generate_struct(domain, &dt, dt.ident_name(), params);
             let identifier = dt.raw_name();
             let name = format_ident!("{}", dt.ident_name());
             stream.extend(quote! {
@@ -294,6 +316,9 @@ impl Generator {
 
             if let DomainDatatype::Commnad(cmd) = dt {
                 let returns_name = format!("{}Returns", cmd.name().to_camel_case());
+                let with_deprecated = self.with_deprecated;
+                let with_experimental = self.with_experimental;
+
                 stream.extend(
                     self.generate_struct(
                         domain,
@@ -301,8 +326,8 @@ impl Generator {
                         returns_name,
                         cmd.returns
                             .iter()
-                            .filter(|p| self.with_deprecated || !p.is_deprecated())
-                            .filter(|p| self.with_experimental || !p.is_experimental()),
+                            .filter(|p| with_deprecated || !p.is_deprecated())
+                            .filter(|p| with_experimental || !p.is_experimental()),
                     ),
                 );
 
@@ -326,10 +351,20 @@ impl Generator {
         }
     }
 
+    fn store_size(&mut self, ty: &str, size: Either<usize, String>) {
+        match size {
+            Either::Left(size) => {
+                let s = self.type_size.entry(ty.to_string()).or_default();
+                *s += size;
+            }
+            Either::Right(name) => self.ref_sizes.push((ty.to_string(), name)),
+        }
+    }
+
     /// Generates the struct definitions including enum definitions inner
     /// parameter enums
     fn generate_struct<'a, T: 'a>(
-        &self,
+        &mut self,
         domain: &Domain,
         dt: &DomainDatatype,
         struct_ident: String,
@@ -338,6 +373,7 @@ impl Generator {
     where
         T: Iterator<Item = &'a Param<'a>> + 'a,
     {
+        // TODO return generated type information
         let name = format_ident!("{}", struct_ident);
         // also generate enums for inner enums
         let mut enum_definitions = TokenStream::default();
@@ -357,9 +393,13 @@ impl Generator {
 
             let field_name = format_ident!("{}", field_name(param.name()));
 
+            let (ty, size) =
+                self.generate_field_type(domain, dt.name(), param.name(), &param.r#type);
+            self.store_size(&struct_ident, size);
+
             let field = FieldDefinition {
                 name: field_name,
-                ty: self.generate_field_type(domain, dt.name(), param.name(), &param.r#type),
+                ty,
                 optional: param.optional,
                 deprecated: param.is_deprecated(),
             };
@@ -388,9 +428,9 @@ impl Generator {
         if builder.fields.is_empty() {
             if let DomainDatatype::Type(tydef) = dt {
                 // create wrapper types if no fields present
-                let wrapped_ty =
+                let (wrapped_ty, size) =
                     self.generate_field_type(domain, dt.name(), dt.name(), &tydef.extends);
-
+                self.store_size(&struct_ident, size);
                 let struct_def = quote! {
                     pub struct #name(#wrapped_ty);
                 };
@@ -417,6 +457,8 @@ impl Generator {
                     stream.extend(struct_def);
                 }
             } else {
+                // zero sized struct
+                self.type_size.insert(struct_ident, 0);
                 stream.extend(quote! {
                     pub struct #name {}
                 })
@@ -436,21 +478,22 @@ impl Generator {
     }
 
     /// Generate enum type with `as_str` and `FromStr` methods
-    fn generate_enum(&self, ident: &Variant, variants: &[Variant]) -> TokenStream {
+    fn generate_enum(&mut self, ident: &Variant, variants: &[Variant]) -> TokenStream {
+        let enum_name = ident
+            .name
+            .as_ref()
+            .rsplit('.')
+            .next()
+            .unwrap()
+            .to_camel_case();
+
+        let name = format_ident!("{}", enum_name);
+
+        self.type_size.insert(enum_name, 16);
+
         let vars = variants
             .iter()
             .map(|v| self.serde_support.generate_variant(v));
-
-        let name = format_ident!(
-            "{}",
-            ident
-                .name
-                .as_ref()
-                .rsplit('.')
-                .next()
-                .unwrap()
-                .to_camel_case()
-        );
 
         let desc = if let Some(desc) = ident.description.as_ref() {
             quote! {
@@ -492,54 +535,73 @@ impl Generator {
         parent: &str,
         param_name: &str,
         ty: &Type,
-    ) -> FieldType {
-        // TODO also return the size
+    ) -> (FieldType, Either<usize, String>) {
+        use std::mem::size_of;
         match ty {
-            Type::Integer => FieldType::new(quote! {
-                i64
-            }),
-            Type::Number => FieldType::new(quote! {
-                f64
-            }),
-            Type::Boolean => FieldType::new(quote! {
-                bool
-            }),
-            Type::String => FieldType::new(quote! {
-                String
-            }),
-            Type::Object | Type::Any => FieldType::new(quote! {serde_json::Value}),
-            Type::Binary => FieldType::new_vec(quote! {u8}),
+            Type::Integer => (
+                FieldType::new(quote! {
+                    i64
+                }),
+                Either::Left(size_of::<i64>()),
+            ),
+            Type::Number => (
+                FieldType::new(quote! {
+                    f64
+                }),
+                Either::Left(size_of::<f64>()),
+            ),
+            Type::Boolean => (
+                FieldType::new(quote! {
+                    bool
+                }),
+                Either::Left(size_of::<bool>()),
+            ),
+            Type::String => (
+                FieldType::new(quote! {
+                    String
+                }),
+                Either::Left(size_of::<String>()),
+            ),
+            Type::Object | Type::Any => (
+                FieldType::new(quote! {serde_json::Value}),
+                Either::Left(size_of::<serde_json::Value>()),
+            ),
+            Type::Binary => (
+                FieldType::new_vec(quote! {u8}),
+                Either::Left(size_of::<u8>()),
+            ),
             Type::Enum(_) => {
                 let ty = format_ident!("{}", subenum_name(parent, param_name));
-                FieldType::new(quote! {#ty})
+                (FieldType::new(quote! {#ty}), Either::Left(16))
             }
             Type::ArrayOf(ty) => {
                 // recursive types don't need to be boxed in vec
                 let ty = if let Type::Ref(name) = ty.deref() {
                     self.projected_type(domain, name)
                 } else {
-                    let ty = self.generate_field_type(domain, parent, param_name, &*ty);
+                    let (ty, _) = self.generate_field_type(domain, parent, param_name, &*ty);
                     quote! {#ty}
                 };
-                FieldType::new_vec(ty)
+                (FieldType::new_vec(ty), Either::Left(size_of::<Vec<()>>()))
             }
             Type::Ref(name) => {
                 // consider recursive types
                 if name == parent {
                     let ident = format_ident!("{}", name.to_camel_case());
-                    FieldType::new_box(quote! {
-                       #ident
-                    })
+                    (
+                        FieldType::new_box(quote! {
+                           #ident
+                        }),
+                        Either::Left(size_of::<Box<()>>()),
+                    )
                 } else {
-                    FieldType::new(self.projected_type(domain, name))
+                    (
+                        FieldType::new(self.projected_type(domain, name)),
+                        Either::Right(name.rsplit('.').next().unwrap().to_string().to_camel_case()),
+                    )
                 }
             }
         }
-    }
-
-    /// Adds support for builder pattern
-    pub fn generate_builder(&self, dt: DomainDatatype) -> TokenStream {
-        todo!()
     }
 
     /// Resolve projections: `Runtime.ScriptId` where `Runtime` is the
@@ -579,46 +641,6 @@ impl Generator {
         }
     }
 
-    /// Generates the field definition like `pub number: f64`, including all
-    /// attributes
-    fn generate_field(&self, domain: &Domain, dt_name: &str, param: &Param) -> TokenStream {
-        let mut desc = if let Some(desc) = param.description() {
-            quote! {
-                #[doc = #desc]
-            }
-        } else {
-            TokenStream::default()
-        };
-
-        if param.is_deprecated() {
-            desc.extend(quote! {#[deprecated]});
-        }
-
-        let name = format_ident!("{}", field_name(param.name()));
-        let ty = self.generate_field_type(domain, dt_name, param.name(), &param.r#type);
-
-        if param.optional {
-            let attr = self.serde_support.generate_opt_field_attr();
-            quote! {
-                #desc
-                #attr
-                pub #name : Option<#ty>
-            }
-        } else {
-            let attr = if let Type::ArrayOf(_) = &param.r#type {
-                self.serde_support.generate_vec_field_attr()
-            } else {
-                TokenStream::default()
-            };
-
-            quote! {
-                #desc
-                #attr
-                pub #name : #ty
-            }
-        }
-    }
-
     fn generate_event_enums(&self, pdls: &[Protocol]) -> TokenStream {
         let mut variants_stream = TokenStream::default();
         let mut var_idents = vec![];
@@ -648,17 +670,31 @@ impl Generator {
                 let protocol_mod = format_ident!("{}", self.protocol_mods[*domain_idx]);
                 let domain_mod = format_ident!("{}", domain.name.to_snake_case());
 
-                let ty_ident = format_ident!("{}", ev.ident_name());
+                let ev_name = ev.ident_name();
+                let size = *self
+                    .type_size
+                    .get(&ev_name)
+                    .unwrap_or_else(|| panic!(format!("No type found for ref {}", ev_name)));
+
+                let ty_ident = format_ident!("{}", ev_name);
                 let deprecated = if ev.is_deprecated() {
                     quote! {[deprecated]}
                 } else {
                     TokenStream::default()
                 };
-                // TODO check for large enums -> Box
+
+                // See https://rust-lang.github.io/rust-clippy/master/#large_enum_variant
+                // The maximum size of a enum’s variant to avoid box suggestion is 200
+                let ty_ident = if size < 200 {
+                    quote! {super::#protocol_mod::#domain_mod::#ty_ident}
+                } else {
+                    quote! {Box<super::#protocol_mod::#domain_mod::#ty_ident>}
+                };
+
                 variants_stream.extend(quote! {
                     #rename
                     #deprecated
-                    #var_ident(super::#protocol_mod::#domain_mod::#ty_ident),
+                    #var_ident(#ty_ident),
                 });
                 var_idents.push(var_ident);
             }
@@ -859,21 +895,6 @@ impl SerdeSupport {
                 quote! {
                     #[cfg(feature = #feature)]
                     use serde::{Serialize, Deserialize};
-                }
-            }
-        }
-    }
-
-    fn generate_serde_imports_deserialize(&self) -> TokenStream {
-        match self {
-            SerdeSupport::None => TokenStream::default(),
-            SerdeSupport::Default => quote! {
-                 use serde::Deserialize;
-            },
-            SerdeSupport::Feature(feature) => {
-                quote! {
-                    #[cfg(feature = #feature)]
-                    use serde::Deserialize;
                 }
             }
         }

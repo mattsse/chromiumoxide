@@ -2,7 +2,7 @@ use crate::build::SerdeSupport;
 use crate::pdl::{Command, DataType, Domain, Event, Item, Param, Type, TypeDef, Variant};
 use heck::CamelCase;
 use proc_macro2::{Ident, TokenStream};
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{quote, ToTokens};
 use std::slice::Iter;
 
 pub struct DomainDataTypeIter<'a> {
@@ -267,12 +267,10 @@ impl FieldDefinition {
 
         let attr = if self.optional {
             serde_support.generate_opt_field_attr()
+        } else if let Type::ArrayOf(_) = &param.r#type {
+            serde_support.generate_vec_field_attr()
         } else {
-            if let Type::ArrayOf(_) = &param.r#type {
-                serde_support.generate_vec_field_attr()
-            } else {
-                TokenStream::default()
-            }
+            TokenStream::default()
         };
 
         let def = self.field_definition();
