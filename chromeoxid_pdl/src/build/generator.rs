@@ -432,17 +432,17 @@ impl Generator {
                     self.generate_field_type(domain, dt.name(), dt.name(), &tydef.extends);
                 self.store_size(&struct_ident, size);
                 let struct_def = quote! {
-                    pub struct #name(#wrapped_ty);
+                    pub struct #name( #wrapped_ty);
                 };
 
                 // add Hash +  Eq for integer and string types
                 if tydef.extends.is_integer() {
                     stream.extend(quote! {
-                        #[derive(Eq, Hash)]
+                        #[derive(Eq, Copy, Hash)]
                         #struct_def
                     });
                 } else if tydef.extends.is_string() {
-                    // add AsRef<str> support
+                    // add string helpers
                     stream.extend(quote! {
                         #[derive(Eq, Hash)]
                         #struct_def
@@ -452,6 +452,13 @@ impl Generator {
                                 self.0.as_str()
                             }
                         }
+
+                        impl Into<String> for #name {
+                            fn into(self) -> String {
+                                self.0
+                            }
+                        }
+
                     });
                 } else {
                     stream.extend(struct_def);

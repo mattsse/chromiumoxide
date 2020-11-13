@@ -12,8 +12,9 @@ pub struct MethodCall {
     ///
     /// [`MethodCall`] id's must be unique for every session
     pub id: CallId,
+    #[serde(rename = "sessionId", skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
     pub method: Cow<'static, str>,
-    /// Json byte vector
     pub params: serde_json::Value,
 }
 
@@ -29,17 +30,14 @@ impl CallId {
 pub trait Command: serde::ser::Serialize + Method {
     type Response: serde::de::DeserializeOwned + fmt::Debug;
 
-    fn create_call(&self, call_id: CallId) -> serde_json::Result<MethodCall> {
-        Ok(MethodCall {
-            id: call_id,
-            method: self.method_name(),
-            params: serde_json::to_value(self)?,
-        })
-    }
-
-    fn to_vec(&self, call_id: CallId) -> serde_json::Result<Vec<u8>> {
-        serde_json::to_vec(&self.create_call(call_id)?)
-    }
+    // fn create_call(&self, call_id: CallId) -> serde_json::Result<MethodCall> {
+    //     Ok(MethodCall {
+    //         id: call_id,
+    //         session_id: None,
+    //         method: self.method_name(),
+    //         params: serde_json::to_value(self)?,
+    //     })
+    // }
 }
 
 pub struct CommandResponse<T>
@@ -129,18 +127,28 @@ pub struct Response {
     pub error: Option<Error>,
 }
 
+// TODO imple custom deserialize https://users.rust-lang.org/t/how-to-deserialize-untagged-enums-fast/28331/4
 #[derive(Deserialize, Debug, Clone)]
 #[serde(untagged)]
 #[allow(clippy::large_enum_variant)]
 pub enum Message<T = CdpEvent> {
-    Event(T),
     Response(Response),
+    Event(T),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ResponseError {
+    pub id: CallId,
+    /// Error code
+    pub code: usize,
+    /// Error Message
+    pub message: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Error {
     /// Error code
-    pub code: usize,
+    pub code: i64,
     /// Error Message
     pub message: String,
 }
