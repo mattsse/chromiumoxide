@@ -87,7 +87,7 @@ impl<T: Event + Unpin> Stream for CdpFuture<T> {
             match ev {
                 Ok(Message::Response(resp)) => pin.respond(resp),
                 Ok(Message::Event(ev)) => return Poll::Ready(Some(Ok(ev))),
-                Err(err) => return { Poll::Ready(Some(Err(err))) },
+                Err(err) => return Poll::Ready(Some(Err(err))),
             }
         }
 

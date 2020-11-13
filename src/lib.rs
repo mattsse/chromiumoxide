@@ -1,6 +1,6 @@
 include!(concat!(env!("OUT_DIR"), "/cdp.rs"));
 
-use crate::cdp::browser_protocol::target::{CreateTargetParams, SessionId};
+use crate::cdp::browser_protocol::target::CreateTargetParams;
 
 /// convenience fixups
 impl<T: Into<String>> From<T> for CreateTargetParams {

@@ -68,12 +68,7 @@ impl Tab {
     }
 
     pub async fn get_document(&self) -> anyhow::Result<Node> {
-        let resp = self
-            .execute(GetDocumentParams {
-                depth: Some(-1),
-                pierce: Some(false),
-            })
-            .await?;
+        let resp = self.execute(GetDocumentParams::default()).await?;
         Ok(resp.result.root)
     }
 

@@ -31,8 +31,8 @@ pub struct Connection<T: Event> {
 }
 
 impl<T: Event + Unpin> Connection<T> {
-    pub async fn connect(debug_ws_url: &str) -> anyhow::Result<Self> {
-        let (ws, _) = async_tungstenite::async_std::connect_async(debug_ws_url).await?;
+    pub async fn connect(debug_ws_url: impl AsRef<str>) -> anyhow::Result<Self> {
+        let (ws, _) = async_tungstenite::async_std::connect_async(debug_ws_url.as_ref()).await?;
         Ok(Self {
             pending_commands: Default::default(),
             ws,

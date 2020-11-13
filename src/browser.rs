@@ -1,11 +1,17 @@
-use serde::Serialize;
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::time::Duration;
-
 use anyhow::Result;
+use async_std::future;
 use futures::channel::mpsc::{channel, Receiver, Sender};
 use futures::channel::oneshot::{channel as oneshot_channel, Sender as OneshotSender};
+use serde::Serialize;
+use std::time::Duration;
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    io::{self, BufRead, BufReader},
+    path::{Path, PathBuf},
+    process::{self, Child, Stdio},
+    sync::Arc,
+};
 
 use chromeoxid_types::*;
 
@@ -14,7 +20,6 @@ use crate::conn::Connection;
 use crate::context::CdpFuture;
 use crate::tab::Tab;
 use futures::SinkExt;
-use std::sync::Arc;
 
 // Browser produces all events and communicates over sender/receiver with tabs,
 // submitting a method to a browser returns a oneshot receiver for the response
@@ -22,11 +27,15 @@ use std::sync::Arc;
 pub struct Browser {
     tabs: Vec<Arc<Tab>>,
     sender: Sender<BrowserMessage>,
+    config: Option<BrowserConfig>,
+    child: Option<Child>,
+    debug_ws_url: String,
 }
 
 impl Browser {
-    pub async fn connect(debug_ws_url: &str) -> Result<(Self, CdpFuture)> {
-        let conn = Connection::<CdpEvent>::connect(debug_ws_url).await?;
+    pub async fn connect(debug_ws_url: impl Into<String>) -> Result<(Self, CdpFuture)> {
+        let debug_ws_url = debug_ws_url.into();
+        let conn = Connection::<CdpEvent>::connect(&debug_ws_url).await?;
 
         let (tx, rx) = channel(1);
 
@@ -34,11 +43,51 @@ impl Browser {
         let browser = Self {
             tabs: vec![],
             sender: tx,
+            config: None,
+            child: None,
+            debug_ws_url,
         };
         Ok((browser, fut))
     }
 
-    pub async fn new_tab(&self, params: impl Into<CreateTargetParams>) -> anyhow::Result<Tab> {
+    /// Launches a new instance of `chromium` in the background and attaches to
+    /// its debug web socket.
+    ///
+    /// This fails when no chromium executable could be detected.
+    ///
+    /// This fails if no web socket url could be detected from the child
+    /// processes stderr for more than 20 seconds.
+    pub async fn launch(config: BrowserConfig) -> Result<(Self, CdpFuture)> {
+        // launch a new chromium instance
+        let mut child = config.launch()?;
+
+        // extract the ws:
+        let get_ws_url = ws_url_from_output(&mut child);
+
+        let dur = Duration::from_secs(20);
+        let debug_ws_url = future::timeout(dur, get_ws_url).await?;
+
+        let conn = Connection::<CdpEvent>::connect(&debug_ws_url).await?;
+
+        let (tx, rx) = channel(1);
+
+        let fut = CdpFuture::new(conn, rx);
+        let browser = Self {
+            tabs: vec![],
+            sender: tx,
+            config: Some(config),
+            child: Some(child),
+            debug_ws_url,
+        };
+        Ok((browser, fut))
+    }
+
+    /// Returns the address of the websocket this browser is attached to
+    pub fn websocket_address(&self) -> &String {
+        &self.debug_ws_url
+    }
+
+    pub async fn new_tab(&self, params: impl Into<CreateTargetParams>) -> Result<Tab> {
         let params = params.into();
         let resp = self.execute(params).await?;
         let target_id = resp.result.target_id;
@@ -86,7 +135,9 @@ impl Browser {
 
 impl Drop for Browser {
     fn drop(&mut self) {
-        // TODO
+        if let Some(child) = self.child.as_mut() {
+            child.kill().expect("!kill");
+        }
     }
 }
 
@@ -137,6 +188,27 @@ pub(crate) enum BrowserMessage {
     RegisterTab(Receiver<CommandMessage>),
 }
 
+async fn ws_url_from_output(child_process: &mut Child) -> String {
+    let stdout = child_process.stderr.take().expect("no stderror");
+    let handle = async_std::task::spawn_blocking(|| {
+        let mut buf = BufReader::new(stdout);
+        let mut line = String::new();
+        loop {
+            if buf.read_line(&mut line).is_ok() {
+                // check for ws in lin
+                if let Some(ws) = line.rsplit("listening on ").next() {
+                    if ws.starts_with("ws") && ws.contains("devtools/browser") {
+                        return ws.trim().to_string();
+                    }
+                }
+            } else {
+                line = String::new();
+            }
+        }
+    });
+    handle.await
+}
+
 #[derive(Debug, Clone)]
 pub struct BrowserConfig {
     /// Determines whether to run headless version of the browser. Defaults to
@@ -147,12 +219,12 @@ pub struct BrowserConfig {
     /// Launch the browser with a specific window width and height.
     window_size: Option<(u32, u32)>,
     /// Launch the browser with a specific debugging port.
-    port: Option<u16>,
+    port: u16,
     /// Path for Chrome or Chromium.
     ///
     /// If unspecified, the create will try to automatically detect a suitable
     /// binary.
-    path: Option<std::path::PathBuf>,
+    executable: std::path::PathBuf,
 
     /// A list of Chrome extensions to load.
     ///
@@ -163,34 +235,173 @@ pub struct BrowserConfig {
     /// See https://bugs.chromium.org/p/chromium/issues/detail?id=706008#c5
     extensions: Vec<String>,
 
-    // /// The options to use for fetching a version of chrome when `path` is None.
-    // ///
-    // /// By default, we'll use a revision guaranteed to work with our API and will
-    // /// download and install that revision of chrome the first time a Process is created.
-    // #[cfg(feature = "fetch")]
-    // #[builder(default)]
-    // fetcher_options: FetcherOptions,
-    /// How long to keep the WebSocket to the browser for after not receiving
-    /// any events from it Defaults to 30 seconds
-    pub idle_browser_timeout: Duration,
-
     /// Environment variables to set for the Chromium process.
     /// Passes value through to std::process::Command::envs.
     pub process_envs: Option<HashMap<String, String>>,
+
+    /// Data dir for user data
+    pub user_data_dir: Option<PathBuf>,
 }
 
-impl Default for BrowserConfig {
+#[derive(Debug, Clone)]
+pub struct BrowserConfigBuilder {
+    headless: bool,
+    sandbox: bool,
+    window_size: Option<(u32, u32)>,
+    port: u16,
+    executable: Option<PathBuf>,
+    extensions: Vec<String>,
+    process_envs: Option<HashMap<String, String>>,
+    user_data_dir: Option<PathBuf>,
+}
+
+impl BrowserConfig {
+    pub fn builder() -> BrowserConfigBuilder {
+        BrowserConfigBuilder::default()
+    }
+
+    pub fn with_executable(path: impl AsRef<Path>) -> Self {
+        Self::builder().chrome_executable(path).build().unwrap()
+    }
+}
+
+impl Default for BrowserConfigBuilder {
     fn default() -> Self {
         Self {
             headless: true,
             sandbox: true,
             window_size: None,
-            port: None,
-            path: None,
+            port: 0,
+            executable: None,
             extensions: vec![],
-            idle_browser_timeout: Duration::from_secs(300),
             process_envs: None,
+            user_data_dir: None,
         }
+    }
+}
+
+impl BrowserConfigBuilder {
+    pub fn window_size(mut self, width: u32, height: u32) -> Self {
+        self.window_size = Some((width, height));
+        self
+    }
+
+    pub fn no_sandbox(mut self) -> Self {
+        self.sandbox = false;
+        self
+    }
+
+    pub fn with_head(mut self) -> Self {
+        self.headless = false;
+        self
+    }
+
+    pub fn user_data_dir(mut self, data_dir: impl AsRef<Path>) -> Self {
+        self.user_data_dir = Some(data_dir.as_ref().to_path_buf());
+        self
+    }
+
+    pub fn chrome_executable(mut self, path: impl AsRef<Path>) -> Self {
+        self.executable = Some(path.as_ref().to_path_buf());
+        self
+    }
+
+    pub fn extension(mut self, extension: impl Into<String>) -> Self {
+        self.extensions.push(extension.into());
+        self
+    }
+
+    pub fn extensions<I, S>(mut self, extensions: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        for ext in extensions {
+            self.extensions.push(ext.into());
+        }
+        self
+    }
+
+    pub fn env(mut self, key: impl Into<String>, val: impl Into<String>) -> Self {
+        self.process_envs
+            .get_or_insert(HashMap::new())
+            .insert(key.into(), val.into());
+        self
+    }
+
+    pub fn envs<I, K, V>(mut self, envs: I) -> Self
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: Into<String>,
+        V: Into<String>,
+    {
+        self.process_envs
+            .get_or_insert(HashMap::new())
+            .extend(envs.into_iter().map(|(k, v)| (k.into(), v.into())));
+        self
+    }
+
+    pub fn build(self) -> std::result::Result<BrowserConfig, String> {
+        let executable = if let Some(e) = self.executable {
+            e
+        } else {
+            default_executable()?
+        };
+
+        Ok(BrowserConfig {
+            headless: self.headless,
+            sandbox: self.sandbox,
+            window_size: self.window_size,
+            port: self.port,
+            executable,
+            extensions: self.extensions,
+            process_envs: None,
+            user_data_dir: None,
+        })
+    }
+}
+
+impl BrowserConfig {
+    pub fn launch(&self) -> io::Result<Child> {
+        let dbg_port = format!("--remote-debugging-port={}", self.port);
+
+        let args = [
+            dbg_port.as_str(),
+            "--disable-gpu",
+            "--enable-logging",
+            "--verbose",
+            "--log-level=0",
+            "--no-first-run",
+            "--disable-audio-output",
+        ];
+
+        let mut cmd = process::Command::new(&self.executable);
+        cmd.args(&args).args(&DEFAULT_ARGS).args(
+            self.extensions
+                .iter()
+                .map(|e| format!("--load-extension={}", e)),
+        );
+
+        if let Some(ref user_data) = self.user_data_dir {
+            cmd.arg(format!("--user-data-dir={}", user_data.display()));
+        }
+
+        if let Some((width, height)) = self.window_size.clone() {
+            cmd.arg(format!("--window-size={},{}", width, height));
+        }
+
+        if !self.sandbox {
+            cmd.args(&["--no-sandbox", "--disable-setuid-sandbox"]);
+        }
+
+        if self.headless {
+            cmd.args(&["--headless", "--hide-scrollbars", "--mute-audio"]);
+        }
+
+        if let Some(ref envs) = self.process_envs {
+            cmd.envs(envs);
+        }
+        cmd.stderr(Stdio::piped()).spawn()
     }
 }
 
@@ -244,3 +455,31 @@ pub fn default_executable() -> Result<std::path::PathBuf, String> {
 
     Err("Could not auto detect a chrome executable".to_string())
 }
+
+/// These are passed to the Chrome binary by default.
+/// Via https://github.com/puppeteer/puppeteer/blob/4846b8723cf20d3551c0d755df394cc5e0c82a94/src/node/Launcher.ts#L157
+static DEFAULT_ARGS: [&str; 23] = [
+    "--disable-background-networking",
+    "--enable-features=NetworkService,NetworkServiceInProcess",
+    "--disable-background-timer-throttling",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-breakpad",
+    "--disable-client-side-phishing-detection",
+    "--disable-component-extensions-with-background-pages",
+    "--disable-default-apps",
+    "--disable-dev-shm-usage",
+    "--disable-extensions",
+    "--disable-features=TranslateUI",
+    "--disable-hang-monitor",
+    "--disable-ipc-flooding-protection",
+    "--disable-popup-blocking",
+    "--disable-prompt-on-repost",
+    "--disable-renderer-backgrounding",
+    "--disable-sync",
+    "--force-color-profile=srgb",
+    "--metrics-recording-only",
+    "--no-first-run",
+    "--enable-automation",
+    "--password-store=basic",
+    "--use-mock-keychain",
+];
