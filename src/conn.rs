@@ -9,12 +9,13 @@ use async_tungstenite::WebSocketStream;
 use futures::stream::Stream;
 use futures::task::{Context, Poll};
 use futures::Sink;
-use serde::export::PhantomData;
 
 use chromeoxid_types::{CallId, Event, Message, MethodCall};
 
+use crate::cdp::browser_protocol::target::SessionId;
 use crate::error::CdpError;
 use std::borrow::Cow;
+use std::marker::PhantomData;
 
 // as input or only produce events and answer to methods via sender/receiver
 /// A Stream of events
@@ -57,10 +58,16 @@ impl<T: Event> Connection<T> {
     pub fn submit_command(
         &mut self,
         method: Cow<'static, str>,
+        session_id: Option<SessionId>,
         params: serde_json::Value,
     ) -> serde_json::Result<CallId> {
         let id = self.next_call_id();
-        let call = MethodCall { id, method, params };
+        let call = MethodCall {
+            id,
+            method,
+            session_id: session_id.map(Into::into),
+            params,
+        };
         self.pending_commands.push_back(call);
         Ok(id)
     }
@@ -74,6 +81,7 @@ impl<T: Event> Connection<T> {
         if self.pending_flush.is_none() && !self.needs_flush {
             if let Some(cmd) = self.pending_commands.pop_front() {
                 let msg = serde_json::to_string(&cmd)?;
+                dbg!(msg.clone());
                 Sink::start_send(Pin::new(&mut self.ws), msg.into())
                     .map_err(|err| CdpError::Ws(err))?;
                 self.pending_flush = Some(cmd);

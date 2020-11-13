@@ -2,11 +2,16 @@ use std::sync::Arc;
 
 use futures::channel::mpsc::Sender;
 use futures::channel::oneshot::channel as oneshot_channel;
-use futures::{future, FutureExt, SinkExt, TryFutureExt};
+use futures::{future, SinkExt};
 
 use chromeoxid_types::*;
 
 use crate::browser::CommandMessage;
+use crate::cdp::browser_protocol::dom::{
+    DescribeNodeParams, GetDocumentParams, Node, NodeId, QuerySelectorAllParams,
+    QuerySelectorParams,
+};
+use crate::cdp::browser_protocol::target::{AttachToTargetParams, SessionId, TargetId};
 use crate::element::Element;
 
 #[derive(Debug)]
@@ -21,7 +26,7 @@ impl TabInner {
         &self,
         cmd: T,
     ) -> anyhow::Result<CommandResponse<T::Response>> {
-        Ok(execute(cmd, self.commands.clone()).await?)
+        Ok(execute(cmd, self.commands.clone(), Some(self.session_id.clone())).await?)
     }
 }
 
@@ -35,9 +40,14 @@ impl Tab {
         target_id: TargetId,
         commands: Sender<CommandMessage>,
     ) -> anyhow::Result<Self> {
+        // See https://vanilla.aslushnikov.com/?Target.attachToTarget
         let resp = execute(
-            AttachToTargetParams::new(target_id.clone()),
+            AttachToTargetParams {
+                target_id: target_id.clone(),
+                flatten: Some(true),
+            },
             commands.clone(),
+            None,
         )
         .await?;
 
@@ -58,23 +68,28 @@ impl Tab {
     }
 
     pub async fn get_document(&self) -> anyhow::Result<Node> {
-        let resp = execute(GetDocumentParams::default(), self.inner.commands.clone()).await?;
+        let resp = self
+            .execute(GetDocumentParams {
+                depth: Some(-1),
+                pierce: Some(false),
+            })
+            .await?;
         Ok(resp.result.root)
     }
 
     pub async fn find_element(&self, selector: impl Into<String>) -> anyhow::Result<Element> {
-        let root = self.get_document().await?;
+        let root = self.get_document().await?.node_id;
         let node_id = self
-            .execute(QuerySelectorParams::new(root.node_id, selector.into()))
+            .execute(QuerySelectorParams::new(root, selector))
             .await?
             .node_id;
         Ok(Element::new(Arc::clone(&self.inner), node_id).await?)
     }
 
     pub async fn find_elements(&self, selector: impl Into<String>) -> anyhow::Result<Vec<Element>> {
-        let root = self.get_document().await?;
+        let root = self.get_document().await?.node_id;
         let resp = self
-            .execute(QuerySelectorAllParams::new(root.node_id, selector.into()))
+            .execute(QuerySelectorAllParams::new(root, selector))
             .await?;
 
         Ok(future::join_all(
@@ -90,7 +105,12 @@ impl Tab {
 
     pub async fn describe_node(&self, node_id: NodeId) -> anyhow::Result<Node> {
         let resp = self
-            .execute(DescribeNodeParams::with_node_id_and_depth(node_id, 100))
+            .execute(
+                DescribeNodeParams::builder()
+                    .node_id(node_id)
+                    .depth(100)
+                    .build(),
+            )
             .await?;
         Ok(resp.result.node)
     }
@@ -99,10 +119,11 @@ impl Tab {
 async fn execute<T: Command>(
     cmd: T,
     mut sender: Sender<CommandMessage>,
+    session: Option<SessionId>,
 ) -> anyhow::Result<CommandResponse<T::Response>> {
     let (tx, rx) = oneshot_channel();
     let method = cmd.identifier();
-    let msg = CommandMessage::new(cmd, tx)?;
+    let msg = CommandMessage::with_session(cmd, tx, session)?;
 
     sender.send(msg).await?;
     let resp = rx.await?;

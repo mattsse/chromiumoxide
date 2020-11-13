@@ -7,11 +7,9 @@ use anyhow::Result;
 use futures::channel::mpsc::{channel, Receiver, Sender};
 use futures::channel::oneshot::{channel as oneshot_channel, Sender as OneshotSender};
 
-use chromeoxid_types::{
-    CallId, CdpEvent, Command, CommandResponse, CreateTargetParams, Event, Method, MethodCall,
-    Response, SessionId, TargetId,
-};
+use chromeoxid_types::*;
 
+use crate::cdp::browser_protocol::target::{CreateTargetParams, SessionId};
 use crate::conn::Connection;
 use crate::context::CdpFuture;
 use crate::tab::Tab;
@@ -54,7 +52,7 @@ impl Browser {
     }
 
     pub async fn new_blank_tab(&self) -> anyhow::Result<Tab> {
-        Ok(self.new_tab(CreateTargetParams::blank()).await?)
+        Ok(self.new_tab(CreateTargetParams::new("about:blank")).await?)
     }
 
     pub async fn execute<T: Command>(
@@ -97,6 +95,8 @@ impl Drop for Browser {
 #[derive(Debug, Serialize)]
 pub(crate) struct CommandMessage {
     pub method: Cow<'static, str>,
+    #[serde(rename = "sessionId", skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<SessionId>,
     pub params: serde_json::Value,
     #[serde(skip_serializing)]
     pub sender: OneshotSender<Response>,
@@ -106,6 +106,20 @@ impl CommandMessage {
     pub fn new<C: Command>(cmd: C, sender: OneshotSender<Response>) -> serde_json::Result<Self> {
         Ok(Self {
             method: cmd.identifier(),
+            session_id: None,
+            params: serde_json::to_value(cmd)?,
+            sender,
+        })
+    }
+
+    pub fn with_session<C: Command>(
+        cmd: C,
+        sender: OneshotSender<Response>,
+        session_id: Option<SessionId>,
+    ) -> serde_json::Result<Self> {
+        Ok(Self {
+            method: cmd.identifier(),
+            session_id,
             params: serde_json::to_value(cmd)?,
             sender,
         })

@@ -1,8 +1,8 @@
-use crate::tab::TabInner;
-use chromeoxid_types::{
-    BackendNodeId, DescribeNodeParams, NodeId, QuerySelectorParams, RemoteObjectId,
-    ResolveNodeParams,
+use crate::cdp::browser_protocol::dom::{
+    BackendNodeId, DescribeNodeParams, NodeId, QuerySelectorParams, ResolveNodeParams,
 };
+use crate::cdp::js_protocol::runtime::RemoteObjectId;
+use crate::tab::TabInner;
 use std::sync::Arc;
 
 /// A handle to a [DOM Element](https://developer.mozilla.org/en-US/docs/Web/API/Element).
@@ -17,13 +17,22 @@ pub struct Element {
 impl Element {
     pub(crate) async fn new(tab: Arc<TabInner>, node_id: NodeId) -> anyhow::Result<Self> {
         let backend_node_id = tab
-            .execute(DescribeNodeParams::with_node_id_and_depth(node_id, 100))
+            .execute(
+                DescribeNodeParams::builder()
+                    .node_id(node_id)
+                    .depth(100)
+                    .build(),
+            )
             .await?
             .node
             .backend_node_id;
 
         let resp = tab
-            .execute(ResolveNodeParams::with_backend_node(backend_node_id))
+            .execute(
+                ResolveNodeParams::builder()
+                    .backend_node_id(backend_node_id)
+                    .build(),
+            )
             .await?;
 
         let remote_object_id = resp
@@ -43,7 +52,7 @@ impl Element {
         // TODO downcast to Option
         let node_id = self
             .tab
-            .execute(QuerySelectorParams::new(self.node_id, selector.into()))
+            .execute(QuerySelectorParams::new(self.node_id, selector))
             .await?
             .node_id;
 
