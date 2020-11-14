@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{self, Error, ErrorKind};
 use std::ops::Deref;
@@ -63,6 +63,12 @@ pub struct Generator {
     type_size: HashMap<String, usize>,
     /// Used to fix a type's size later if the ref was not processed yet
     ref_sizes: Vec<(String, String)>,
+    /// This contains a list of all enums of all domains with their qualified
+    /// names <domain>.<name>
+    ///
+    /// This is a fix in order to check in struct definitions whether the
+    /// targeted type is an enum
+    enums: HashSet<String>,
 }
 
 impl Default for Generator {
@@ -77,6 +83,7 @@ impl Default for Generator {
             target_mod: Default::default(),
             type_size: Default::default(),
             ref_sizes: vec![],
+            enums: Default::default(),
         }
     }
 }
@@ -176,6 +183,14 @@ impl Generator {
             self.domains
                 .extend(pdl.domains.iter().map(|d| (d.name.to_string(), idx)));
 
+            // store enum types
+            self.enums.extend(
+                pdl.domains
+                    .iter()
+                    .flat_map(|d| d.types.iter().filter(|d| d.is_enum()))
+                    .map(|e| e.raw_name.to_string()),
+            );
+
             protocols.push(pdl);
         }
 
@@ -220,6 +235,30 @@ impl Generator {
                     #events
                 }
                 #modules
+
+                pub mod de {
+                    use serde::{de, Deserialize, Deserializer};
+                    use std::str::FromStr;
+
+                    /// Use the `FromStr` implementation to serialize an optional value
+                    pub fn deserialize_from_str_optional<'de, D, T>(data: D) -> Result<Option<T>, D::Error>
+                        where
+                            D: Deserializer<'de>,
+                            T: FromStr<Err = String>,
+                    {
+                        deserialize_from_str(data).map(Some)
+                    }
+
+                    /// Use the `FromStr` implementation to serialize a value
+                    pub fn deserialize_from_str<'de, D, T>(data: D) -> Result<T, D::Error>
+                        where
+                            D: Deserializer<'de>,
+                            T: FromStr<Err = String>,
+                    {
+                        let s: String = Deserialize::deserialize(data)?;
+                        T::from_str(&s).map_err(de::Error::custom)
+                    }
+                }
             }
         };
 
@@ -397,17 +436,24 @@ impl Generator {
                 self.generate_field_type(domain, dt.name(), param.name(), &param.r#type);
             self.store_size(&struct_ident, size);
 
+            // check if the type of the param points to an enum
+            let is_enum = if let Type::Ref(name) = &param.r#type {
+                self.enums.contains(name.as_ref()) || self.enums.contains(&format!("{}.{}", domain.name, name.as_ref()))
+            } else {
+                param.r#type.is_enum()
+            };
+
             let field = FieldDefinition {
                 name: field_name,
                 ty,
                 optional: param.optional,
                 deprecated: param.is_deprecated(),
+                is_enum,
             };
 
-            builder.fields.push((
-                field.generate_definition(&self.serde_support, &param),
-                field,
-            ));
+            builder
+                .fields
+                .push((field.generate_meta(&self.serde_support, &param), field));
         }
 
         let derives = if !builder.has_mandatory_types() {
@@ -456,6 +502,12 @@ impl Generator {
                         impl Into<String> for #name {
                             fn into(self) -> String {
                                 self.0
+                            }
+                        }
+
+                        impl From<String> for #name {
+                            fn from(expr: String) -> Self {
+                                #name(expr)
                             }
                         }
 
@@ -522,12 +574,30 @@ impl Generator {
         };
 
         // from str to string impl
-        let (vars, strs): (Vec<_>, Vec<_>) = variants
+        let vars: Vec<_> = variants
             .iter()
-            .map(|s| (format_ident!("{}", s.name.to_camel_case()), s.name.as_ref()))
-            .unzip();
+            .map(|s| format_ident!("{}", s.name.to_camel_case()))
+            .collect();
 
-        let str_fns = generate_enum_str_fns(&name, &vars, &strs);
+        let str_values: Vec<_> = variants
+            .iter()
+            .map(|s| {
+                let mut vars = vec![s.name.to_string()];
+                let lc = s.name.to_lowercase();
+                let cc = s.name.to_camel_case();
+                if cc != lc {
+                    if vars[0] != cc {
+                        vars.push(cc);
+                    }
+                }
+                if vars[0] != lc {
+                    vars.push(lc);
+                }
+                vars
+            })
+            .collect();
+
+        let str_fns = generate_enum_str_fns(&name, &vars, &str_values);
 
         quote! {
             #ty_def
@@ -728,12 +798,22 @@ impl Generator {
     }
 }
 
-fn generate_enum_str_fns(name: &Ident, vars: &[Ident], strs: &[&str]) -> TokenStream {
+fn generate_enum_str_fns(name: &Ident, vars: &[Ident], str_vals: &[Vec<String>]) -> TokenStream {
+    assert_eq!(vars.len(), str_vals.len());
+    let mut from_str_stream = TokenStream::default();
+    let mut as_str_idents = Vec::new();
+    for (var, strs) in vars.iter().zip(str_vals.iter()) {
+        from_str_stream.extend(quote! {
+                #(#strs)|* => Ok(#name::#var),
+        });
+        as_str_idents.push(&strs[0]);
+    }
+
     quote! {
         impl #name {
         pub fn as_str(&self) -> &'static str {
             match self {
-                #( #name::#vars => #strs ),*
+                #( #name::#vars => #as_str_idents ),*
             }
         }
     }
@@ -743,7 +823,7 @@ fn generate_enum_str_fns(name: &Ident, vars: &[Ident], strs: &[&str]) -> TokenSt
 
         fn from_str(s: &str) -> Result<Self, Self::Err> {
             match s {
-                #(#strs => Ok(#name::#vars),)*
+                #from_str_stream
                 _=> Err(s.to_string())
             }
         }
@@ -861,18 +941,16 @@ impl SerdeSupport {
             }
         }
     }
-
     fn generate_enum_derives(&self) -> TokenStream {
         match self {
             SerdeSupport::None => TokenStream::default(),
             SerdeSupport::Default => quote! {
                 #[derive(Serialize, Deserialize)]
-                 #[serde(rename_all = "lowercase")]
+
             },
             SerdeSupport::Feature(feature) => {
                 quote! {
                     #[cfg_attr(feature = #feature, derive(Serialize, Deserialize))]
-                    #[cfg_attr(feature = #feature,  serde(rename_all = "lowercase"))]
                 }
             }
         }
@@ -947,6 +1025,18 @@ impl SerdeSupport {
                 quote! {
                      #[cfg_attr(feature = #feature, serde(skip_serializing_if = "Vec::is_empty"))]
                 }
+            }
+        }
+    }
+
+    pub(crate) fn generate_enum_de_with(is_option: bool) -> TokenStream {
+        if is_option {
+            quote! {
+                 #[serde(deserialize_with = "super::super::de::deserialize_from_str_optional")]
+            }
+        } else {
+            quote! {
+                 #[serde(deserialize_with = "super::super::de::deserialize_from_str")]
             }
         }
     }

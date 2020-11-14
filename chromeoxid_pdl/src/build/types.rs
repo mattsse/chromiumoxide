@@ -249,10 +249,12 @@ pub struct FieldDefinition {
     pub ty: FieldType,
     pub optional: bool,
     pub deprecated: bool,
+    pub is_enum: bool,
 }
 
 impl FieldDefinition {
-    pub fn generate_definition(&self, serde_support: &SerdeSupport, param: &Param) -> TokenStream {
+    /// Generate meta attributes: desc, serde
+    pub fn generate_meta(&self, serde_support: &SerdeSupport, param: &Param) -> TokenStream {
         let mut desc = if let Some(desc) = param.description() {
             quote! {
                 #[doc = #desc]
@@ -273,10 +275,17 @@ impl FieldDefinition {
             TokenStream::default()
         };
 
+        let de_enum = if self.is_enum {
+            SerdeSupport::generate_enum_de_with(self.optional)
+        } else {
+            TokenStream::default()
+        };
+
         let def = self.field_definition();
         quote! {
             #desc
             #attr
+            #de_enum
             #def
         }
     }

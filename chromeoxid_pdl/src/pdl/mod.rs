@@ -69,6 +69,16 @@ pub struct TypeDef<'a> {
     pub is_circular_dep: bool,
 }
 
+impl<'a> TypeDef<'a> {
+    pub fn is_enum(&self) -> bool {
+        if let Some(item) = self.item.as_ref() {
+            matches!(item, Item::Enum(_))
+        } else {
+            false
+        }
+    }
+}
+
 #[cfg_attr(feature = "serde0", derive(Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Type<'a> {
@@ -101,6 +111,10 @@ impl Type<'_> {
                 _ => Type::Ref(Cow::Borrowed(ty)),
             }
         }
+    }
+
+    pub fn is_enum(&self) -> bool {
+        matches!(self, Type::Enum(_))
     }
 
     pub fn is_string(&self) -> bool {
