@@ -64,6 +64,8 @@ impl<T: fmt::Debug> Deref for CommandResponse<T> {
 pub struct CdpEvent {
     /// Name of the method
     pub method: Cow<'static, str>,
+    #[serde(rename = "sessionId", skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
     /// Json params
     pub params: serde_json::Value,
 }

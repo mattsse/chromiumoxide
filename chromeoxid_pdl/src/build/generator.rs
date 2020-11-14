@@ -899,6 +899,7 @@ impl SerdeSupport {
                     use chromeoxid_types::Method;
                     Ok(chromeoxid_types::CdpEvent {
                         method: self.identifier(),
+                        session_id: None,
                         params: self.to_params()?
                     })
                 }
@@ -1031,7 +1032,9 @@ impl SerdeSupport {
 
     pub(crate) fn generate_enum_de_with(is_option: bool) -> TokenStream {
         if is_option {
+            // NOTE: `#[serde(default)]` is needed here: https://stackoverflow.com/a/44303505/6242846
             quote! {
+                 #[serde(default)]
                  #[serde(deserialize_with = "super::super::de::deserialize_from_str_optional")]
             }
         } else {
