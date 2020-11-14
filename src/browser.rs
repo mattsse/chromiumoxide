@@ -21,18 +21,21 @@ use crate::context::CdpFuture;
 use crate::tab::Tab;
 use futures::SinkExt;
 
-// Browser produces all events and communicates over sender/receiver with tabs,
-// submitting a method to a browser returns a oneshot receiver for the response
-// and a unbounded receiver for the events that can be tracked to the request
 pub struct Browser {
     tabs: Vec<Arc<Tab>>,
+    /// The `Sender` to send messages to the connection handler that drives the
+    /// websocket
     sender: Sender<BrowserMessage>,
+    /// How the spawned chromium instance was configured, if any
     config: Option<BrowserConfig>,
+    /// The spawned chromium instance
     child: Option<Child>,
+    /// The debug web socket url of the chromium instance
     debug_ws_url: String,
 }
 
 impl Browser {
+    /// Connect to an already running chromium instance via websocket
     pub async fn connect(debug_ws_url: impl Into<String>) -> Result<(Self, CdpFuture)> {
         let debug_ws_url = debug_ws_url.into();
         let conn = Connection::<CdpEvent>::connect(&debug_ws_url).await?;
@@ -87,6 +90,7 @@ impl Browser {
         &self.debug_ws_url
     }
 
+    /// Create a new tab and return a handle to it.
     pub async fn new_tab(&self, params: impl Into<CreateTargetParams>) -> Result<Tab> {
         let params = params.into();
         let resp = self.execute(params).await?;
@@ -104,6 +108,7 @@ impl Browser {
         Ok(self.new_tab(CreateTargetParams::new("about:blank")).await?)
     }
 
+    /// Call a browser method.
     pub async fn execute<T: Command>(
         &self,
         cmd: T,

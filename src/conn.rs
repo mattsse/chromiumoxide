@@ -17,15 +17,17 @@ use crate::error::CdpError;
 use std::borrow::Cow;
 use std::marker::PhantomData;
 
-// as input or only produce events and answer to methods via sender/receiver
-/// A Stream of events
+/// Exchanges the messages with the websocket
 #[must_use = "streams do nothing unless polled"]
 pub struct Connection<T: Event> {
     /// Queue of commands to send.
     pending_commands: VecDeque<MethodCall>,
+    /// The websocket of the chromium instance
     ws: WebSocketStream<ConnectStream>,
+    /// The identifier for a specific command
     next_id: usize,
     needs_flush: bool,
+    /// The message that is currently being proceessed
     pending_flush: Option<MethodCall>,
     _marker: PhantomData<T>,
 }
@@ -43,8 +45,6 @@ impl<T: Event + Unpin> Connection<T> {
         })
     }
 }
-
-// multiple receivers and multiple senders?
 
 impl<T: Event> Connection<T> {
     fn next_call_id(&mut self) -> CallId {
@@ -72,6 +72,8 @@ impl<T: Event> Connection<T> {
         Ok(id)
     }
 
+    /// flush any processed message and start sending the next over the conn
+    /// sink
     fn start_send_next(&mut self, cx: &mut Context<'_>) -> Result<(), CdpError> {
         if self.needs_flush {
             if let Poll::Ready(Ok(())) = Sink::poll_flush(Pin::new(&mut self.ws), cx) {
@@ -111,16 +113,16 @@ impl<T: Event + Unpin> Stream for Connection<T> {
             }
         }
 
-        // read from ws
+        // read from the ws
         match Stream::poll_next(Pin::new(&mut pin.ws), cx) {
             Poll::Ready(Some(Ok(msg))) => {
+                dbg!(msg.clone().to_string());
                 return match serde_json::from_slice::<Message<T>>(&msg.into_data()) {
                     Ok(msg) => Poll::Ready(Some(Ok(msg))),
                     Err(err) => Poll::Ready(Some(Err(err.into()))),
-                }
+                };
             }
             Poll::Ready(Some(Err(err))) => {
-                println!("Read err stream {:?}", err);
                 return Poll::Ready(Some(Err(CdpError::Ws(err))));
             }
             _ => {}
