@@ -438,7 +438,10 @@ impl Generator {
 
             // check if the type of the param points to an enum
             let is_enum = if let Type::Ref(name) = &param.r#type {
-                self.enums.contains(name.as_ref()) || self.enums.contains(&format!("{}.{}", domain.name, name.as_ref()))
+                self.enums.contains(name.as_ref())
+                    || self
+                        .enums
+                        .contains(&format!("{}.{}", domain.name, name.as_ref()))
             } else {
                 param.r#type.is_enum()
             };

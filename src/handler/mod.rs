@@ -36,12 +36,16 @@ impl<T: Event> CdpFuture<T> {
         }
     }
 
-    fn submit_command(&mut self, msg: CommandMessage) -> Result<(), CdpError> {
+    pub(crate) fn submit_command(&mut self, msg: CommandMessage) -> Result<(), CdpError> {
         let call_id = self
             .conn
             .submit_command(msg.method, msg.session_id, msg.params)?;
         self.pending_commands.insert(call_id, msg.sender);
         Ok(())
+    }
+
+    fn on_message(&self) {
+
     }
 }
 

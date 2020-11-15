@@ -71,9 +71,8 @@ impl Builder {
         }
 
         // clippy allows up to 7 arguments: https://rust-lang.github.io/rust-clippy/master/#too_many_arguments
-        // let's limit this to 4, since all fields are public usual struct init is
-        // always possible
-        if mandatory_param_name.len() <= 4 {
+        // But let's limit this to 4, because a builder will also be implemented
+        if mandatory_param_name.len() > 0 && mandatory_param_name.len() <= 4 {
             stream.extend(quote! {
                 impl #name {
                     pub fn new(#(#mandatory_param_name : #mandatory_param_ty),*) -> Self {
@@ -113,13 +112,44 @@ impl Builder {
                 quote! {#field_name.into()}
             };
 
-            setters.extend(quote! {
-                pub fn #field_name(mut self, #field_name : #ty_param ) -> Self {
-                    self.#field_name = Some(#assign);
-                    self
-                }
-            });
-            // TODO special case for vec
+            if field.ty.is_vec {
+                let ty = &field.ty.ty;
+                let s = field.name.to_string();
+                let (iter_setter_name, single_setter_name) = if s.ends_with("s") {
+                    (field.name.clone(), format_ident!("{}", &s[..s.len() - 1]))
+                } else {
+                    (format_ident!("{}s", s), field.name.clone())
+                };
+                // create from iterator
+                setters.extend(
+                  quote! {
+                     pub fn #single_setter_name(mut self, #single_setter_name: impl Into<#ty>) -> Self {
+                        let v = self.#field_name.get_or_insert(Vec::new());
+                        v.push(#single_setter_name.into());
+                        self
+                     }
+
+                    pub fn #iter_setter_name<I, S>(mut self, #iter_setter_name: I) -> Self
+                    where
+                        I: IntoIterator<Item = S>,
+                        S: Into<#ty>,
+                    {
+                        let v = self.#field_name.get_or_insert(Vec::new());
+                        for val in #iter_setter_name {
+                            v.push(val.into());
+                        }
+                        self
+                    }
+                  }
+                );
+            } else {
+                setters.extend(quote! {
+                    pub fn #field_name(mut self, #field_name : #ty_param ) -> Self {
+                        self.#field_name = Some(#assign);
+                        self
+                    }
+                });
+            }
 
             // mappings for the `build` fn
             if field.optional {
