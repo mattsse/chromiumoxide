@@ -430,7 +430,7 @@ impl Generator {
                 enum_definitions.extend(self.generate_enum(&enum_ident, vars));
             }
 
-            let field_name = format_ident!("{}", field_name(param.name()));
+            let field_name = format_ident!("{}", generate_field_name(param.name()));
 
             let (ty, size) =
                 self.generate_field_type(domain, dt.name(), param.name(), &param.r#type);
@@ -835,7 +835,7 @@ fn generate_enum_str_fns(name: &Ident, vars: &[Ident], str_vals: &[Vec<String>])
 }
 
 /// Escapes reserved rust keywords
-fn field_name(name: &str) -> String {
+pub(crate) fn generate_field_name(name: &str) -> String {
     let name = name.to_snake_case();
     match name.as_str() {
         "type" => "r#type".to_string(),
@@ -846,7 +846,7 @@ fn field_name(name: &str) -> String {
 }
 
 /// Escapes reserved rust keywords
-fn type_name(name: &str) -> String {
+pub(crate) fn generate_type_name(name: &str) -> String {
     let name = name.to_camel_case();
     match name.as_str() {
         "type" => "r#type".to_string(),
@@ -864,7 +864,7 @@ fn type_name(name: &str) -> String {
 /// ```
 /// to `ParentType`
 fn subenum_name(parent: &str, inner: &str) -> String {
-    format!("{}{}", parent.to_camel_case(), type_name(inner))
+    format!("{}{}", parent.to_camel_case(), generate_type_name(inner))
 }
 
 #[derive(Debug, Clone)]

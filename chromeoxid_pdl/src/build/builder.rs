@@ -1,10 +1,9 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 
+use crate::build::generator::generate_field_name;
 use crate::build::types::FieldDefinition;
-
-const MIN_FIELDS: usize = 4;
-
+use heck::*;
 pub struct Builder {
     pub fields: Vec<(TokenStream, FieldDefinition)>,
     pub name: Ident,
@@ -85,10 +84,27 @@ impl Builder {
             })
         }
 
-        if self.fields.len() < MIN_FIELDS {
-            // don't create builder for structs with less than `MIN_FIELDS` fields
-            return stream;
+        // impl From<String> for types that only have a single mandatory field of type
+        // string
+        if mandatory_param_name.len() == 1 {
+            let f = self.mandatory().next().unwrap();
+            if !f.ty.is_vec && f.ty.ty.to_string() == "String" {
+                stream.extend(quote! {
+                    impl<T: Into<String>> From<T> for #name {
+                          fn from(url: T) -> Self {
+                              #name::new(url)
+                          }
+                    }
+                });
+            }
         }
+
+        // NOTE: we generate a builder for every type bc. struct initialization may be
+        // broken by ex/inlcuding deprecated or experimental types
+        // if self.fields.len() < 4 {
+        //     // don't create builder for structs with less than `4` fields
+        //     return stream;
+        // }
 
         let builder = format_ident!("{}Builder", self.name);
 
@@ -114,12 +130,16 @@ impl Builder {
 
             if field.ty.is_vec {
                 let ty = &field.ty.ty;
-                let s = field.name.to_string();
+                let s = field_name.to_string().to_snake_case();
                 let (iter_setter_name, single_setter_name) = if s.ends_with("s") {
-                    (field.name.clone(), format_ident!("{}", &s[..s.len() - 1]))
+                    (
+                        field_name.clone(),
+                        format_ident!("{}", generate_field_name(&s[..s.len() - 1])),
+                    )
                 } else {
-                    (format_ident!("{}s", s), field.name.clone())
+                    (format_ident!("{}s", s), field_name.clone())
                 };
+
                 // create from iterator
                 setters.extend(
                   quote! {
@@ -196,7 +216,6 @@ impl Builder {
         };
 
         stream.extend(quote! {
-
                impl #name {
                     pub fn builder() -> #builder {
                         #builder::default()
