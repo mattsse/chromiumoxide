@@ -11,6 +11,7 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 
 use crate::build::builder::Builder;
+use crate::build::event::{EventBuilder, EventType};
 use crate::build::types::*;
 use crate::pdl::parser::parse_pdl;
 use crate::pdl::{DataType, Domain, Param, Protocol, Type, Variant};
@@ -226,7 +227,7 @@ impl Generator {
         let mod_name = self.target_mod.as_deref().unwrap_or("cdp");
         let mod_ident = format_ident!("{}", mod_name);
         let events = self.generate_event_enums(&protocols);
-        let imports = self.serde_support.generate_serde_imports();
+        let imports = self.serde_support.generate_serde_import_deserialize();
         let stream = quote! {
             pub mod #mod_ident {
                 pub use events::*;
@@ -722,82 +723,50 @@ impl Generator {
     }
 
     fn generate_event_enums(&self, pdls: &[Protocol]) -> TokenStream {
-        let mut variants_stream = TokenStream::default();
-        let mut var_idents = vec![];
+        let mut events = Vec::new();
         for domain in pdls.iter().flat_map(|p| {
             p.domains
                 .iter()
                 .filter(|d| self.with_deprecated || !d.deprecated)
                 .filter(|d| self.with_experimental || !d.experimental)
         }) {
-            for ev in domain
+            for event in domain
                 .into_iter()
-                .filter(DomainDatatype::is_event)
-                .filter(|d| self.with_deprecated || !d.is_deprecated())
-                .filter(|d| self.with_experimental || !d.is_experimental())
+                .filter_map(|d| {
+                    if let DomainDatatype::Event(ev) = d {
+                        Some(ev)
+                    } else {
+                        None
+                    }
+                })
+                .filter(|ev| self.with_deprecated || !ev.is_deprecated())
+                .filter(|ev| self.with_experimental || !ev.is_experimental())
             {
-                let var_ident = format_ident!(
-                    "{}{}",
-                    domain.name.to_camel_case(),
-                    ev.name().to_camel_case()
-                );
-
-                let rename = self.serde_support.generate_enum_rename(ev.raw_name());
-
                 let domain_idx = self.domains.get(domain.name.as_ref()).unwrap_or_else(|| {
                     panic!(format!("No matching domain registered for {}", domain.name))
                 });
                 let protocol_mod = format_ident!("{}", self.protocol_mods[*domain_idx]);
-                let domain_mod = format_ident!("{}", domain.name.to_snake_case());
 
-                let ev_name = ev.ident_name();
+                let ev_name = format!("Event{}", event.name().to_camel_case());
+
                 let size = *self
                     .type_size
                     .get(&ev_name)
                     .unwrap_or_else(|| panic!(format!("No type found for ref {}", ev_name)));
 
-                let ty_ident = format_ident!("{}", ev_name);
-                let deprecated = if ev.is_deprecated() {
-                    quote! {[deprecated]}
-                } else {
-                    TokenStream::default()
-                };
-
                 // See https://rust-lang.github.io/rust-clippy/master/#large_enum_variant
                 // The maximum size of a enum’s variant to avoid box suggestion is 200
-                let ty_ident = if size < 200 {
-                    quote! {super::#protocol_mod::#domain_mod::#ty_ident}
-                } else {
-                    quote! {Box<super::#protocol_mod::#domain_mod::#ty_ident>}
-                };
+                let needs_box = size < 200;
 
-                variants_stream.extend(quote! {
-                    #rename
-                    #deprecated
-                    #var_ident(#ty_ident),
+                events.push(EventType {
+                    protocol_mod,
+                    domain,
+                    inner: event,
+                    needs_box,
                 });
-                var_idents.push(var_ident);
             }
         }
-        let tag = self.serde_support.tag("method");
-        let event_json = self.serde_support.generate_event_json_support(&var_idents);
-        quote! {
-            #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-            #tag
-            pub enum Event {
-                #variants_stream
-            }
-
-            impl chromeoxid_types::Method for Event {
-
-                fn identifier(&self) -> ::std::borrow::Cow<'static, str> {
-                    match self {
-                        #(Event::#var_idents(inner) => inner.identifier()),*
-                    }
-                }
-            }
-            #event_json
-        }
+        EventBuilder::new(events).build()
     }
 }
 
@@ -879,72 +848,6 @@ impl SerdeSupport {
         SerdeSupport::Feature(feature.into())
     }
 
-    fn tag(&self, name: &str) -> TokenStream {
-        match self {
-            SerdeSupport::None => TokenStream::default(),
-            SerdeSupport::Default => quote! {
-                 #[serde(tag = #name)]
-            },
-            SerdeSupport::Feature(feature) => {
-                quote! {
-                    #[cfg_attr(feature = #feature,  serde(tag = #name))]
-                }
-            }
-        }
-    }
-
-    fn event_impl() -> TokenStream {
-        quote! {
-           impl std::convert::TryInto<chromeoxid_types::CdpEvent> for Event {
-                type Error = serde_json::Error;
-
-                fn try_into(self) -> Result<chromeoxid_types::CdpEvent, Self::Error> {
-                    use chromeoxid_types::Method;
-                    Ok(chromeoxid_types::CdpEvent {
-                        method: self.identifier(),
-                        session_id: None,
-                        params: self.to_params()?
-                    })
-                }
-           }
-        }
-    }
-
-    fn event_try_into(var_idents: &[Ident]) -> TokenStream {
-        quote! {
-           impl Event {
-                pub fn to_params(&self) -> serde_json::Result<serde_json::Value> {
-                    match self {
-                        #(Event::#var_idents(inner) => serde_json::to_value(inner)),*
-                    }
-                }
-           }
-        }
-    }
-
-    fn generate_event_json_support(&self, var_idents: &[Ident]) -> TokenStream {
-        match self {
-            SerdeSupport::None => TokenStream::default(),
-            SerdeSupport::Default => {
-                let event_impl = Self::event_impl();
-                let event_try_into = Self::event_try_into(var_idents);
-                quote! {
-                    #event_impl
-                    #event_try_into
-                }
-            }
-            SerdeSupport::Feature(feature) => {
-                let event_impl = Self::event_impl();
-                let event_try_into = Self::event_try_into(var_idents);
-                quote! {
-                    #[cfg(feature = #feature )]
-                    #event_impl
-                    #[cfg(feature = #feature )]
-                    #event_try_into
-                }
-            }
-        }
-    }
     fn generate_enum_derives(&self) -> TokenStream {
         match self {
             SerdeSupport::None => TokenStream::default(),
@@ -960,15 +863,16 @@ impl SerdeSupport {
         }
     }
 
-    fn generate_enum_rename(&self, name: &str) -> TokenStream {
+    fn generate_serde_import_deserialize(&self) -> TokenStream {
         match self {
             SerdeSupport::None => TokenStream::default(),
             SerdeSupport::Default => quote! {
-                 #[serde(rename = #name)]
+                 use serde::Deserialize;
             },
             SerdeSupport::Feature(feature) => {
                 quote! {
-                   #[cfg_attr(feature = #feature,  serde(rename_all = #name))]
+                    #[cfg(feature = #feature)]
+                    use serde::Deserialize;
                 }
             }
         }
@@ -1093,7 +997,6 @@ pub fn fmt(out_dir: impl AsRef<Path>) {
                 exit(1)
             }
             Ok(output) => {
-                eprintln!("formatted {}", out_dir.display());
                 if !output.status.success() {
                     io::stderr().write_all(&output.stderr).unwrap();
                     exit(output.status.code().unwrap_or(1))

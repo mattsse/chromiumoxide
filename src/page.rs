@@ -56,6 +56,9 @@ impl Tab {
         )
         .await?;
 
+        // TODO enable networking
+        // self.execute(browser_protocol::network::EnableParams::default()).await?;
+
         let inner = Arc::new(TabInner {
             target_id,
             commands,
@@ -105,6 +108,7 @@ impl Tab {
             .execute(QuerySelectorParams::new(root, selector))
             .await?
             .node_id;
+
         Ok(Element::new(Arc::clone(&self.inner), node_id).await?)
     }
 
