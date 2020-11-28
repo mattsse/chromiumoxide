@@ -1,10 +1,10 @@
 [package]
-name = "chromeoxid_pdl"
+name = "chromiumoxid_pdl"
 version = "0.1.0"
 authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
 edition = "2018"
 license = "MIT OR APACHE-2.0"
-repository = "https://github.com/mattsse/chromeoxid"
+repository = "https://github.com/mattsse/chromiumoxid"
 
 [[bin]]
 path = "cdproto-gen.rs"
@@ -21,7 +21,7 @@ serde_json = "1.0"
 reqwest = { version = "0.10", optional = true }
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0.21"
-chromeoxid_types = { path = "../chromeoxid_types", version = "0.1.0" }
+chromiumoxid_types = { path = "../chromiumoxid_types", version = "0.1.0" }
 either = "1.6.1"
 
 [features]

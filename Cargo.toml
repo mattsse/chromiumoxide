@@ -1,14 +1,14 @@
 [package]
-name = "chromeoxid"
+name = "chromiumoxid"
 version = "0.1.0"
 authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
 edition = "2018"
 license = "MIT OR APACHE-2.0"
 readme = "README.md"
-repository = "https://github.com/mattsse/chromeoxid"
+repository = "https://github.com/mattsse/chromiumoxid"
 
 [build-dependencies]
-chromeoxid_pdl = { path = "chromeoxid_pdl", version = "0.1.0" }
+chromiumoxid_pdl = { path = "chromiumoxid_pdl", version = "0.1.0" }
 
 [dependencies]
 async-tungstenite = { version = "0.10", features = ["async-std-runtime"] }
@@ -17,8 +17,8 @@ async-std = { version = "1.6", features = ["attributes", "unstable"] }
 anyhow = "1.0"
 regex = "1.4"
 futures = "0.3"
-chromeoxid_pdl = { path = "chromeoxid_pdl", version = "0.1.0" }
-chromeoxid_types = { path = "chromeoxid_types", version = "0.1.0" }
+chromiumoxid_pdl = { path = "chromiumoxid_pdl", version = "0.1.0" }
+chromiumoxid_types = { path = "chromiumoxid_types", version = "0.1.0" }
 serde_json = "1.0"
 which = "4.0.2"
 thiserror = "1.0.22"
@@ -41,6 +41,6 @@ pdl = []
 
 [workspace]
 members = [
-    "chromeoxid_pdl",
-    "chromeoxid_types"
+    "chromiumoxid_pdl",
+    "chromiumoxid_types"
 ]

@@ -12,5 +12,5 @@ pub enum CdpError {
     #[error("{0}")]
     Serde(#[from] serde_json::Error),
     #[error("{0}")]
-    Chrome(#[from] chromeoxid_types::Error),
+    Chrome(#[from] chromiumoxid_types::Error),
 }

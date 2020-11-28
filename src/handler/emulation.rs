@@ -1,4 +1,4 @@
-use chromeoxid_types::Method;
+use chromiumoxid_types::Method;
 
 use crate::cdp::browser_protocol::emulation::{
     ScreenOrientation, ScreenOrientationType, SetDeviceMetricsOverrideParams,

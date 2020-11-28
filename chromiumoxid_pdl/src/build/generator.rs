@@ -42,7 +42,7 @@ use crate::pdl::{DataType, Domain, Param, Protocol, Type, Variant};
 /// ```rust,no_run
 /// # use std::io::Result;
 /// fn main() -> Result<()> {
-///   chromeoxid_pdl::build::compile_pdls(&["src/js.pdl", "src/browser.pdl"])?;
+///   chromiumoxid_pdl::build::compile_pdls(&["src/js.pdl", "src/browser.pdl"])?;
 ///   Ok(())
 /// }
 /// ```
@@ -135,7 +135,7 @@ impl Generator {
     /// Compile `.pdls` files into Rust files during a Cargo build with
     /// additional code generator configuration options.
     ///
-    /// This method is like the `chromeoxid_pdl::build::compile_pdls` function,
+    /// This method is like the `chromiumoxid_pdl::build::compile_pdls` function,
     /// with the added ability to specify non-default code generation
     /// options. See that function for more information about the arguments
     /// and generated outputs.
@@ -145,7 +145,7 @@ impl Generator {
     /// ```rust,no_run
     /// # use std::io::Result;
     /// fn main() -> Result<()> {
-    ///   let mut pdl_build = chromeoxid_pdl::build::Generator::default();
+    ///   let mut pdl_build = chromiumoxid_pdl::build::Generator::default();
     ///   pdl_build.out_dir("some/path");
     ///   pdl_build.compile_pdls(&["src/frontend.pdl", "src/backend.pdl"])?;
     ///   Ok(())
@@ -345,7 +345,7 @@ impl Generator {
             });
             if !dt.is_type() {
                 stream.extend(quote! {
-                    impl chromeoxid_types::Method for #name {
+                    impl chromiumoxid_types::Method for #name {
 
                         fn identifier(&self) -> ::std::borrow::Cow<'static, str> {
                             Self::IDENTIFIER.into()
@@ -374,7 +374,7 @@ impl Generator {
                 // impl `Command` trait
                 let response = format_ident!("{}Returns", dt.name().to_camel_case());
                 stream.extend(quote! {
-                    impl chromeoxid_types::Command for #name {
+                    impl chromiumoxid_types::Command for #name {
                         type Response = #response;
                     }
                 });

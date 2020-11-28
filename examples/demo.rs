@@ -1,13 +1,10 @@
-use chromeoxid::browser::Browser;
+use chromiumoxid::browser::{Browser, BrowserConfig};
+use chromiumoxid::cdp::browser_protocol;
 use futures::StreamExt;
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let url = "ws://127.0.0.1:53114/devtools/browser/c0606c14-d0ae-4285-90cd-932bbf38bae7";
-
-    let (browser, mut fut) = Browser::connect(url).await?;
-
-    println!("here");
+    let (browser, mut fut) = Browser::launch(BrowserConfig::builder().build().unwrap()).await?;
 
     let handle = async_std::task::spawn(async move {
         loop {
@@ -16,12 +13,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    let tab = browser.new_tab("about:blank").await?;
-    std::thread::sleep(std::time::Duration::from_secs(5));
-    let doc = tab.get_document().await?;
-    dbg!(doc);
-    println!("here3");
-    handle.await;
+    let tab = browser.new_page("https://en.wikipedia.org").await?;
 
+    tab.execute(browser_protocol::network::EnableParams::default())
+        .await?;
+
+    tab.goto("https://news.ycombinator.com/").await;
+
+    // std::thread::sleep(std::time::Duration::from_millis(1000));
+
+    // tab.get_document().await?;
+
+    // dbg!(tab.find_element("input#searchInput").await?);
+
+    handle.await;
     Ok(())
 }

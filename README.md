@@ -1,12 +1,12 @@
-chromeoxid
+chromiumoxid
 =====================
-![Build](https://github.com/mattsse/chromeoxid/workflows/Continuous%20integration/badge.svg)
-[![Crates.io](https://img.shields.io/crates/v/chromeoxid.svg)](https://crates.io/crates/chromeoxid)
-[![Documentation](https://docs.rs/chromeoxid/badge.svg)](https://docs.rs/chromeoxid)
+![Build](https://github.com/mattsse/chromiumoxid/workflows/Continuous%20integration/badge.svg)
+[![Crates.io](https://img.shields.io/crates/v/chromiumoxid.svg)](https://crates.io/crates/chromiumoxid)
+[![Documentation](https://docs.rs/chromiumoxid/badge.svg)](https://docs.rs/chromiumoxid)
 
 
 ## Generated Code
-`chromeoxid` generates Rust code from `*.pdl` files.
+`chromiumoxid` generates Rust code from `*.pdl` files.
 
 ## License
 

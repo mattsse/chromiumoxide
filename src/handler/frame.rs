@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use fnv::FnvHashMap;
 
-use chromeoxid_types::{CdpJsonEventMessage, Method};
+use chromiumoxid_types::{CdpJsonEventMessage, Method};
 
 use crate::cdp::browser_protocol::network::LoaderId;
 use crate::cdp::browser_protocol::page::*;
@@ -117,10 +117,10 @@ impl FrameManager {
     }
 
     pub fn main_frame(&self) -> Option<&Frame> {
-        self.main_frame.as_ref().and_then(|id|self.frames.get(id))
+        self.main_frame.as_ref().and_then(|id| self.frames.get(id))
     }
 
-    pub fn frames(&self) -> impl Iterator<Item = &Frame> +'_ {
+    pub fn frames(&self) -> impl Iterator<Item = &Frame> + '_ {
         self.frames.values()
     }
 
@@ -132,10 +132,7 @@ impl FrameManager {
 
     pub fn check_lifecycle_complete(&self, id: NavigationId) {}
 
-    pub fn navigate_frame(&mut self, frame_id: &FrameId, req: NavigationRequest) {
-
-
-    }
+    pub fn navigate_frame(&mut self, frame_id: &FrameId, req: NavigationRequest) {}
 
     /// Fired when a frame moved to another session
     fn on_attached_to_target(&mut self, event: &EventAttachedToTarget) {
@@ -201,9 +198,7 @@ impl FrameManager {
         }
     }
 
-    fn on_frame_execution_context_created(&mut self, event: &EventExecutionContextCreated) {
-
-    }
+    fn on_frame_execution_context_created(&mut self, event: &EventExecutionContextCreated) {}
 
     fn on_frame_execution_context_destroyed(&mut self, event: &EventExecutionContextDestroyed) {}
 

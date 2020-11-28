@@ -18,7 +18,7 @@ use futures::SinkExt;
 use futures::Stream;
 use serde::Serialize;
 
-use chromeoxid_types::*;
+use chromiumoxid_types::*;
 
 use crate::cdp::browser_protocol::target::{
     CreateTargetParams, SessionId, SetDiscoverTargetsParams,
@@ -27,7 +27,7 @@ use crate::conn::Connection;
 use crate::handler::Handler;
 use crate::page::Page;
 
-/// A [`Browser`] is created when chromeoxid connects to a Chromium instance.
+/// A [`Browser`] is created when chromiumoxid connects to a Chromium instance.
 ///
 /// Browser drives all the events and dispatches to Tabs?
 pub struct Browser {

@@ -120,7 +120,7 @@ struct Frame {
     parent_frame: Option<Box<Frame>>,
 }
 
-/// A Browser is created when chromeoxid connects to a Chromium instance
+/// A Browser is created when chromiumoxid connects to a Chromium instance
 struct Browser {
     contexts: HashMap<BrowserContextId, BrowserContext>,
     default_context: BrowserContext,

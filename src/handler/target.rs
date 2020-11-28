@@ -6,7 +6,7 @@ use futures::channel::oneshot::Sender;
 use futures::task::Poll;
 use serde_json::Value;
 
-use chromeoxid_types::{Method, Request, Response};
+use chromiumoxid_types::{Method, Request, Response};
 
 use crate::cdp::browser_protocol::browser::BrowserContextId;
 use crate::cdp::browser_protocol::log;

@@ -10,7 +10,7 @@ use futures::stream::{Fuse, Stream};
 use futures::task::{Context, Poll};
 use futures::StreamExt;
 
-use chromeoxid_types::{CallId, CdpJsonEventMessage, Event, Message, Response};
+use chromiumoxid_types::{CallId, CdpJsonEventMessage, Event, Message, Response};
 
 use crate::{
     browser::{BrowserMessage, CommandMessage},

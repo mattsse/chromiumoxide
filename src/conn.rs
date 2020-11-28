@@ -9,7 +9,7 @@ use futures::stream::Stream;
 use futures::task::{Context, Poll};
 use futures::Sink;
 
-use chromeoxid_types::{CallId, Event, Message, MethodCall};
+use chromiumoxid_types::{CallId, Event, Message, MethodCall};
 
 use crate::cdp::browser_protocol::target::SessionId;
 use crate::error::CdpError;

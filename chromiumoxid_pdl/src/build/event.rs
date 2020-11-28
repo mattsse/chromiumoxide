@@ -91,7 +91,7 @@ impl<'a> EventBuilder<'a> {
                 /// Json params
                 pub params: CdpEvent,
             }
-            impl chromeoxid_types::Method for CdpEventMessage {
+            impl chromiumoxid_types::Method for CdpEventMessage {
                 fn identifier(&self) -> ::std::borrow::Cow<'static, str> {
                    match &self.params {
                         #(CdpEvent::#var_idents(inner) => inner.identifier(),)*
@@ -99,7 +99,7 @@ impl<'a> EventBuilder<'a> {
                     }
                 }
             }
-            impl chromeoxid_types::Event for CdpEventMessage {
+            impl chromiumoxid_types::Event for CdpEventMessage {
                 fn session_id(&self) -> Option<&str> {
                     self.session_id.as_ref().map(|x| x.as_str())
                 }
@@ -224,12 +224,12 @@ impl<'a> EventBuilder<'a> {
                 }
             }
 
-            impl std::convert::TryInto<chromeoxid_types::CdpJsonEventMessage> for CdpEventMessage {
+            impl std::convert::TryInto<chromiumoxid_types::CdpJsonEventMessage> for CdpEventMessage {
                 type Error = serde_json::Error;
 
-                fn try_into(self) -> Result<chromeoxid_types::CdpJsonEventMessage, Self::Error> {
-                    use chromeoxid_types::Method;
-                    Ok(chromeoxid_types::CdpJsonEventMessage {
+                fn try_into(self) -> Result<chromiumoxid_types::CdpJsonEventMessage, Self::Error> {
+                    use chromiumoxid_types::Method;
+                    Ok(chromiumoxid_types::CdpJsonEventMessage {
                         method: self.identifier(),
                         session_id: self.session_id,
                         params: self.params.to_json()?

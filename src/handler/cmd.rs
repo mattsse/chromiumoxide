@@ -5,7 +5,7 @@ use std::time::Instant;
 use futures::channel::oneshot::Sender;
 use futures::task::Poll;
 
-use chromeoxid_types::Response;
+use chromiumoxid_types::Response;
 
 use crate::cdp::browser_protocol::target::TargetId;
 use crate::page::Page;

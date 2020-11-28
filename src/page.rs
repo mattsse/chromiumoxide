@@ -6,7 +6,7 @@ use futures::channel::mpsc::Sender;
 use futures::channel::oneshot::channel as oneshot_channel;
 use futures::{future, SinkExt};
 
-use chromeoxid_types::*;
+use chromiumoxid_types::*;
 
 use crate::browser::CommandMessage;
 use crate::cdp::browser_protocol;
