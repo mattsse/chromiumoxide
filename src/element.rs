@@ -1,9 +1,10 @@
+use std::sync::Arc;
+
 use crate::cdp::browser_protocol::dom::{
     BackendNodeId, DescribeNodeParams, NodeId, QuerySelectorParams, ResolveNodeParams,
 };
 use crate::cdp::js_protocol::runtime::RemoteObjectId;
-use crate::tab::TabInner;
-use std::sync::Arc;
+use crate::page::PageInner;
 
 /// A handle to a [DOM Element](https://developer.mozilla.org/en-US/docs/Web/API/Element).
 #[derive(Debug)]
@@ -11,11 +12,11 @@ pub struct Element {
     pub remote_object_id: RemoteObjectId,
     pub backend_node_id: BackendNodeId,
     pub node_id: NodeId,
-    tab: Arc<TabInner>,
+    tab: Arc<PageInner>,
 }
 
 impl Element {
-    pub(crate) async fn new(tab: Arc<TabInner>, node_id: NodeId) -> anyhow::Result<Self> {
+    pub(crate) async fn new(tab: Arc<PageInner>, node_id: NodeId) -> anyhow::Result<Self> {
         let backend_node_id = tab
             .execute(
                 DescribeNodeParams::builder()

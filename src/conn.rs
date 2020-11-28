@@ -1,11 +1,10 @@
+use std::borrow::Cow;
 use std::collections::VecDeque;
-
+use std::marker::PhantomData;
 use std::pin::Pin;
 
 use async_tungstenite::async_std::ConnectStream;
-
 use async_tungstenite::WebSocketStream;
-
 use futures::stream::Stream;
 use futures::task::{Context, Poll};
 use futures::Sink;
@@ -14,8 +13,6 @@ use chromeoxid_types::{CallId, Event, Message, MethodCall};
 
 use crate::cdp::browser_protocol::target::SessionId;
 use crate::error::CdpError;
-use std::borrow::Cow;
-use std::marker::PhantomData;
 
 /// Exchanges the messages with the websocket
 #[must_use = "streams do nothing unless polled"]

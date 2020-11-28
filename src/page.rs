@@ -1,19 +1,18 @@
+use std::path::Path;
 use std::sync::Arc;
 
+use anyhow::{anyhow, Result};
 use futures::channel::mpsc::Sender;
 use futures::channel::oneshot::channel as oneshot_channel;
 use futures::{future, SinkExt};
 
+use chromeoxid_types::*;
+
 use crate::browser::CommandMessage;
 use crate::cdp::browser_protocol;
-use crate::cdp::browser_protocol::dom::{
-    DescribeNodeParams, GetDocumentParams, GetFrameOwnerParams, Node, NodeId,
-    QuerySelectorAllParams, QuerySelectorParams,
-};
+use crate::cdp::browser_protocol::dom::*;
 use crate::cdp::browser_protocol::network::{Cookie, GetCookiesParams, SetUserAgentOverrideParams};
-use crate::cdp::browser_protocol::page::{
-    FrameId, FrameTree, GetFrameTreeParams, NavigateParams, PrintToPdfParams,
-};
+use crate::cdp::browser_protocol::page::*;
 use crate::cdp::browser_protocol::target::{
     ActivateTargetParams, AttachToTargetParams, SessionId, TargetId,
 };
@@ -21,29 +20,26 @@ use crate::cdp::js_protocol;
 use crate::cdp::js_protocol::debugger::GetScriptSourceParams;
 use crate::cdp::js_protocol::runtime::{EvaluateParams, RemoteObject, ScriptId};
 use crate::element::Element;
-use anyhow::{anyhow, Result};
-use chromeoxid_types::*;
-use std::path::Path;
 
 #[derive(Debug)]
-pub(crate) struct TabInner {
+pub(crate) struct PageInner {
     target_id: TargetId,
     session_id: SessionId,
     commands: Sender<CommandMessage>,
 }
 
-impl TabInner {
+impl PageInner {
     pub(crate) async fn execute<T: Command>(&self, cmd: T) -> Result<CommandResponse<T::Response>> {
         Ok(execute(cmd, self.commands.clone(), Some(self.session_id.clone())).await?)
     }
 }
 
 #[derive(Debug)]
-pub struct Tab {
-    inner: Arc<TabInner>,
+pub struct Page {
+    inner: Arc<PageInner>,
 }
 
-impl Tab {
+impl Page {
     pub(crate) async fn new(target_id: TargetId, commands: Sender<CommandMessage>) -> Result<Self> {
         // See https://vanilla.aslushnikov.com/?Target.attachToTarget
         let resp = execute(
@@ -59,7 +55,7 @@ impl Tab {
         // TODO enable networking
         // self.execute(browser_protocol::network::EnableParams::default()).await?;
 
-        let inner = Arc::new(TabInner {
+        let inner = Arc::new(PageInner {
             target_id,
             commands,
             session_id: resp.result.session_id,
