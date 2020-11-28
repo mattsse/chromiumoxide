@@ -135,10 +135,10 @@ impl Generator {
     /// Compile `.pdls` files into Rust files during a Cargo build with
     /// additional code generator configuration options.
     ///
-    /// This method is like the `chromiumoxid_pdl::build::compile_pdls` function,
-    /// with the added ability to specify non-default code generation
-    /// options. See that function for more information about the arguments
-    /// and generated outputs.
+    /// This method is like the `chromiumoxid_pdl::build::compile_pdls`
+    /// function, with the added ability to specify non-default code
+    /// generation options. See that function for more information about the
+    /// arguments and generated outputs.
     ///
     /// # Example `build.rs`
     ///
