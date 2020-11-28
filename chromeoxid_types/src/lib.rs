@@ -59,24 +59,22 @@ impl<T: fmt::Debug> Deref for CommandResponse<T> {
     }
 }
 
-/// An event produced by the Chrome instance
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-pub struct CdpEvent {
+#[derive(Deserialize, Debug, PartialEq, Clone)]
+pub struct CdpJsonEventMessage {
     /// Name of the method
     pub method: Cow<'static, str>,
-    #[serde(rename = "sessionId", skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
     /// Json params
     pub params: serde_json::Value,
 }
 
-impl Method for CdpEvent {
+impl Method for CdpJsonEventMessage {
     fn identifier(&self) -> Cow<'static, str> {
         self.method.clone()
     }
 }
 
-impl Event for CdpEvent {
+impl Event for CdpJsonEventMessage {
     fn session_id(&self) -> Option<&str> {
         self.params.get("sessionId").and_then(|x| x.as_str())
     }
@@ -118,7 +116,16 @@ pub trait Method {
     }
 }
 
-/// A response to a [`MethodCall`] from the Chrome instance
+/// A cdp request
+#[derive(Deserialize, Debug, PartialEq, Clone)]
+pub struct Request {
+    pub method: Cow<'static, str>,
+    #[serde(rename = "sessionId", skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    pub params: serde_json::Value,
+}
+
+/// A response to a [`MethodCall`] from the chromium instance
 #[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct Response {
     /// matching [`MethodCall`] identifier
@@ -129,11 +136,11 @@ pub struct Response {
     pub error: Option<Error>,
 }
 
-// TODO imple custom deserialize https://users.rust-lang.org/t/how-to-deserialize-untagged-enums-fast/28331/4
+// TODO impl custom deserialize https://users.rust-lang.org/t/how-to-deserialize-untagged-enums-fast/28331/4
 #[derive(Deserialize, Debug, Clone)]
 #[serde(untagged)]
 #[allow(clippy::large_enum_variant)]
-pub enum Message<T = CdpEvent> {
+pub enum Message<T = CdpJsonEventMessage> {
     Response(Response),
     Event(T),
 }
