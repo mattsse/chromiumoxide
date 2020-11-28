@@ -13,7 +13,7 @@ chromeoxid_pdl = { path = "chromeoxid_pdl", version = "0.1.0" }
 [dependencies]
 async-tungstenite = { version = "0.10", features = ["async-std-runtime"] }
 serde = { version = "1.0", features = ["derive"] }
-async-std = { version = "1.6", features = ["attributes"] }
+async-std = { version = "1.6", features = ["attributes", "unstable"] }
 anyhow = "1.0"
 regex = "1.4"
 futures = "0.3"
@@ -26,6 +26,10 @@ url = "2.1.1"
 tungstenite = "0.11.1"
 bytes = "0.6.0"
 log = "0.4.11"
+base64 = "0.13.0"
+fnv = "1.0.7"
+futures-timer = "3.0.2"
+smallvec = "1.5.0"
 
 [dev-dependencies]
 quote = "1.0"
