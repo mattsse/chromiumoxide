@@ -1,8 +1,5 @@
-use anyhow::Result;
-use async_std::future;
-use futures::channel::mpsc::{channel, Receiver, Sender};
-use futures::channel::oneshot::{channel as oneshot_channel, Sender as OneshotSender};
-use serde::Serialize;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use std::time::Duration;
 use std::{
     borrow::Cow,
@@ -13,16 +10,28 @@ use std::{
     sync::Arc,
 };
 
+use anyhow::Result;
+use async_std::future;
+use futures::channel::mpsc::{channel, Receiver, Sender};
+use futures::channel::oneshot::{channel as oneshot_channel, Sender as OneshotSender};
+use futures::SinkExt;
+use futures::Stream;
+use serde::Serialize;
+
 use chromeoxid_types::*;
 
-use crate::cdp::browser_protocol::target::{CreateTargetParams, SessionId};
+use crate::cdp::browser_protocol::target::{
+    CreateTargetParams, SessionId, SetDiscoverTargetsParams,
+};
 use crate::conn::Connection;
-use crate::context::CdpFuture;
-use crate::tab::Tab;
-use futures::SinkExt;
+use crate::handler::Handler;
+use crate::page::Page;
 
+/// A [`Browser`] is created when chromeoxid connects to a Chromium instance.
+///
+/// Browser drives all the events and dispatches to Tabs?
 pub struct Browser {
-    tabs: Vec<Arc<Tab>>,
+    tabs: Vec<Arc<Page>>,
     /// The `Sender` to send messages to the connection handler that drives the
     /// websocket
     sender: Sender<BrowserMessage>,
@@ -36,13 +45,13 @@ pub struct Browser {
 
 impl Browser {
     /// Connect to an already running chromium instance via websocket
-    pub async fn connect(debug_ws_url: impl Into<String>) -> Result<(Self, CdpFuture)> {
+    pub async fn connect(debug_ws_url: impl Into<String>) -> Result<(Self, Handler)> {
         let debug_ws_url = debug_ws_url.into();
-        let conn = Connection::<CdpEvent>::connect(&debug_ws_url).await?;
+        let conn = Connection::<CdpJsonEventMessage>::connect(&debug_ws_url).await?;
 
         let (tx, rx) = channel(1);
 
-        let fut = CdpFuture::new(conn, rx);
+        let fut = Handler::new(conn, rx);
         let browser = Self {
             tabs: vec![],
             sender: tx,
@@ -60,7 +69,7 @@ impl Browser {
     ///
     /// This fails if no web socket url could be detected from the child
     /// processes stderr for more than 20 seconds.
-    pub async fn launch(config: BrowserConfig) -> Result<(Self, CdpFuture)> {
+    pub async fn launch(config: BrowserConfig) -> Result<(Self, Handler)> {
         // launch a new chromium instance
         let mut child = config.launch()?;
 
@@ -70,19 +79,32 @@ impl Browser {
         let dur = Duration::from_secs(20);
         let debug_ws_url = future::timeout(dur, get_ws_url).await?;
 
-        let conn = Connection::<CdpEvent>::connect(&debug_ws_url).await?;
+        let conn = Connection::<CdpJsonEventMessage>::connect(&debug_ws_url).await?;
 
         let (tx, rx) = channel(1);
 
-        let fut = CdpFuture::new(conn, rx);
+        let fut = Handler::new(conn, rx);
+
         let browser = Self {
-            tabs: vec![],
+            tabs: Vec::new(),
             sender: tx,
             config: Some(config),
             child: Some(child),
             debug_ws_url,
         };
+
         Ok((browser, fut))
+    }
+
+    pub async fn set_discover_targets(&self) -> Result<()> {
+        // discover targets
+        // let (discover_tx, discover_rx) = oneshot_channel();
+
+        let cmd = SetDiscoverTargetsParams::new(true);
+
+        let resp = self.execute(cmd).await?;
+
+        Ok(())
     }
 
     /// Returns the address of the websocket this browser is attached to
@@ -90,8 +112,8 @@ impl Browser {
         &self.debug_ws_url
     }
 
-    /// Create a new tab and return a handle to it.
-    pub async fn new_tab(&self, params: impl Into<CreateTargetParams>) -> Result<Tab> {
+    /// Create a new page and return a handle to it.
+    pub async fn new_page(&self, params: impl Into<CreateTargetParams>) -> Result<Page> {
         let params = params.into();
         let resp = self.execute(params).await?;
         let target_id = resp.result.target_id;
@@ -101,11 +123,13 @@ impl Browser {
             .clone()
             .send(BrowserMessage::RegisterTab(from_commands))
             .await?;
-        Ok(Tab::new(target_id, commands).await?)
+        Ok(Page::new(target_id, commands).await?)
     }
 
-    pub async fn new_blank_tab(&self) -> anyhow::Result<Tab> {
-        Ok(self.new_tab(CreateTargetParams::new("about:blank")).await?)
+    pub async fn new_blank_tab(&self) -> anyhow::Result<Page> {
+        Ok(self
+            .new_page(CreateTargetParams::new("about:blank"))
+            .await?)
     }
 
     /// Call a browser method.
@@ -212,6 +236,14 @@ async fn ws_url_from_output(child_process: &mut Child) -> String {
         }
     });
     handle.await
+}
+
+impl Stream for Browser {
+    type Item = ();
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        unimplemented!()
+    }
 }
 
 #[derive(Debug, Clone)]

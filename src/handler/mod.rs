@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::pin::Pin;
 
 use futures::channel::mpsc::Receiver;
@@ -6,21 +7,35 @@ use futures::stream::{Fuse, Stream};
 use futures::task::{Context, Poll};
 use futures::StreamExt;
 
-use chromeoxid_types::{CallId, CdpEvent, Event, Message, Response};
+use chromeoxid_types::{CallId, CdpJsonEventMessage, Event, Message, Response};
 
 use crate::browser::{BrowserMessage, CommandMessage};
+use crate::cdp::browser_protocol::target::SessionId;
 use crate::conn::Connection;
 use crate::error::CdpError;
-use std::collections::HashMap;
 
-pub struct CdpFuture<T: Event = CdpEvent> {
+mod browser;
+mod cmd;
+mod emulation;
+mod frame;
+mod handler2;
+mod job;
+mod network;
+mod page;
+mod session;
+mod target;
+mod viewport;
+
+// TODO move logic inside, this is essentially the `Browser` class from
+// puppeteer
+pub struct Handler<T: Event = CdpJsonEventMessage> {
     pending_commands: HashMap<CallId, OneshotSender<Response>>,
     from_tabs: Vec<Fuse<Receiver<CommandMessage>>>,
     from_browser: Fuse<Receiver<BrowserMessage>>,
     conn: Connection<T>,
 }
 
-impl<T: Event> CdpFuture<T> {
+impl<T: Event> Handler<T> {
     pub(crate) fn new(conn: Connection<T>, rx: Receiver<BrowserMessage>) -> Self {
         Self {
             pending_commands: Default::default(),
@@ -44,12 +59,10 @@ impl<T: Event> CdpFuture<T> {
         Ok(())
     }
 
-    fn on_message(&self) {
-
-    }
+    fn on_message(&self) {}
 }
 
-impl<T: Event + Unpin> Stream for CdpFuture<T> {
+impl<T: Event + Unpin> Stream for Handler<T> {
     type Item = Result<T, CdpError>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
