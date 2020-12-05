@@ -23,15 +23,16 @@ use chromiumoxid_types::*;
 use crate::cdp::browser_protocol::target::{
     CreateTargetParams, SessionId, SetDiscoverTargetsParams,
 };
+use crate::cdp::CdpEventMessage;
 use crate::conn::Connection;
-use crate::handler::Handler;
+use crate::handler::{Handler, HandlerMessage};
 use crate::page::Page;
 
 /// A [`Browser`] is created when chromiumoxid connects to a Chromium instance.
 pub struct Browser {
     /// The `Sender` to send messages to the connection handler that drives the
     /// websocket
-    sender: Sender<BrowserMessage>,
+    sender: Sender<HandlerMessage>,
     /// How the spawned chromium instance was configured, if any
     config: Option<BrowserConfig>,
     /// The spawned chromium instance
@@ -44,7 +45,7 @@ impl Browser {
     /// Connect to an already running chromium instance via websocket
     pub async fn connect(debug_ws_url: impl Into<String>) -> Result<(Self, Handler)> {
         let debug_ws_url = debug_ws_url.into();
-        let conn = Connection::<CdpJsonEventMessage>::connect(&debug_ws_url).await?;
+        let conn = Connection::<CdpEventMessage>::connect(&debug_ws_url).await?;
 
         let (tx, rx) = channel(1);
 
@@ -75,7 +76,7 @@ impl Browser {
         let dur = Duration::from_secs(20);
         let debug_ws_url = future::timeout(dur, get_ws_url).await?;
 
-        let conn = Connection::<CdpJsonEventMessage>::connect(&debug_ws_url).await?;
+        let conn = Connection::<CdpEventMessage>::connect(&debug_ws_url).await?;
 
         let (tx, rx) = channel(1);
 
@@ -91,16 +92,6 @@ impl Browser {
         Ok((browser, fut))
     }
 
-    pub async fn set_discover_targets(&self) -> Result<()> {
-        // let (discover_tx, discover_rx) = oneshot_channel();
-
-        let cmd = SetDiscoverTargetsParams::new(true);
-
-        let resp = self.execute(cmd).await?;
-
-        Ok(())
-    }
-
     /// Returns the address of the websocket this browser is attached to
     pub fn websocket_address(&self) -> &String {
         &self.debug_ws_url
@@ -108,20 +99,13 @@ impl Browser {
 
     /// Create a new browser page
     pub async fn new_page(&self, params: impl Into<CreateTargetParams>) -> Result<Page> {
-        let params = params.into();
-        let resp = self.execute(params).await?;
-        let target_id = resp.result.target_id;
+        let (tx, rx) = oneshot_channel();
 
+        self.sender
+            .clone()
+            .send(HandlerMessage::CreatePage(params.into(), tx))
+            .await?;
         todo!()
-        //
-        //
-        // let (commands, from_commands) = channel(1);
-        //
-        // self.sender
-        //     .clone()
-        //     .send(BrowserMessage::RegisterTab(from_commands))
-        //     .await?;
-        // Ok(Page::new(target_id, commands).await?)
     }
 
     pub async fn new_blank_tab(&self) -> anyhow::Result<Page> {
@@ -141,7 +125,7 @@ impl Browser {
 
         self.sender
             .clone()
-            .send(BrowserMessage::Command(msg))
+            .send(HandlerMessage::Command(msg))
             .await?;
         let resp = rx.await?;
 
