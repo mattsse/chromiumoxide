@@ -514,8 +514,17 @@ impl Generator {
                                 #name(expr)
                             }
                         }
-
                     });
+                    // Fixup specifically for `SessionId`
+                    if struct_ident == "SessionId" {
+                        stream.extend(quote! {
+                            impl std::borrow::Borrow<String> for #name {
+                                fn borrow(&self) -> &String {
+                                    &self.0
+                                }
+                            }
+                        })
+                    }
                 } else {
                     stream.extend(struct_def);
                 }
