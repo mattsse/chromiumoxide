@@ -28,10 +28,7 @@ use crate::handler::Handler;
 use crate::page::Page;
 
 /// A [`Browser`] is created when chromiumoxid connects to a Chromium instance.
-///
-/// Browser drives all the events and dispatches to Tabs?
 pub struct Browser {
-    tabs: Vec<Arc<Page>>,
     /// The `Sender` to send messages to the connection handler that drives the
     /// websocket
     sender: Sender<BrowserMessage>,
@@ -53,7 +50,6 @@ impl Browser {
 
         let fut = Handler::new(conn, rx);
         let browser = Self {
-            tabs: vec![],
             sender: tx,
             config: None,
             child: None,
@@ -86,7 +82,6 @@ impl Browser {
         let fut = Handler::new(conn, rx);
 
         let browser = Self {
-            tabs: Vec::new(),
             sender: tx,
             config: Some(config),
             child: Some(child),
@@ -97,7 +92,6 @@ impl Browser {
     }
 
     pub async fn set_discover_targets(&self) -> Result<()> {
-        // discover targets
         // let (discover_tx, discover_rx) = oneshot_channel();
 
         let cmd = SetDiscoverTargetsParams::new(true);
@@ -112,18 +106,22 @@ impl Browser {
         &self.debug_ws_url
     }
 
-    /// Create a new page and return a handle to it.
+    /// Create a new browser page
     pub async fn new_page(&self, params: impl Into<CreateTargetParams>) -> Result<Page> {
         let params = params.into();
         let resp = self.execute(params).await?;
         let target_id = resp.result.target_id;
-        let (commands, from_commands) = channel(1);
 
-        self.sender
-            .clone()
-            .send(BrowserMessage::RegisterTab(from_commands))
-            .await?;
-        Ok(Page::new(target_id, commands).await?)
+        todo!()
+        //
+        //
+        // let (commands, from_commands) = channel(1);
+        //
+        // self.sender
+        //     .clone()
+        //     .send(BrowserMessage::RegisterTab(from_commands))
+        //     .await?;
+        // Ok(Page::new(target_id, commands).await?)
     }
 
     pub async fn new_blank_tab(&self) -> anyhow::Result<Page> {

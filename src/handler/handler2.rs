@@ -9,13 +9,18 @@ use futures::channel::oneshot::Sender as OneshotSender;
 use futures::stream::{Fuse, Stream};
 use futures::task::{Context, Poll};
 use futures::StreamExt;
+use serde_json::{Error, Value};
+use smallvec::alloc::borrow::Borrow;
 
-use chromiumoxid_types::{CallId, CdpJsonEventMessage, Event, Message, Response};
+use chromiumoxid_types::{
+    CallId, CdpJsonEventMessage, Command, CommandResponse, Event, Message, Method, Response,
+};
 
 use crate::{
     browser::{BrowserMessage, CommandMessage},
     cdp::{
         browser_protocol::{browser::*, fetch::*, network::*, page::*, target::*},
+        events::CdpEvent,
         events::CdpEventMessage,
         js_protocol::runtime::*,
     },
@@ -33,12 +38,16 @@ pub const NAVIGATION_TIMEOUT: u64 = 30000;
 pub struct Handler2 {
     /// Commands that are being processed await a response from the chromium
     /// instance
-    pending_commands: FnvHashMap<CallId, (OneshotSender<Response>, Instant)>,
+    pending_commands: FnvHashMap<CallId, (PendingRequest, Instant)>,
     from_tabs: Vec<Fuse<Receiver<CommandMessage>>>,
     from_browser: Fuse<Receiver<HandlerMessage>>,
     // default_ctx: BrowserContext,
     contexts: FnvHashMap<BrowserContextId, BrowserContext>,
+    /// The created and attached targets
     targets: FnvHashMap<TargetId, Target>,
+    /// Keeps track of all the current active sessions
+    ///
+    /// There can be multiple sessions per target.
     sessions: FnvHashMap<SessionId, Session>,
     /// The websocket connection to the chromium instance
     conn: Connection<CdpEventMessage>,
@@ -58,8 +67,32 @@ impl Handler2 {
     // }
 
     fn on_response(&mut self, resp: Response) {
-        if let Some((ret, _)) = self.pending_commands.remove(&resp.id) {
-            ret.send(resp).ok();
+        if let Some((req, _)) = self.pending_commands.remove(&resp.id) {
+            match req {
+                PendingRequest::CreatePage(tx) => {
+                    match to_command_response::<CreateTargetParams>(resp, CreateTargetParams::IDENTIFIER.into()) {
+                        Ok(resp) => {
+                            if let Some(target) = self.targets.get_mut(&resp.target_id) {
+                                target.set_initiator(tx);
+                            } else {
+                                // TODO can this even happen?
+                                panic!("Created target not present")
+                            }
+                        }
+                        Err(err) => {
+                            tx.send(Err(err));
+                        }
+                    }
+                }
+                PendingRequest::ExternalCommand(tx) => {
+                    tx.send(resp);
+                }
+                PendingRequest::InternalCommand(target_id) => {
+                    if let Some(target) = self.targets.get_mut(&target_id) {
+                        target.on_response(resp);
+                    }
+                }
+            }
         }
     }
 
@@ -68,7 +101,7 @@ impl Handler2 {
             .conn
             .submit_command(msg.method, msg.session_id, msg.params)?;
         self.pending_commands
-            .insert(call_id, (msg.sender, Instant::now()));
+            .insert(call_id, (PendingRequest::ExternalCommand(msg.sender), Instant::now()));
         Ok(())
     }
 
@@ -78,26 +111,63 @@ impl Handler2 {
         // attach to target flatten
     }
 
-    /// Create a new page
-    fn create_page(&mut self, params: CreateTargetParams, tx: OneshotSender<Page>) {
+    /// Create a new page and send it to the receiver
+    fn create_page(
+        &mut self,
+        params: CreateTargetParams,
+        tx: OneshotSender<Result<Page, CdpError>>,
+    ) {
+        let method = params.identifier();
+        match serde_json::to_value(params) {
+            Ok(params) => match self.conn.submit_command(method, None, params) {
+                Ok(call_id) => {
+                    self.pending_commands
+                        .insert(call_id, (PendingRequest::CreatePage(tx), Instant::now()));
+                }
+                Err(err) => {
+                    tx.send(Err(err.into()));
+                }
+            },
+            Err(err) => {
+                tx.send(Err(err.into()));
+            }
+        }
         // 1. Target.createTarget
         // 2. initialize target
         // 3. create session
         // 4. initialize page
     }
 
-    fn on_event(&mut self, event: CdpEventMessage) {}
+    fn on_event(&mut self, event: CdpEventMessage) {
+        if let Some(ref session_id) = event.session_id {
+            if let Some(session) = self.sessions.get(session_id) {
+                if let Some(target) = self.targets.get_mut(session.target_id()) {
+                    return target.on_event(event);
+                }
+            }
+        }
+        match event.params {
+            CdpEvent::TargetTargetCreated(ev) => self.on_target_created(*ev),
+            CdpEvent::TargetAttachedToTarget(ev) => self.on_attached_to_target(*ev),
+            CdpEvent::TargetTargetDestroyed(ev) => self.on_target_destroyed(*ev),
+            _ => {}
+        }
+    }
 
     fn on_target_created(&mut self, event: EventTargetCreated) {
-        // TODO create new Target instance, store with target id
-        // TODO initialize Target
-        // create new session for this target
-        // TODO initialize target
+        let target = Target::new(event.target_info);
+        self.targets.insert(target.target_id().clone(), target);
     }
 
     fn on_attached_to_target(&mut self, event: EventAttachedToTarget) {
-        // create new session for event.target_id
-        // frame manager on_frame_moved
+        let session = Session::new(
+            event.session_id,
+            event.target_info.r#type,
+            event.target_info.target_id,
+        );
+        if let Some(target) = self.targets.get_mut(session.target_id()) {
+            target.set_session_id(session.session_id().clone())
+        }
     }
 
     /// The session was detached from target.
@@ -105,10 +175,20 @@ impl Handler2 {
     /// attached to it.
     fn on_detached_from_target(&mut self, event: EventDetachedFromTarget) {
         // remove the session
+        if let Some(session) = self.sessions.remove(&event.session_id) {
+            if let Some(target) = self.targets.get_mut(session.target_id()) {
+                target.session_id().take();
+            }
+        }
     }
 
     fn on_target_destroyed(&mut self, event: EventTargetDestroyed) {
-        // remove the target from store
+        if let Some(target) = self.targets.remove(&event.target_id) {
+            // TODO shutdown?
+            if let Some(session) = target.session_id() {
+                self.sessions.remove(session);
+            }
+        }
     }
 
     // network manager events
@@ -175,11 +255,36 @@ impl Stream for Handler2 {
     }
 }
 
+enum PendingRequest {
+    CreatePage(OneshotSender<Result<Page, CdpError>>),
+    ExternalCommand(OneshotSender<Response>),
+    InternalCommand(TargetId)
+}
+
 /// Events used internally to communicate with the handler, which are executed
 /// in the background
+// TODO rename to BrowserMessage
 pub(crate) enum HandlerMessage {
     CreatePage(CreateTargetParams, OneshotSender<Result<Page, CdpError>>),
     GetPages(OneshotSender<Vec<Page>>),
     Command(CommandMessage),
     Subscribe,
+}
+
+pub(crate) fn to_command_response<T: Command>(
+    resp: Response,
+    method: Cow<'static, str>
+) -> Result<CommandResponse<T::Response>, CdpError> {
+    if let Some(res) = resp.result {
+        let result = serde_json::from_value(res)?;
+        Ok(CommandResponse {
+            id: resp.id,
+            result,
+            method,
+        })
+    } else if let Some(err) = resp.error {
+        Err(err.into())
+    } else {
+        Err(CdpError::NoResponse)
+    }
 }
