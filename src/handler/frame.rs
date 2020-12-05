@@ -132,7 +132,9 @@ impl FrameManager {
 
     pub fn check_lifecycle_complete(&self, id: NavigationId) {}
 
-    pub fn navigate_frame(&mut self, frame_id: &FrameId, req: NavigationRequest) {}
+    pub fn navigate_frame(&mut self, frame_id: &FrameId, req: NavigationRequest) {
+        // TODO where the navigation happens
+    }
 
     /// Fired when a frame moved to another session
     fn on_attached_to_target(&mut self, event: &EventAttachedToTarget) {
@@ -218,7 +220,7 @@ impl FrameManager {
 
     /// Detach all child frames
     fn remove_frames_recursively(&mut self, id: &FrameId) -> Option<Frame> {
-        if let Some(mut frame) = self.frames.remove(&id) {
+        if let Some(mut frame) = self.frames.remove(id) {
             for child in &frame.child_frames {
                 self.remove_frames_recursively(child);
             }
