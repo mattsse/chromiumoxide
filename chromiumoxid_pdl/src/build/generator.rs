@@ -765,7 +765,7 @@ impl Generator {
 
                 // See https://rust-lang.github.io/rust-clippy/master/#large_enum_variant
                 // The maximum size of a enum’s variant to avoid box suggestion is 200
-                let needs_box = size < 200;
+                let needs_box = size > 200;
 
                 events.push(EventType {
                     protocol_mod,
