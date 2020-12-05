@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::collections::VecDeque;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
@@ -15,9 +16,9 @@ use crate::cdp::{
     events::CdpEventMessage,
     js_protocol::runtime,
 };
+use crate::error::DeadlineExceeded;
 use crate::handler::cmd::CommandChain;
-use crate::handler::handler2::NAVIGATION_TIMEOUT;
-use std::collections::VecDeque;
+use crate::handler::REQUEST_TIMEOUT;
 
 /// TODO FrameId could optimized by rolling usize based id setup, or find better
 /// design for tracking child/parent
@@ -169,8 +170,7 @@ impl FrameManager {
             if now > deadline {
                 return Some(FrameEvent::NavigationResult(Err(
                     NavigationError::Timeout {
-                        now,
-                        deadline,
+                        err: DeadlineExceeded::new(now, deadline),
                         id: watcher.id,
                     },
                 )));
@@ -190,7 +190,6 @@ impl FrameManager {
                 )));
             }
         } else {
-            // TODO queue in new nav if pending
             if let Some((req, watcher)) = self.pending_navigations.pop_front() {
                 let mut builder = NavigateParams::builder()
                     .url(req.url)
@@ -323,7 +322,7 @@ impl Default for FrameManager {
         FrameManager {
             main_frame: None,
             frames: Default::default(),
-            timeout: Duration::from_millis(NAVIGATION_TIMEOUT),
+            timeout: Duration::from_millis(REQUEST_TIMEOUT),
             pending_navigations: Default::default(),
             navigation: None,
         }
@@ -340,8 +339,7 @@ pub enum FrameEvent {
 pub enum NavigationError {
     Timeout {
         id: NavigationId,
-        now: Instant,
-        deadline: Instant,
+        err: DeadlineExceeded,
     },
     FrameNotFound {
         id: NavigationId,
@@ -390,12 +388,10 @@ impl NavigationWatcher {
             self.same_document_navigation = true;
         }
     }
-
-    fn on_network_request(&mut self, ev: ()) {}
 }
 
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
-pub struct NavigationId(usize);
+pub struct NavigationId(pub usize);
 
 #[derive(Debug)]
 pub struct NavigationRequest {

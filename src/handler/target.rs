@@ -15,13 +15,32 @@ use crate::cdp::browser_protocol::performance;
 use crate::cdp::browser_protocol::target::{SessionId, SetAutoAttachParams, TargetId, TargetInfo};
 use crate::cdp::events::CdpEvent;
 use crate::cdp::CdpEventMessage;
-use crate::error::CdpError;
+use crate::error::{CdpError, DeadlineExceeded};
 use crate::handler::cmd::CommandChain;
 use crate::handler::emulation::EmulationManager;
 use crate::handler::frame::FrameManager;
 use crate::handler::network::NetworkManager;
 use crate::handler::viewport::Viewport;
 use crate::page::{Page, PageInner};
+
+macro_rules! advance_state {
+    ($s:ident, $now:ident, $cmds: ident, $next_state:expr ) => {{
+        if let Poll::Ready(poll) = $cmds.poll($now) {
+            return match poll {
+                None => {
+                    $s.state = $next_state;
+                    $s.poll($now)
+                }
+                Some(Ok((method, params))) => Some(TargetEvent::Request(Request {
+                    method,
+                    session_id: $s.session_id.clone().map(Into::into),
+                    params,
+                })),
+                Some(Err(err)) => Some(TargetEvent::RequestTimeout(err)),
+            };
+        }
+    }};
+}
 
 pub(crate) struct Target {
     info: TargetInfo,
@@ -155,66 +174,41 @@ impl Target {
     }
 
     /// Advance that target's state
-    pub fn poll(&mut self) -> Option<TargetEvent> {
-        todo!()
-        // match &mut self.state {
-        //     TargetState::InitializingFrame(cmds) => match cmds.poll() {
-        //         Poll::Ready(Some((method, params))) => Poll::Ready(Request {
-        //             method,
-        //             session_id: self.session_id.clone().map(Into::into),
-        //             params,
-        //         }),
-        //         Poll::Ready(None) => {
-        //             self.state =
-        //
-        // TargetState::InitializingNetwork(self.network_manager.
-        // init_commands());            return self.poll()
-        //         }
-        //         _ => Poll::Pending,
-        //     },
-        //     TargetState::InitializingNetwork(cmds) => match cmds.poll() {
-        //         Poll::Ready(Some((method, params))) => Poll::Ready(Request {
-        //             method,
-        //             session_id: self.session_id.clone().map(Into::into),
-        //             params,
-        //         }),
-        //         Poll::Ready(None) => {
-        //             self.state =
-        // TargetState::InitializingPage(Self::page_init_commands());
-        //             return self.poll()
-        //         }
-        //         _ => Poll::Pending,
-        //     },
-        //     TargetState::InitializingPage(cmds) => match cmds.poll() {
-        //         Poll::Ready(Some((method, params))) => Poll::Ready(Request {
-        //             method,
-        //             session_id: self.session_id.clone().map(Into::into),
-        //             params,
-        //         }),
-        //         Poll::Ready(None) => {
-        //             self.state = TargetState::InitializingEmulation(
-        //                 self.emulation_manager.init_commands(&self.viewport),
-        //             );
-        //             return self.poll()
-        //         }
-        //         _ => Poll::Pending,
-        //     },
-        //     TargetState::InitializingEmulation(cmds) => match cmds.poll() {
-        //         Poll::Ready(Some((method, params))) => Poll::Ready(Request {
-        //             method,
-        //             session_id: self.session_id.clone().map(Into::into),
-        //             params,
-        //         }),
-        //         Poll::Ready(None) => {
-        //             if self.emulation_manager.needs_reload {
-        //                 // TODO start navigation
-        //                 panic!("");
-        //             }
-        //         }
-        //         _ => Poll::Pending,
-        //     },
-        //     _ => panic!(),
-        // }
+    pub fn poll(&mut self, now: Instant) -> Option<TargetEvent> {
+        match &mut self.state {
+            TargetState::InitializingFrame(cmds) => {
+                advance_state!(
+                    self,
+                    now,
+                    cmds,
+                    TargetState::InitializingNetwork(self.network_manager.init_commands())
+                );
+            }
+            TargetState::InitializingNetwork(cmds) => {
+                advance_state!(
+                    self,
+                    now,
+                    cmds,
+                    TargetState::InitializingPage(Self::page_init_commands())
+                );
+            }
+            TargetState::InitializingPage(cmds) => {
+                advance_state!(
+                    self,
+                    now,
+                    cmds,
+                    TargetState::InitializingEmulation(
+                        self.emulation_manager.init_commands(&self.viewport),
+                    )
+                );
+            }
+            TargetState::InitializingEmulation(cmds) => {
+                advance_state!(self, now, cmds, TargetState::Initialized);
+            }
+            TargetState::Initialized => {}
+        };
+
+        None
     }
 
     pub fn set_initiator(&mut self, tx: Sender<Result<Page, CdpError>>) {
@@ -248,26 +242,21 @@ impl Target {
 // TODO this can be moved into the classes?
 #[derive(Debug)]
 pub enum TargetState {
-    Idle,
     InitializingFrame(CommandChain),
     InitializingNetwork(CommandChain),
     InitializingPage(CommandChain),
     InitializingEmulation(CommandChain),
-    Navigating(
-        // framemanager waitForFrameNavigation
-        Navigating,
-    ),
+    Initialized,
 }
 
 impl TargetState {
     fn commands_mut(&mut self) -> Option<&mut CommandChain> {
         match self {
-            TargetState::Idle => None,
             TargetState::InitializingFrame(cmd) => Some(cmd),
             TargetState::InitializingNetwork(cmd) => Some(cmd),
             TargetState::InitializingPage(cmd) => Some(cmd),
             TargetState::InitializingEmulation(cmd) => Some(cmd),
-            TargetState::Navigating(_) => None,
+            TargetState::Initialized => None,
         }
     }
 
@@ -277,7 +266,10 @@ impl TargetState {
 }
 
 #[derive(Debug)]
-pub enum TargetEvent {}
+pub enum TargetEvent {
+    Request(Request),
+    RequestTimeout(DeadlineExceeded),
+}
 
 #[derive(Debug)]
 pub struct Navigating {
