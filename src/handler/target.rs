@@ -35,7 +35,6 @@ pub(crate) struct Target {
     state: TargetState,
     /// The sender who initiated the creation of a page.
     initiator: Option<Sender<Result<Page, CdpError>>>,
-    pending_navigations: VecDeque<(Option<Sender<Response>>, Request)>,
 }
 
 impl Target {
@@ -53,7 +52,6 @@ impl Target {
             page: None,
             state: TargetState::InitializingFrame(FrameManager::init_commands()),
             initiator: None,
-            pending_navigations: Default::default(),
         }
     }
 
@@ -115,46 +113,49 @@ impl Target {
     pub fn on_event(&mut self, event: CdpEventMessage) {
         match event.params {
             // `FrameManager` events
-            CdpEvent::PageFrameAttached(ev) => self.frame_manager.on_frame_attached(&*ev),
-            CdpEvent::PageFrameDetached(ev) => self.frame_manager.on_frame_detached(&*ev),
-            CdpEvent::PageFrameNavigated(ev) => self.frame_manager.on_frame_navigated(&ev),
+            CdpEvent::PageFrameAttached(ev) => self.frame_manager.on_frame_attached(&ev),
+            CdpEvent::PageFrameDetached(ev) => self.frame_manager.on_frame_detached(&ev),
+            CdpEvent::PageFrameNavigated(ev) => self.frame_manager.on_frame_navigated(&*ev),
             CdpEvent::PageNavigatedWithinDocument(ev) => {
-                self.frame_manager.on_frame_navigated_within_document(&*ev)
+                self.frame_manager.on_frame_navigated_within_document(&ev)
             }
             CdpEvent::RuntimeExecutionContextCreated(ev) => {
-                self.frame_manager.on_frame_execution_context_created(&*ev)
+                self.frame_manager.on_frame_execution_context_created(&ev)
             }
-            CdpEvent::RuntimeExecutionContextDestroyed(ev) => self
-                .frame_manager
-                .on_frame_execution_context_destroyed(&*ev),
+            CdpEvent::RuntimeExecutionContextDestroyed(ev) => {
+                self.frame_manager.on_frame_execution_context_destroyed(&ev)
+            }
             CdpEvent::RuntimeExecutionContextsCleared(ev) => {
-                self.frame_manager.on_execution_context_cleared(&*ev)
+                self.frame_manager.on_execution_context_cleared(&ev)
             }
-            CdpEvent::PageLifecycleEvent(ev) => self.frame_manager.on_page_lifecycle_event(&*ev),
+            CdpEvent::PageLifecycleEvent(ev) => self.frame_manager.on_page_lifecycle_event(&ev),
 
             // `NetworkManager` events
-            CdpEvent::FetchRequestPaused(ev) => self.network_manager.on_fetch_request_paused(&ev),
-            CdpEvent::FetchAuthRequired(ev) => self.network_manager.on_fetch_auth_required(&ev),
+            CdpEvent::FetchRequestPaused(ev) => self.network_manager.on_fetch_request_paused(&*ev),
+            CdpEvent::FetchAuthRequired(ev) => self.network_manager.on_fetch_auth_required(&*ev),
             CdpEvent::NetworkRequestWillBeSent(ev) => {
-                self.network_manager.on_request_will_be_sent(&ev)
+                self.network_manager.on_request_will_be_sent(&*ev)
             }
             CdpEvent::NetworkRequestServedFromCache(ev) => {
-                self.network_manager.on_request_served_from_cache(&*ev)
+                self.network_manager.on_request_served_from_cache(&ev)
             }
-            CdpEvent::NetworkResponseReceived(ev) => self.network_manager.on_response_received(&ev),
+            CdpEvent::NetworkResponseReceived(ev) => {
+                self.network_manager.on_response_received(&*ev)
+            }
             CdpEvent::NetworkLoadingFinished(ev) => {
-                self.network_manager.on_network_loading_finished(&*ev)
+                self.network_manager.on_network_loading_finished(&ev)
             }
             CdpEvent::NetworkLoadingFailed(ev) => {
-                self.network_manager.on_network_loading_failed(&*ev)
+                self.network_manager.on_network_loading_failed(&ev)
             }
-
+            // Other
+            // CdpEvent::PageLoadEventFired(ev) => self.frame_manager.on_load_event_fired(&ev),
             _ => {}
         }
     }
 
-    /// Advance its state towards a completed `Target`
-    pub fn poll(&mut self) -> Poll<Option<Request>> {
+    /// Advance that target's state
+    pub fn poll(&mut self) -> Option<TargetEvent> {
         todo!()
         // match &mut self.state {
         //     TargetState::InitializingFrame(cmds) => match cmds.poll() {
@@ -275,11 +276,8 @@ impl TargetState {
     }
 }
 
-pub struct NavigationRequest {
-    pub referer: Vec<String>,
-    pub url: String,
-    pub wait_until: WaitUntil,
-}
+#[derive(Debug)]
+pub enum TargetEvent {}
 
 #[derive(Debug)]
 pub struct Navigating {
@@ -290,13 +288,9 @@ pub struct Navigating {
     deadline: Instant,
     /// If this navigation was triggered via a channel
     sender: Option<Sender<Response>>,
-
-    navigation_id: NavigationId,
 }
 
-#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
-pub struct NavigationId(usize);
-
+#[derive(Debug)]
 pub struct WaitUntil {
     pub started: Instant,
     pub events: HashSet<Cow<'static, str>>,
@@ -312,6 +306,16 @@ impl WaitUntil {
         Self {
             started,
             events: events.into_iter().map(Into::into).collect(),
+            timeout: None,
+        }
+    }
+}
+
+impl Default for WaitUntil {
+    fn default() -> Self {
+        WaitUntil {
+            started: Instant::now(),
+            events: std::iter::once(EventLoadEventFired::IDENTIFIER.into()).collect(),
             timeout: None,
         }
     }

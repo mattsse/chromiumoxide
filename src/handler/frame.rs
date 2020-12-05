@@ -17,7 +17,7 @@ use crate::cdp::{
 };
 use crate::handler::cmd::CommandChain;
 use crate::handler::handler2::NAVIGATION_TIMEOUT;
-use crate::handler::target::{NavigationId, NavigationRequest, WaitUntil};
+use std::collections::VecDeque;
 
 /// TODO FrameId could optimized by rolling usize based id setup, or find better
 /// design for tracking child/parent
@@ -73,8 +73,10 @@ impl Frame {
     }
 
     fn on_loading_stopped(&mut self) {
-        self.lifecycle_events.insert("DOMContentLoaded".into());
-        self.lifecycle_events.insert("load".into());
+        self.lifecycle_events
+            .insert(EventDomContentEventFired::IDENTIFIER.into());
+        self.lifecycle_events
+            .insert(EventLoadEventFired::IDENTIFIER.into());
     }
 }
 
@@ -89,7 +91,9 @@ pub struct FrameManager {
     /// arrive results in an error
     timeout: Duration,
     /// Track currently in progress navigation
-    navigation_watcher: HashMap<FrameId, NavigationWatcher>,
+    pending_navigations: VecDeque<(NavigationRequest, NavigationWatcher)>,
+    /// The currently ongoing navigation
+    navigation: Option<(NavigationWatcher, Instant)>,
 }
 
 impl FrameManager {
@@ -128,10 +132,90 @@ impl FrameManager {
         self.frames.get(id)
     }
 
-    pub fn check_lifecycle_complete(&self, id: NavigationId) {}
+    fn check_lifecycle(&self, watcher: &NavigationWatcher, frame: &Frame) -> bool {
+        watcher
+            .expected_lifecycle
+            .iter()
+            .all(|ev| frame.lifecycle_events.contains(ev))
+            && frame
+                .child_frames
+                .iter()
+                .filter_map(|f| self.frames.get(f))
+                .all(|f| self.check_lifecycle(watcher, f))
+    }
 
-    pub fn navigate_frame(&mut self, frame_id: &FrameId, req: NavigationRequest) {
-        // TODO where the navigation happens
+    fn check_lifecycle_complete(
+        &self,
+        watcher: &NavigationWatcher,
+        frame: &Frame,
+    ) -> Option<NavigationOk> {
+        if !self.check_lifecycle(watcher, frame) {
+            return None;
+        }
+        if frame.loader_id == watcher.loader_id && !watcher.same_document_navigation {
+            return None;
+        }
+        if watcher.same_document_navigation {
+            return Some(NavigationOk::SameDocumentNavigation(watcher.id));
+        }
+        if frame.loader_id != watcher.loader_id {
+            return Some(NavigationOk::NewDocumentNavigation(watcher.id));
+        }
+        None
+    }
+
+    pub fn poll(&mut self, now: Instant) -> Option<FrameEvent> {
+        if let Some((watcher, deadline)) = self.navigation.take() {
+            if now > deadline {
+                return Some(FrameEvent::NavigationResult(Err(
+                    NavigationError::Timeout {
+                        now,
+                        deadline,
+                        id: watcher.id,
+                    },
+                )));
+            }
+            if let Some(frame) = self.frames.get(&watcher.frame_id) {
+                if let Some(nav) = self.check_lifecycle_complete(&watcher, frame) {
+                    return Some(FrameEvent::NavigationResult(Ok(nav)));
+                } else {
+                    self.navigation = Some((watcher, deadline));
+                }
+            } else {
+                return Some(FrameEvent::NavigationResult(Err(
+                    NavigationError::FrameNotFound {
+                        frame: watcher.frame_id,
+                        id: watcher.id,
+                    },
+                )));
+            }
+        } else {
+            // TODO queue in new nav if pending
+            if let Some((req, watcher)) = self.pending_navigations.pop_front() {
+                let mut builder = NavigateParams::builder()
+                    .url(req.url)
+                    .frame_id(watcher.frame_id.clone());
+                if let Some(referer) = req.referer {
+                    builder = builder.referrer(referer);
+                }
+                return Some(FrameEvent::NavigationRequest(builder.build().unwrap()));
+            }
+        }
+        None
+    }
+
+    /// entrypoint for page navigation
+    pub fn goto(&mut self, req: NavigationRequest) {
+        if let Some(frame_id) = self.main_frame.clone() {
+            self.navigate_frame(frame_id, req);
+        }
+    }
+
+    /// Navigate a specific frame
+    pub fn navigate_frame(&mut self, frame_id: FrameId, req: NavigationRequest) {
+        let loader_id = self.frames.get(&frame_id).and_then(|f| f.loader_id.clone());
+        let watcher = NavigationWatcher::until_page_load(req.id, frame_id, loader_id);
+        self.pending_navigations.push_back((req, watcher))
     }
 
     /// Fired when a frame moved to another session
@@ -205,6 +289,7 @@ impl FrameManager {
 
     pub fn on_execution_context_cleared(&mut self, event: &EventExecutionContextsCleared) {}
 
+    /// Fired for top level page lifecycle events (nav, load, paint, etc.)
     pub fn on_page_lifecycle_event(&mut self, event: &EventLifecycleEvent) {
         if let Some(frame) = self.frames.get_mut(&event.frame_id) {
             if event.name == "init" {
@@ -213,8 +298,6 @@ impl FrameManager {
             }
             frame.lifecycle_events.insert(event.name.clone().into());
         }
-
-        // TODO call watcher is_complete to advance
     }
 
     /// Detach all child frames
@@ -241,46 +324,83 @@ impl Default for FrameManager {
             main_frame: None,
             frames: Default::default(),
             timeout: Duration::from_millis(NAVIGATION_TIMEOUT),
-            navigation_watcher: Default::default(),
+            pending_navigations: Default::default(),
+            navigation: None,
         }
     }
+}
+
+#[derive(Debug)]
+pub enum FrameEvent {
+    NavigationResult(Result<NavigationOk, NavigationError>),
+    NavigationRequest(NavigateParams),
+}
+
+#[derive(Debug)]
+pub enum NavigationError {
+    Timeout {
+        id: NavigationId,
+        now: Instant,
+        deadline: Instant,
+    },
+    FrameNotFound {
+        id: NavigationId,
+        frame: FrameId,
+    },
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum NavigationOk {
+    SameDocumentNavigation(NavigationId),
+    NewDocumentNavigation(NavigationId),
 }
 
 /// Tracks the progress of an issued `Page.navigate` request until completion.
 #[derive(Debug)]
 pub struct NavigationWatcher {
-    lifecycle: HashSet<Cow<'static, str>>,
-    frame: FrameId,
-    deadline: Instant,
+    id: NavigationId,
+    expected_lifecycle: HashSet<Cow<'static, str>>,
+    frame_id: FrameId,
+    loader_id: Option<LoaderId>,
     /// Once we receive the response to the issued `Page.navigate` request we
     /// can detect whether we were navigating withing the same document or were
     /// navigating to a new document by checking if a loader was included in the
     /// response.
-    nav_kind: Option<DocumentNavigationKind>,
+    same_document_navigation: bool,
 }
 
 impl NavigationWatcher {
-    /// Checks whether the navigation was completed
-    pub fn is_lifecycle_complete(&self) -> bool {
-        todo!()
+    pub fn until_page_load(id: NavigationId, frame: FrameId, loader_id: Option<LoaderId>) -> Self {
+        Self {
+            id,
+            expected_lifecycle: std::iter::once(EventLoadEventFired::IDENTIFIER.into()).collect(),
+            loader_id,
+            frame_id: frame,
+            same_document_navigation: false,
+        }
     }
 
-    fn check_lifecycle_events(&self, frame: &Frame) -> bool {
-        // loop events
-        todo!()
+    /// Checks whether the navigation was completed
+    pub fn is_lifecycle_complete(&self) -> bool {
+        self.expected_lifecycle.is_empty()
     }
 
     fn on_frame_navigated_within_document(&mut self, ev: &EventNavigatedWithinDocument) {
-        if self.frame == ev.frame_id {
-            self.nav_kind = Some(DocumentNavigationKind::Same)
+        if self.frame_id == ev.frame_id {
+            self.same_document_navigation = true;
         }
     }
 
     fn on_network_request(&mut self, ev: ()) {}
 }
 
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
+pub struct NavigationId(usize);
+
 #[derive(Debug)]
-pub enum DocumentNavigationKind {
-    Same,
-    New,
+pub struct NavigationRequest {
+    pub id: NavigationId,
+    pub referer: Option<String>,
+    pub url: String,
+    pub timeout: Duration,
 }

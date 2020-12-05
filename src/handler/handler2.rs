@@ -149,9 +149,9 @@ impl Handler2 {
             }
         }
         match event.params {
-            CdpEvent::TargetTargetCreated(ev) => self.on_target_created(*ev),
-            CdpEvent::TargetAttachedToTarget(ev) => self.on_attached_to_target(*ev),
-            CdpEvent::TargetTargetDestroyed(ev) => self.on_target_destroyed(*ev),
+            CdpEvent::TargetTargetCreated(ev) => self.on_target_created(ev),
+            CdpEvent::TargetAttachedToTarget(ev) => self.on_attached_to_target(ev),
+            CdpEvent::TargetTargetDestroyed(ev) => self.on_target_destroyed(ev),
             _ => {}
         }
     }
