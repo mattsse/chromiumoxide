@@ -13,4 +13,6 @@ pub enum CdpError {
     Serde(#[from] serde_json::Error),
     #[error("{0}")]
     Chrome(#[from] chromiumoxid_types::Error),
+    #[error("Received no response from the chromium instance.")]
+    NoResponse,
 }
