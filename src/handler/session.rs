@@ -11,3 +11,20 @@ pub struct Session {
     /// The identifier of the target this session is attached to.
     target_id: TargetId,
 }
+impl Session {
+    pub fn new(id: SessionId, target_type: String, target_id: TargetId) -> Self {
+        Self {
+            id,
+            target_id,
+            target_type,
+        }
+    }
+
+    pub fn session_id(&self) -> &SessionId {
+        &self.id
+    }
+
+    pub fn target_id(&self) -> &TargetId {
+        &self.target_id
+    }
+}
