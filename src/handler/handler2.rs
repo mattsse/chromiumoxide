@@ -70,7 +70,7 @@ impl Handler2 {
         if let Some((req, _)) = self.pending_commands.remove(&resp.id) {
             match req {
                 PendingRequest::CreatePage(tx) => {
-                    match to_command_response::<CreateTargetParams>(resp, CreateTargetParams::IDENTIFIER.into()) {
+                    match to_command_response::<CreateTargetParams>(resp) {
                         Ok(resp) => {
                             if let Some(target) = self.targets.get_mut(&resp.target_id) {
                                 target.set_initiator(tx);
@@ -100,8 +100,10 @@ impl Handler2 {
         let call_id = self
             .conn
             .submit_command(msg.method, msg.session_id, msg.params)?;
-        self.pending_commands
-            .insert(call_id, (PendingRequest::ExternalCommand(msg.sender), Instant::now()));
+        self.pending_commands.insert(
+            call_id,
+            (PendingRequest::ExternalCommand(msg.sender), Instant::now()),
+        );
         Ok(())
     }
 
@@ -190,17 +192,6 @@ impl Handler2 {
             }
         }
     }
-
-    // network manager events
-
-    fn on_fetch_request_paused(&mut self, event: EventRequestPaused) {}
-
-    fn on_fetch_auth_required(&mut self, event: EventAuthRequired) {}
-    fn on_request_will_be_sent(&mut self, event: EventRequestWillBeSent) {}
-    fn on_request_served_from_cache(&mut self, event: EventRequestServedFromCache) {}
-    fn on_response_received(&mut self, event: EventResponseReceived) {}
-    fn on_network_loading_finished(&mut self, event: EventLoadingFinished) {}
-    fn on_network_loading_failed(&mut self, event: EventLoadingFailed) {}
 }
 
 impl Stream for Handler2 {
@@ -258,7 +249,7 @@ impl Stream for Handler2 {
 enum PendingRequest {
     CreatePage(OneshotSender<Result<Page, CdpError>>),
     ExternalCommand(OneshotSender<Response>),
-    InternalCommand(TargetId)
+    InternalCommand(TargetId),
 }
 
 /// Events used internally to communicate with the handler, which are executed
@@ -273,14 +264,13 @@ pub(crate) enum HandlerMessage {
 
 pub(crate) fn to_command_response<T: Command>(
     resp: Response,
-    method: Cow<'static, str>
 ) -> Result<CommandResponse<T::Response>, CdpError> {
     if let Some(res) = resp.result {
         let result = serde_json::from_value(res)?;
         Ok(CommandResponse {
             id: resp.id,
             result,
-            method,
+            method: resp.method,
         })
     } else if let Some(err) = resp.error {
         Err(err.into())

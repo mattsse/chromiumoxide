@@ -128,8 +128,10 @@ pub struct Request {
 /// A response to a [`MethodCall`] from the chromium instance
 #[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct Response {
-    /// matching [`MethodCall`] identifier
+    /// Numeric identifier for the exact request
     pub id: CallId,
+    /// The identifier for the type of request issued
+    pub method: Cow<'static, str>,
     /// The response payload
     pub result: Option<serde_json::Value>,
     /// The Reason why the [`MethodCall`] failed.

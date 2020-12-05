@@ -13,6 +13,7 @@ use crate::cdp::browser_protocol::log;
 use crate::cdp::browser_protocol::page::*;
 use crate::cdp::browser_protocol::performance;
 use crate::cdp::browser_protocol::target::{SessionId, SetAutoAttachParams, TargetId, TargetInfo};
+use crate::cdp::events::CdpEvent;
 use crate::cdp::CdpEventMessage;
 use crate::error::CdpError;
 use crate::handler::cmd::CommandChain;
@@ -105,9 +106,52 @@ impl Target {
     }
 
     /// Received a response to a command issued by this target
-    pub fn on_response(&mut self, resp: Response) {}
+    pub fn on_response(&mut self, resp: Response) {
+        if let Some(cmds) = self.state.commands_mut() {
+            cmds.received_response(resp.method.as_ref());
+        }
+    }
 
-    pub fn on_event(&mut self, event: CdpEventMessage) {}
+    pub fn on_event(&mut self, event: CdpEventMessage) {
+        match event.params {
+            // `FrameManager` events
+            CdpEvent::PageFrameAttached(ev) => self.frame_manager.on_frame_attached(&*ev),
+            CdpEvent::PageFrameDetached(ev) => self.frame_manager.on_frame_detached(&*ev),
+            CdpEvent::PageFrameNavigated(ev) => self.frame_manager.on_frame_navigated(&ev),
+            CdpEvent::PageNavigatedWithinDocument(ev) => {
+                self.frame_manager.on_frame_navigated_within_document(&*ev)
+            }
+            CdpEvent::RuntimeExecutionContextCreated(ev) => {
+                self.frame_manager.on_frame_execution_context_created(&*ev)
+            }
+            CdpEvent::RuntimeExecutionContextDestroyed(ev) => self
+                .frame_manager
+                .on_frame_execution_context_destroyed(&*ev),
+            CdpEvent::RuntimeExecutionContextsCleared(ev) => {
+                self.frame_manager.on_execution_context_cleared(&*ev)
+            }
+            CdpEvent::PageLifecycleEvent(ev) => self.frame_manager.on_page_lifecycle_event(&*ev),
+
+            // `NetworkManager` events
+            CdpEvent::FetchRequestPaused(ev) => self.network_manager.on_fetch_request_paused(&ev),
+            CdpEvent::FetchAuthRequired(ev) => self.network_manager.on_fetch_auth_required(&ev),
+            CdpEvent::NetworkRequestWillBeSent(ev) => {
+                self.network_manager.on_request_will_be_sent(&ev)
+            }
+            CdpEvent::NetworkRequestServedFromCache(ev) => {
+                self.network_manager.on_request_served_from_cache(&*ev)
+            }
+            CdpEvent::NetworkResponseReceived(ev) => self.network_manager.on_response_received(&ev),
+            CdpEvent::NetworkLoadingFinished(ev) => {
+                self.network_manager.on_network_loading_finished(&*ev)
+            }
+            CdpEvent::NetworkLoadingFailed(ev) => {
+                self.network_manager.on_network_loading_failed(&*ev)
+            }
+
+            _ => {}
+        }
+    }
 
     /// Advance its state towards a completed `Target`
     pub fn poll(&mut self) -> Poll<Option<Request>> {
@@ -212,12 +256,23 @@ pub enum TargetState {
         // framemanager waitForFrameNavigation
         Navigating,
     ),
-    Page(
-        // only for type `page` and `background_page`
-    ),
-    Worker(
-        // only for targets of type service_worker or shared_worker
-    ),
+}
+
+impl TargetState {
+    fn commands_mut(&mut self) -> Option<&mut CommandChain> {
+        match self {
+            TargetState::Idle => None,
+            TargetState::InitializingFrame(cmd) => Some(cmd),
+            TargetState::InitializingNetwork(cmd) => Some(cmd),
+            TargetState::InitializingPage(cmd) => Some(cmd),
+            TargetState::InitializingEmulation(cmd) => Some(cmd),
+            TargetState::Navigating(_) => None,
+        }
+    }
+
+    fn on_response(&mut self, resp: &Response) {
+        todo!()
+    }
 }
 
 pub struct NavigationRequest {

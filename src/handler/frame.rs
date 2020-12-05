@@ -128,8 +128,6 @@ impl FrameManager {
         self.frames.get(id)
     }
 
-    pub fn on_event(&mut self, event: &CdpEventMessage) {}
-
     pub fn check_lifecycle_complete(&self, id: NavigationId) {}
 
     pub fn navigate_frame(&mut self, frame_id: &FrameId, req: NavigationRequest) {
@@ -137,11 +135,11 @@ impl FrameManager {
     }
 
     /// Fired when a frame moved to another session
-    fn on_attached_to_target(&mut self, event: &EventAttachedToTarget) {
+    pub fn on_attached_to_target(&mut self, event: &EventAttachedToTarget) {
         // _onFrameMoved
     }
 
-    fn on_frame_attached(&mut self, event: &EventFrameAttached) {
+    pub fn on_frame_attached(&mut self, event: &EventFrameAttached) {
         if self.frames.contains_key(&event.frame_id) {
             return;
         }
@@ -151,11 +149,11 @@ impl FrameManager {
         }
     }
 
-    fn on_frame_detached(&mut self, event: &EventFrameDetached) {
+    pub fn on_frame_detached(&mut self, event: &EventFrameDetached) {
         self.remove_frames_recursively(&event.frame_id);
     }
 
-    fn on_frame_navigated(&mut self, event: &EventFrameNavigated) {
+    pub fn on_frame_navigated(&mut self, event: &EventFrameNavigated) {
         if event.frame.parent_id.is_some() {
             if let Some((id, mut frame)) = self.frames.remove_entry(&event.frame.id) {
                 for child in &frame.child_frames {
@@ -188,25 +186,26 @@ impl FrameManager {
         }
     }
 
-    fn on_frame_navigated_within_document(&mut self, event: &EventNavigatedWithinDocument) {
+    pub fn on_frame_navigated_within_document(&mut self, event: &EventNavigatedWithinDocument) {
         if let Some(frame) = self.frames.get_mut(&event.frame_id) {
             frame.navigated_within_url(event.url.clone());
         }
     }
 
-    fn on_frame_stopped_loading(&mut self, event: &EventFrameStoppedLoading) {
+    pub fn on_frame_stopped_loading(&mut self, event: &EventFrameStoppedLoading) {
         if let Some(frame) = self.frames.get_mut(&event.frame_id) {
             frame.on_loading_stopped();
         }
     }
 
-    fn on_frame_execution_context_created(&mut self, event: &EventExecutionContextCreated) {}
+    pub fn on_frame_execution_context_created(&mut self, event: &EventExecutionContextCreated) {}
 
-    fn on_frame_execution_context_destroyed(&mut self, event: &EventExecutionContextDestroyed) {}
+    pub fn on_frame_execution_context_destroyed(&mut self, event: &EventExecutionContextDestroyed) {
+    }
 
-    fn on_execution_context_cleared(&mut self, event: &EventExecutionContextsCleared) {}
+    pub fn on_execution_context_cleared(&mut self, event: &EventExecutionContextsCleared) {}
 
-    fn on_page_lifecycle_event(&mut self, event: &EventLifecycleEvent) {
+    pub fn on_page_lifecycle_event(&mut self, event: &EventLifecycleEvent) {
         if let Some(frame) = self.frames.get_mut(&event.frame_id) {
             if event.name == "init" {
                 frame.loader_id = Some(event.loader_id.clone());

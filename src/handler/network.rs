@@ -1,5 +1,10 @@
 use chromiumoxid_types::Method;
 
+use crate::cdp::browser_protocol::fetch::{EventAuthRequired, EventRequestPaused};
+use crate::cdp::browser_protocol::network::{
+    EventLoadingFailed, EventLoadingFinished, EventRequestServedFromCache, EventRequestWillBeSent,
+    EventResponseReceived,
+};
 use crate::cdp::browser_protocol::{
     network::EnableParams, security::SetIgnoreCertificateErrorsParams,
 };
@@ -30,6 +35,20 @@ impl NetworkManager {
             )])
         }
     }
+
+    pub fn on_fetch_request_paused(&mut self, event: &EventRequestPaused) {}
+
+    pub fn on_fetch_auth_required(&mut self, event: &EventAuthRequired) {}
+
+    pub fn on_request_will_be_sent(&mut self, event: &EventRequestWillBeSent) {}
+
+    pub fn on_request_served_from_cache(&mut self, event: &EventRequestServedFromCache) {}
+
+    pub fn on_response_received(&mut self, event: &EventResponseReceived) {}
+
+    pub fn on_network_loading_finished(&mut self, event: &EventLoadingFinished) {}
+
+    pub fn on_network_loading_failed(&mut self, event: &EventLoadingFailed) {}
 }
 
 impl Default for NetworkManager {
