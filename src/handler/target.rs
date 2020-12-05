@@ -13,6 +13,7 @@ use crate::cdp::browser_protocol::log;
 use crate::cdp::browser_protocol::page::*;
 use crate::cdp::browser_protocol::performance;
 use crate::cdp::browser_protocol::target::{SessionId, SetAutoAttachParams, TargetId, TargetInfo};
+use crate::cdp::CdpEventMessage;
 use crate::error::CdpError;
 use crate::handler::cmd::CommandChain;
 use crate::handler::emulation::EmulationManager;
@@ -31,8 +32,8 @@ pub(crate) struct Target {
     session_id: Option<SessionId>,
     page: Option<PageInner>,
     state: TargetState,
-    /// Sender towards the receiver who initiated the creation of a page.
-    initiator: Option<Sender<Page>>,
+    /// The sender who initiated the creation of a page.
+    initiator: Option<Sender<Result<Page, CdpError>>>,
     pending_navigations: VecDeque<(Option<Sender<Response>>, Request)>,
 }
 
@@ -53,6 +54,18 @@ impl Target {
             initiator: None,
             pending_navigations: Default::default(),
         }
+    }
+
+    pub fn set_session_id(&mut self, id: SessionId) {
+        self.session_id = Some(id)
+    }
+
+    pub fn session_id(&self) -> Option<&SessionId> {
+        self.session_id.as_ref()
+    }
+
+    pub fn session_id_mut(&mut self) -> &mut Option<SessionId> {
+        &mut self.session_id
     }
 
     /// The identifier for this target
@@ -93,6 +106,8 @@ impl Target {
 
     /// Received a response to a command issued by this target
     pub fn on_response(&mut self, resp: Response) {}
+
+    pub fn on_event(&mut self, event: CdpEventMessage) {}
 
     /// Advance its state towards a completed `Target`
     pub fn poll(&mut self) -> Poll<Option<Request>> {
@@ -157,7 +172,9 @@ impl Target {
         // }
     }
 
-    pub fn create_page(&mut self, tx: Sender<Page>) {}
+    pub fn set_initiator(&mut self, tx: Sender<Result<Page, CdpError>>) {
+        self.initiator = Some(tx)
+    }
 
     // TODO move to other location
     pub(crate) fn page_init_commands() -> CommandChain {
