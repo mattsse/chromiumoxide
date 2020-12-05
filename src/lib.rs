@@ -1,4 +1,4 @@
-use crate::cdp::browser_protocol::target::CreateTargetParams;
+use crate::cdp::browser_protocol::target::{CreateTargetParams, SessionId};
 
 // Include all the types
 include!(concat!(env!("OUT_DIR"), "/cdp.rs"));
