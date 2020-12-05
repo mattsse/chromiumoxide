@@ -2,6 +2,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
+use crate::handler::REQUEST_TIMEOUT;
 use futures::Future;
 use futures_timer::Delay;
 
@@ -21,5 +22,15 @@ impl PeriodicJob {
             return true;
         }
         false
+    }
+}
+
+impl Default for PeriodicJob {
+    fn default() -> Self {
+        let interval = Duration::from_millis(REQUEST_TIMEOUT);
+        Self {
+            delay: Delay::new(interval),
+            interval,
+        }
     }
 }
