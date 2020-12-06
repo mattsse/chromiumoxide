@@ -92,7 +92,7 @@ impl Browser {
 
     /// Create a new browser page
     pub async fn new_page(&self, params: impl Into<CreateTargetParams>) -> Result<Page> {
-        let (tx, rx) = oneshot_channel();
+        let (tx, _rx) = oneshot_channel();
 
         self.sender
             .clone()

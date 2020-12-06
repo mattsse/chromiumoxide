@@ -36,19 +36,19 @@ impl NetworkManager {
         }
     }
 
-    pub fn on_fetch_request_paused(&mut self, event: &EventRequestPaused) {}
+    pub fn on_fetch_request_paused(&mut self, _event: &EventRequestPaused) {}
 
-    pub fn on_fetch_auth_required(&mut self, event: &EventAuthRequired) {}
+    pub fn on_fetch_auth_required(&mut self, _event: &EventAuthRequired) {}
 
-    pub fn on_request_will_be_sent(&mut self, event: &EventRequestWillBeSent) {}
+    pub fn on_request_will_be_sent(&mut self, _event: &EventRequestWillBeSent) {}
 
-    pub fn on_request_served_from_cache(&mut self, event: &EventRequestServedFromCache) {}
+    pub fn on_request_served_from_cache(&mut self, _event: &EventRequestServedFromCache) {}
 
-    pub fn on_response_received(&mut self, event: &EventResponseReceived) {}
+    pub fn on_response_received(&mut self, _event: &EventResponseReceived) {}
 
-    pub fn on_network_loading_finished(&mut self, event: &EventLoadingFinished) {}
+    pub fn on_network_loading_finished(&mut self, _event: &EventLoadingFinished) {}
 
-    pub fn on_network_loading_failed(&mut self, event: &EventLoadingFailed) {}
+    pub fn on_network_loading_failed(&mut self, _event: &EventLoadingFailed) {}
 }
 
 impl Default for NetworkManager {

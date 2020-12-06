@@ -210,7 +210,7 @@ impl FrameManager {
     }
 
     /// Fired when a frame moved to another session
-    pub fn on_attached_to_target(&mut self, event: &EventAttachedToTarget) {
+    pub fn on_attached_to_target(&mut self, _event: &EventAttachedToTarget) {
         // _onFrameMoved
     }
 
@@ -273,12 +273,15 @@ impl FrameManager {
         }
     }
 
-    pub fn on_frame_execution_context_created(&mut self, event: &EventExecutionContextCreated) {}
+    pub fn on_frame_execution_context_created(&mut self, _event: &EventExecutionContextCreated) {}
 
-    pub fn on_frame_execution_context_destroyed(&mut self, event: &EventExecutionContextDestroyed) {
+    pub fn on_frame_execution_context_destroyed(
+        &mut self,
+        _event: &EventExecutionContextDestroyed,
+    ) {
     }
 
-    pub fn on_execution_context_cleared(&mut self, event: &EventExecutionContextsCleared) {}
+    pub fn on_execution_context_cleared(&mut self, _event: &EventExecutionContextsCleared) {}
 
     /// Fired for top level page lifecycle events (nav, load, paint, etc.)
     pub fn on_page_lifecycle_event(&mut self, event: &EventLifecycleEvent) {
