@@ -1,5 +1,5 @@
 use crate::cdp::browser_protocol::target::{SessionId, TargetId};
-use crate::handler::target::{TargetEvent, TargetMessage};
+use crate::handler::target::TargetMessage;
 use chromiumoxid_types::{Command, CommandResponse};
 use futures::channel::mpsc::{channel, Receiver, Sender};
 use futures::channel::oneshot::channel as oneshot_channel;

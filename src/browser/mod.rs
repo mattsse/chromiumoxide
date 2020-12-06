@@ -1,5 +1,3 @@
-use std::pin::Pin;
-use std::task::{Context, Poll};
 use std::time::Duration;
 use std::{
     borrow::Cow,
@@ -7,23 +5,18 @@ use std::{
     io::{self, BufRead, BufReader},
     path::{Path, PathBuf},
     process::{self, Child, Stdio},
-    sync::Arc,
 };
 
 use anyhow::Result;
-use async_std::future;
-use futures::channel::mpsc::{channel, Receiver, Sender};
+use futures::channel::mpsc::{channel, Sender};
 use futures::channel::oneshot::{channel as oneshot_channel, Sender as OneshotSender};
 use futures::SinkExt;
-use futures::Stream;
 use serde::Serialize;
 
 use chromiumoxid_types::*;
 
 use crate::cdp::browser_protocol::page::NavigateParams;
-use crate::cdp::browser_protocol::target::{
-    CreateTargetParams, SessionId, SetDiscoverTargetsParams,
-};
+use crate::cdp::browser_protocol::target::{CreateTargetParams, SessionId};
 use crate::cdp::CdpEventMessage;
 use crate::conn::Connection;
 use crate::handler::{Handler, HandlerMessage};
@@ -75,7 +68,7 @@ impl Browser {
         let get_ws_url = ws_url_from_output(&mut child);
 
         let dur = Duration::from_secs(20);
-        let debug_ws_url = future::timeout(dur, get_ws_url).await?;
+        let debug_ws_url = async_std::future::timeout(dur, get_ws_url).await?;
 
         let conn = Connection::<CdpEventMessage>::connect(&debug_ws_url).await?;
 
@@ -200,11 +193,6 @@ impl Method for CommandMessage {
     }
 }
 
-pub(crate) enum BrowserMessage {
-    Command(CommandMessage),
-    RegisterTab(Receiver<CommandMessage>),
-}
-
 async fn ws_url_from_output(child_process: &mut Child) -> String {
     let stdout = child_process.stderr.take().expect("no stderror");
     let handle = async_std::task::spawn_blocking(|| {
@@ -224,14 +212,6 @@ async fn ws_url_from_output(child_process: &mut Child) -> String {
         }
     });
     handle.await
-}
-
-impl Stream for Browser {
-    type Item = ();
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        unimplemented!()
-    }
 }
 
 #[derive(Debug, Clone)]

@@ -21,7 +21,6 @@ use crate::{
         browser_protocol::{browser::*, page::*, target::*},
         events::CdpEvent,
         events::CdpEventMessage,
-        js_protocol::runtime::*,
     },
     conn::Connection,
     error::CdpError,
@@ -74,7 +73,7 @@ pub struct Handler {
 impl Handler {
     pub(crate) fn new(mut conn: Connection<CdpEventMessage>, rx: Receiver<HandlerMessage>) -> Self {
         let discover = SetDiscoverTargetsParams::new(true);
-        conn.submit_command(
+        let _ = conn.submit_command(
             discover.identifier(),
             None,
             serde_json::to_value(discover).unwrap(),
@@ -227,7 +226,7 @@ impl Handler {
             TargetMessage::Command(msg) => {
                 if msg.is_navigation() {
                 } else {
-                    self.submit_external_command(msg, now);
+                    let _ = self.submit_external_command(msg, now);
                 }
             }
         }
@@ -274,6 +273,7 @@ impl Handler {
             CdpEvent::TargetTargetCreated(ev) => self.on_target_created(ev),
             CdpEvent::TargetAttachedToTarget(ev) => self.on_attached_to_target(ev),
             CdpEvent::TargetTargetDestroyed(ev) => self.on_target_destroyed(ev),
+            CdpEvent::TargetDetachedFromTarget(ev) => self.on_detached_from_target(ev),
             _ => {}
         }
     }
@@ -345,7 +345,8 @@ impl Stream for Handler {
                 while let Some(event) = target.poll(cx, now) {
                     match event {
                         TargetEvent::Request(req) => {
-                            pin.submit_internal_command(target.target_id().clone(), req, now);
+                            let _ =
+                                pin.submit_internal_command(target.target_id().clone(), req, now);
                         }
                         TargetEvent::RequestTimeout(_) => {
                             // TODO close and remove

@@ -1,11 +1,10 @@
-use std::borrow::Cow;
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use futures::channel::oneshot::Sender;
-use futures::stream::{Fuse, Stream};
+use futures::stream::Stream;
 use futures::task::{Context, Poll};
 
 use chromiumoxid_types::{Method, Request, Response};

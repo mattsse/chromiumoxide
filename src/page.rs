@@ -13,9 +13,7 @@ use crate::cdp::browser_protocol;
 use crate::cdp::browser_protocol::dom::*;
 use crate::cdp::browser_protocol::network::{Cookie, GetCookiesParams, SetUserAgentOverrideParams};
 use crate::cdp::browser_protocol::page::*;
-use crate::cdp::browser_protocol::target::{
-    ActivateTargetParams, AttachToTargetParams, SessionId, TargetId,
-};
+use crate::cdp::browser_protocol::target::{ActivateTargetParams, SessionId};
 use crate::cdp::js_protocol;
 use crate::cdp::js_protocol::debugger::GetScriptSourceParams;
 use crate::cdp::js_protocol::runtime::{EvaluateParams, RemoteObject, ScriptId};

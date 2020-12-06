@@ -124,7 +124,7 @@ impl<'a> EventBuilder<'a> {
 
         let deserialize_impl = quote! {
             use std::fmt;
-            use serde::de::{self, Deserializer, MapAccess, SeqAccess, Visitor};
+            use serde::de::{self, Deserializer, MapAccess, Visitor};
             impl<'de> Deserialize<'de> for CdpEventMessage {
                 fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
                 where
