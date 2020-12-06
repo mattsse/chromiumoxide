@@ -6,7 +6,6 @@ use std::{
     process::{self, Child, Stdio},
 };
 
-use anyhow::Result;
 use futures::channel::mpsc::{channel, Sender};
 use futures::channel::oneshot::channel as oneshot_channel;
 use futures::SinkExt;
@@ -17,7 +16,7 @@ use crate::cdp::browser_protocol::target::CreateTargetParams;
 use crate::cdp::CdpEventMessage;
 use crate::cmd::CommandMessage;
 use crate::conn::Connection;
-use crate::error::CdpError;
+use crate::error::{CdpError, Result};
 use crate::handler::{Handler, HandlerMessage};
 use crate::page::Page;
 
@@ -67,7 +66,9 @@ impl Browser {
         let get_ws_url = ws_url_from_output(&mut child);
 
         let dur = Duration::from_secs(20);
-        let debug_ws_url = async_std::future::timeout(dur, get_ws_url).await?;
+        let debug_ws_url = async_std::future::timeout(dur, get_ws_url)
+            .await
+            .map_err(|_| CdpError::Timeout)?;
 
         let conn = Connection::<CdpEventMessage>::connect(&debug_ws_url).await?;
 
@@ -108,10 +109,7 @@ impl Browser {
     }
 
     /// Call a browser method.
-    pub async fn execute<T: Command>(
-        &self,
-        cmd: T,
-    ) -> Result<CommandResponse<T::Response>, CdpError> {
+    pub async fn execute<T: Command>(&self, cmd: T) -> Result<CommandResponse<T::Response>> {
         let (tx, rx) = oneshot_channel();
         let method = cmd.identifier();
         let msg = CommandMessage::new(cmd, tx)?;

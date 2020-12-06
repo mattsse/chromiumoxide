@@ -8,6 +8,8 @@ use futures::channel::oneshot::Canceled;
 use std::time::Instant;
 use thiserror::Error;
 
+pub type Result<T, E = CdpError> = std::result::Result<T, E>;
+
 #[derive(Debug, Error)]
 pub enum CdpError {
     #[error("{0}")]

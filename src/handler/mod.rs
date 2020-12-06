@@ -13,20 +13,21 @@ use chromiumoxid_types::Request as CdpRequest;
 use chromiumoxid_types::{CallId, Command, CommandResponse, Message, Method, Response};
 pub(crate) use page::PageInner;
 
+use crate::cdp::browser_protocol::browser::*;
+use crate::cdp::browser_protocol::target::*;
+use crate::cdp::events::CdpEvent;
+use crate::cdp::events::CdpEventMessage;
+use crate::cmd::CommandMessage;
+use crate::conn::Connection;
+use crate::error::{CdpError, Result};
+use crate::handler::browser::BrowserContext;
 use crate::handler::frame::FrameNavigationRequest;
 use crate::handler::frame::{NavigationError, NavigationId, NavigationOk};
+use crate::handler::job::PeriodicJob;
+use crate::handler::session::Session;
+use crate::handler::target::Target;
 use crate::handler::target::{TargetEvent, TargetMessage};
-use crate::{
-    cdp::{
-        browser_protocol::{browser::*, target::*},
-        events::{CdpEvent, CdpEventMessage},
-    },
-    cmd::CommandMessage,
-    conn::Connection,
-    error::CdpError,
-    handler::{browser::BrowserContext, job::PeriodicJob, session::Session, target::Target},
-    page::Page,
-};
+use crate::page::Page;
 
 /// Standard timeout in MS
 pub const REQUEST_TIMEOUT: u64 = 30000;
@@ -189,7 +190,7 @@ impl Handler {
         &mut self,
         msg: CommandMessage,
         now: Instant,
-    ) -> Result<(), CdpError> {
+    ) -> Result<()> {
         let call_id = self
             .conn
             .submit_command(msg.method, msg.session_id, msg.params)?;
@@ -203,7 +204,7 @@ impl Handler {
         target_id: TargetId,
         req: CdpRequest,
         now: Instant,
-    ) -> Result<(), CdpError> {
+    ) -> Result<()> {
         let call_id =
             self.conn
                 .submit_command(req.method, req.session_id.map(Into::into), req.params)?;
@@ -246,11 +247,7 @@ impl Handler {
     }
 
     /// Create a new page and send it to the receiver
-    fn create_page(
-        &mut self,
-        params: CreateTargetParams,
-        tx: OneshotSender<Result<Page, CdpError>>,
-    ) {
+    fn create_page(&mut self, params: CreateTargetParams, tx: OneshotSender<Result<Page>>) {
         let method = params.identifier();
         match serde_json::to_value(params) {
             Ok(params) => match self.conn.submit_command(method, None, params) {
@@ -328,7 +325,7 @@ impl Handler {
 }
 
 impl Stream for Handler {
-    type Item = Result<CdpEventMessage, CdpError>;
+    type Item = Result<CdpEventMessage>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let pin = self.get_mut();
@@ -436,14 +433,14 @@ impl<T> NavigationInProgress<T> {
 
 #[derive(Debug)]
 enum NavigationRequest {
-    Goto(NavigationInProgress<Result<Response, CdpError>>),
+    Goto(NavigationInProgress<Result<Response>>),
 }
 
 #[derive(Debug)]
 enum PendingRequest {
-    CreateTarget(OneshotSender<Result<Page, CdpError>>),
+    CreateTarget(OneshotSender<Result<Page>>),
     Navigate(NavigationId),
-    ExternalCommand(OneshotSender<Result<Response, CdpError>>),
+    ExternalCommand(OneshotSender<Result<Response>>),
     InternalCommand(TargetId),
 }
 
@@ -452,7 +449,7 @@ enum PendingRequest {
 // TODO rename to BrowserMessage
 #[derive(Debug)]
 pub(crate) enum HandlerMessage {
-    CreatePage(CreateTargetParams, OneshotSender<Result<Page, CdpError>>),
+    CreatePage(CreateTargetParams, OneshotSender<Result<Page>>),
     GetPages(OneshotSender<Vec<Page>>),
     Command(CommandMessage),
     Subscribe,
@@ -460,7 +457,7 @@ pub(crate) enum HandlerMessage {
 
 pub(crate) fn to_command_response<T: Command>(
     resp: Response,
-) -> Result<CommandResponse<T::Response>, CdpError> {
+) -> Result<CommandResponse<T::Response>> {
     if let Some(res) = resp.result {
         let result = serde_json::from_value(res)?;
         Ok(CommandResponse {

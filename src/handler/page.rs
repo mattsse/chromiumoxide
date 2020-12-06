@@ -7,7 +7,7 @@ use futures::stream::Fuse;
 use std::sync::Arc;
 
 use crate::cmd::CommandMessage;
-use crate::error::CdpError;
+use crate::error::{CdpError, Result};
 use futures::{SinkExt, StreamExt};
 
 #[derive(Debug)]
@@ -43,10 +43,7 @@ pub(crate) struct PageInner {
 }
 
 impl PageInner {
-    pub(crate) async fn execute<T: Command>(
-        &self,
-        cmd: T,
-    ) -> Result<CommandResponse<T::Response>, CdpError> {
+    pub(crate) async fn execute<T: Command>(&self, cmd: T) -> Result<CommandResponse<T::Response>> {
         Ok(execute(cmd, self.commands.clone(), Some(self.session_id.clone())).await?)
     }
 
@@ -63,7 +60,7 @@ async fn execute<T: Command>(
     cmd: T,
     mut sender: Sender<TargetMessage>,
     session: Option<SessionId>,
-) -> Result<CommandResponse<T::Response>, CdpError> {
+) -> Result<CommandResponse<T::Response>> {
     let (tx, rx) = oneshot_channel();
     let method = cmd.identifier();
     let msg = CommandMessage::with_session(cmd, tx, session)?;

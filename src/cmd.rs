@@ -10,13 +10,13 @@ use chromiumoxid_types::{Command, Method, Request, Response};
 
 use crate::cdp::browser_protocol::page::NavigateParams;
 use crate::cdp::browser_protocol::target::SessionId;
-use crate::error::{CdpError, DeadlineExceeded};
+use crate::error::{DeadlineExceeded, Result};
 use crate::handler::REQUEST_TIMEOUT;
 
 /// Messages used internally to communicate with the connection, which is
 /// executed in the the background task.
 #[derive(Debug, Serialize)]
-pub(crate) struct CommandMessage<T = Result<Response, CdpError>> {
+pub(crate) struct CommandMessage<T = Result<Response>> {
     pub method: Cow<'static, str>,
     #[serde(rename = "sessionId", skip_serializing_if = "Option::is_none")]
     pub session_id: Option<SessionId>,

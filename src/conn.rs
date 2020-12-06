@@ -3,6 +3,7 @@ use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::pin::Pin;
 
+use crate::error::Result;
 use async_tungstenite::async_std::ConnectStream;
 use async_tungstenite::WebSocketStream;
 use futures::stream::Stream;
@@ -31,7 +32,7 @@ pub struct Connection<T: Event> {
 }
 
 impl<T: Event + Unpin> Connection<T> {
-    pub async fn connect(debug_ws_url: impl AsRef<str>) -> anyhow::Result<Self> {
+    pub async fn connect(debug_ws_url: impl AsRef<str>) -> Result<Self> {
         let (ws, _) = async_tungstenite::async_std::connect_async(debug_ws_url.as_ref()).await?;
         Ok(Self {
             pending_commands: Default::default(),
@@ -72,7 +73,7 @@ impl<T: Event> Connection<T> {
 
     /// flush any processed message and start sending the next over the conn
     /// sink
-    fn start_send_next(&mut self, cx: &mut Context<'_>) -> Result<(), CdpError> {
+    fn start_send_next(&mut self, cx: &mut Context<'_>) -> Result<()> {
         if self.needs_flush {
             if let Poll::Ready(Ok(())) = Sink::poll_flush(Pin::new(&mut self.ws), cx) {
                 self.needs_flush = false;
@@ -92,7 +93,7 @@ impl<T: Event> Connection<T> {
 }
 
 impl<T: Event + Unpin> Stream for Connection<T> {
-    type Item = Result<Message<T>, CdpError>;
+    type Item = Result<Message<T>>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let pin = self.get_mut();

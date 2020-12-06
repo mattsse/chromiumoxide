@@ -18,7 +18,7 @@ use crate::cdp::events::CdpEvent;
 use crate::cdp::CdpEventMessage;
 use crate::cmd::CommandChain;
 use crate::cmd::CommandMessage;
-use crate::error::{CdpError, DeadlineExceeded};
+use crate::error::{DeadlineExceeded, Result};
 use crate::handler::emulation::EmulationManager;
 use crate::handler::frame::FrameNavigationRequest;
 use crate::handler::frame::{
@@ -70,7 +70,7 @@ pub struct Target {
     /// Currently queued events to report to the `Handler`
     queued_events: VecDeque<TargetEvent>,
     /// The sender who initiated the creation of a page.
-    initiator: Option<Sender<Result<Page, CdpError>>>,
+    initiator: Option<Sender<Result<Page>>>,
 }
 
 impl Target {
@@ -278,7 +278,7 @@ impl Target {
         }
     }
 
-    pub fn set_initiator(&mut self, tx: Sender<Result<Page, CdpError>>) {
+    pub fn set_initiator(&mut self, tx: Sender<Result<Page>>) {
         self.initiator = Some(tx)
     }
 
