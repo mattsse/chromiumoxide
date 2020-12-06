@@ -10,6 +10,7 @@ use crate::browser::CommandMessage;
 use crate::error::CdpError;
 use futures::{SinkExt, StreamExt};
 
+#[derive(Debug)]
 pub struct PageHandle {
     pub(crate) rx: Fuse<Receiver<TargetMessage>>,
     page: Arc<PageInner>,

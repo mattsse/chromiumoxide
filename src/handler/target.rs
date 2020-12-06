@@ -49,16 +49,25 @@ macro_rules! advance_state {
     }};
 }
 
+#[derive(Debug)]
 pub struct Target {
+    /// Info about this target as returned from the chromium instance
     info: TargetInfo,
+    /// Whether this target was marked as closed
     is_closed: bool,
+    /// The frame manager that maintains the state of all frames and handles
+    /// navigations of frames
     frame_manager: FrameManager,
     network_manager: NetworkManager,
     emulation_manager: EmulationManager,
     viewport: Viewport,
+    /// The identifier of the session this target is attached to
     session_id: Option<SessionId>,
+    /// The handle of the browser page of this target
     page: Option<PageHandle>,
+    /// Drives this target towards initialization
     init_state: TargetInit,
+    /// Currently queued events to report to the `Handler`
     queued_events: VecDeque<TargetEvent>,
     /// The sender who initiated the creation of a page.
     initiator: Option<Sender<Result<Page, CdpError>>>,

@@ -1,6 +1,6 @@
 use std::pin::Pin;
 use std::task::Context;
-use std::time::{Duration};
+use std::time::Duration;
 
 use crate::handler::REQUEST_TIMEOUT;
 use futures::Future;

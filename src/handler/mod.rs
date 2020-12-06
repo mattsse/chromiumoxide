@@ -42,7 +42,8 @@ mod session;
 pub mod target;
 mod viewport;
 
-// puppeteer
+#[must_use = "streams do nothing unless polled"]
+#[derive(Debug)]
 pub struct Handler {
     /// Commands that are being processed await a response from the chromium
     /// instance
@@ -56,6 +57,7 @@ pub struct Handler {
     target_ids: Vec<TargetId>,
     /// The created and attached targets
     targets: HashMap<TargetId, Target>,
+    /// Currently queued in navigations for targets
     navigations: FnvHashMap<NavigationId, NavigationRequest>,
     /// Keeps track of all the current active sessions
     ///
@@ -63,6 +65,7 @@ pub struct Handler {
     sessions: HashMap<SessionId, Session>,
     /// The websocket connection to the chromium instance
     conn: Connection<CdpEventMessage>,
+    /// Evicts timed out requests periodically
     evict_command_timeout: PeriodicJob,
     /// The internal identifier for a specific navigation
     next_navigation_id: usize,

@@ -16,6 +16,7 @@ use crate::error::CdpError;
 
 /// Exchanges the messages with the websocket
 #[must_use = "streams do nothing unless polled"]
+#[derive(Debug)]
 pub struct Connection<T: Event> {
     /// Queue of commands to send.
     pending_commands: VecDeque<MethodCall>,
