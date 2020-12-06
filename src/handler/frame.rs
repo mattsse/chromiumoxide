@@ -188,6 +188,7 @@ impl FrameManager {
             }
         } else {
             if let Some((req, watcher)) = self.pending_navigations.pop_front() {
+                self.navigation = Some((watcher, Instant::now()));
                 return Some(FrameEvent::NavigationRequest(req.id, req.req));
             }
         }

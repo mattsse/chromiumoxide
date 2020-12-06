@@ -49,7 +49,7 @@ macro_rules! advance_state {
     }};
 }
 
-pub(crate) struct Target {
+pub struct Target {
     info: TargetInfo,
     is_closed: bool,
     frame_manager: FrameManager,

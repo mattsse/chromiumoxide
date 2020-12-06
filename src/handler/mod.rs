@@ -3,14 +3,15 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
 
-use chromiumoxid_types::Request as CdpRequest;
 use fnv::FnvHashMap;
 use futures::channel::mpsc::Receiver;
 use futures::channel::oneshot::Sender as OneshotSender;
 use futures::stream::{Fuse, Stream, StreamExt};
 use futures::task::{Context, Poll};
 
+use chromiumoxid_types::Request as CdpRequest;
 use chromiumoxid_types::{CallId, Command, CommandResponse, Message, Method, Response};
+pub(crate) use page::PageInner;
 
 use crate::handler::frame::FrameNavigationRequest;
 use crate::handler::frame::{NavigationError, NavigationId, NavigationOk};
@@ -40,8 +41,6 @@ mod page;
 mod session;
 pub mod target;
 mod viewport;
-
-pub(crate) use page::PageInner;
 
 // puppeteer
 pub struct Handler {
@@ -93,6 +92,16 @@ impl Handler {
         }
     }
 
+    /// Return the target with the matching `target_id`
+    pub fn get_target(&self, target_id: &TargetId) -> Option<&Target> {
+        self.targets.get(target_id)
+    }
+
+    /// Iterator over all currently attached targets
+    pub fn targets(&self) -> impl Iterator<Item = &Target> + '_ {
+        self.targets.values()
+    }
+
     /// received a response to a navigation request like `Page.navigate`
     fn on_navigation_response(&mut self, id: NavigationId, resp: Response) {
         if let Some(nav) = self.navigations.remove(&id) {
@@ -130,7 +139,7 @@ impl Handler {
                 if let Some(nav) = self.navigations.remove(err.navigation_id()) {
                     match nav {
                         NavigationRequest::Goto(nav) => {
-                            nav.tx.send(Err(err.into()));
+                            let _ = nav.tx.send(Err(err.into()));
                         }
                     }
                 }
@@ -216,10 +225,11 @@ impl Handler {
         match msg {
             TargetMessage::Command(msg) => {
                 if msg.is_navigation() {
-                    // TODO 1. submit navigation in target
-                    // FrameNavigationRequest::new(self.next_navigation_id(),
-                    // msg. )
-                    // target.goto()
+                    let (req, tx) = msg.split();
+                    let id = self.next_navigation_id();
+                    target.goto(FrameNavigationRequest::new(id, req));
+                    self.navigations
+                        .insert(id, NavigationRequest::Goto(NavigationInProgress::new(tx)));
                 } else {
                     let _ = self.submit_external_command(msg, now);
                 }
@@ -330,7 +340,19 @@ impl Stream for Handler {
                 HandlerMessage::Command(cmd) => {
                     pin.submit_external_command(cmd, now).unwrap();
                 }
-                _ => {}
+                HandlerMessage::CreatePage(params, tx) => {
+                    pin.create_page(params, tx);
+                }
+                HandlerMessage::GetPages(tx) => {
+                    let pages: Vec<_> = pin
+                        .targets
+                        .values_mut()
+                        .filter_map(|target| target.get_or_create_page())
+                        .map(|page| Page::from(page.clone()))
+                        .collect();
+                    let _ = tx.send(pages);
+                }
+                HandlerMessage::Subscribe => {}
             }
         }
 
@@ -374,6 +396,10 @@ impl Stream for Handler {
             }
         }
 
+        if pin.evict_command_timeout.is_ready(cx) {
+            // TODO evict all commands that timed out
+        }
+
         Poll::Pending
     }
 }
@@ -389,6 +415,14 @@ pub struct NavigationInProgress<T> {
 }
 
 impl<T> NavigationInProgress<T> {
+    fn new(tx: OneshotSender<T>) -> Self {
+        Self {
+            navigated: false,
+            response: None,
+            tx,
+        }
+    }
+
     fn set_response(&mut self, resp: Response) {
         self.response = Some(resp);
     }

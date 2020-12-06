@@ -186,6 +186,17 @@ impl<T> CommandMessage<T> {
             sender,
         })
     }
+
+    pub fn split(self) -> (Request, OneshotSender<T>) {
+        (
+            Request {
+                method: self.method,
+                session_id: self.session_id.map(Into::into),
+                params: self.params,
+            },
+            self.sender,
+        )
+    }
 }
 
 impl Method for CommandMessage {

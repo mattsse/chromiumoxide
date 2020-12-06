@@ -3,7 +3,6 @@ use std::collections::VecDeque;
 use std::iter::FromIterator;
 use std::time::{Duration, Instant};
 
-use futures::channel::oneshot::Sender;
 use futures::task::Poll;
 
 use chromiumoxid_types::Response;
@@ -11,34 +10,6 @@ use chromiumoxid_types::Response;
 use crate::cdp::browser_protocol::target::TargetId;
 use crate::error::DeadlineExceeded;
 use crate::handler::REQUEST_TIMEOUT;
-use crate::page::Page;
-
-pub enum PendingRequests {
-    NewPage(NewPage),
-    /// A request issued from a target, (e.g. as part of an initialize routine)
-    InternalFromTarget(TargetId),
-    External(Sender<Response>, Instant),
-}
-
-#[derive(Debug)]
-pub struct NewPage {
-    /// Time the creation started
-    start: Instant,
-    /// Sender who requested the page
-    sender: Sender<Page>,
-    /// State tracks the progress for a creation page
-    state: NewPageState,
-}
-
-impl NewPage {}
-
-#[derive(Debug)]
-pub enum NewPageState {
-    CreatingTarget,
-    InitializingTarget,
-    CreatingSession,
-    Done,
-}
 
 #[derive(Debug)]
 pub struct CommandChain {
@@ -49,8 +20,6 @@ pub struct CommandChain {
     /// The window a response after issuing a request must arrive
     timeout: Duration,
 }
-
-type NextCommand = Poll<Option<Result<(Cow<'static, str>, serde_json::Value), DeadlineExceeded>>>;
 
 impl CommandChain {
     /// Creates a new `CommandChain` from an `Iterator`.
@@ -85,7 +54,10 @@ impl CommandChain {
 
     /// Return the next command to process or `None` if done.
     /// If the response timeout an error is returned instead
-    pub fn poll(&mut self, now: Instant) -> NextCommand {
+    pub fn poll(
+        &mut self,
+        now: Instant,
+    ) -> Poll<Option<Result<(Cow<'static, str>, serde_json::Value), DeadlineExceeded>>> {
         if let Some((_, deadline)) = self.waiting.as_ref() {
             if now > *deadline {
                 Poll::Ready(Some(Err(DeadlineExceeded::new(now, *deadline))))

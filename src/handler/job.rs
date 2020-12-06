@@ -1,6 +1,6 @@
 use std::pin::Pin;
 use std::task::Context;
-use std::time::{Duration, Instant};
+use std::time::{Duration};
 
 use crate::handler::REQUEST_TIMEOUT;
 use futures::Future;
@@ -16,7 +16,7 @@ pub(crate) struct PeriodicJob {
 impl PeriodicJob {
     /// Returns `true` if the job is currently not running but ready
     /// to be run, `false` otherwise.
-    fn is_ready(&mut self, cx: &mut Context<'_>, now: Instant) -> bool {
+    pub fn is_ready(&mut self, cx: &mut Context<'_>) -> bool {
         if !Future::poll(Pin::new(&mut self.delay), cx).is_pending() {
             self.delay.reset(self.interval);
             return true;
