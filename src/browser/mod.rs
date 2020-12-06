@@ -19,6 +19,7 @@ use crate::cdp::browser_protocol::page::NavigateParams;
 use crate::cdp::browser_protocol::target::{CreateTargetParams, SessionId};
 use crate::cdp::CdpEventMessage;
 use crate::conn::Connection;
+use crate::error::CdpError;
 use crate::handler::{Handler, HandlerMessage};
 use crate::page::Page;
 
@@ -112,7 +113,7 @@ impl Browser {
     pub async fn execute<T: Command>(
         &self,
         cmd: T,
-    ) -> anyhow::Result<CommandResponse<T::Response>> {
+    ) -> Result<CommandResponse<T::Response>, CdpError> {
         let (tx, rx) = oneshot_channel();
         let method = cmd.identifier();
         let msg = CommandMessage::new(cmd, tx)?;
@@ -121,7 +122,7 @@ impl Browser {
             .clone()
             .send(HandlerMessage::Command(msg))
             .await?;
-        let resp = rx.await?;
+        let resp = rx.await??;
 
         if let Some(res) = resp.result {
             let result = serde_json::from_value(res)?;
@@ -133,7 +134,7 @@ impl Browser {
         } else if let Some(err) = resp.error {
             Err(err.into())
         } else {
-            Err(anyhow::anyhow!("Empty Response"))
+            Err(CdpError::NoResponse)
         }
     }
 }
@@ -149,17 +150,17 @@ impl Drop for Browser {
 /// Messages used internally to communicate with the connection, which is
 /// executed in the the background task.
 #[derive(Debug, Serialize)]
-pub(crate) struct CommandMessage {
+pub(crate) struct CommandMessage<T = Result<Response, CdpError>> {
     pub method: Cow<'static, str>,
     #[serde(rename = "sessionId", skip_serializing_if = "Option::is_none")]
     pub session_id: Option<SessionId>,
     pub params: serde_json::Value,
     #[serde(skip_serializing)]
-    pub sender: OneshotSender<Response>,
+    pub sender: OneshotSender<T>,
 }
 
-impl CommandMessage {
-    pub fn new<C: Command>(cmd: C, sender: OneshotSender<Response>) -> serde_json::Result<Self> {
+impl<T> CommandMessage<T> {
+    pub fn new<C: Command>(cmd: C, sender: OneshotSender<T>) -> serde_json::Result<Self> {
         Ok(Self {
             method: cmd.identifier(),
             session_id: None,
@@ -175,7 +176,7 @@ impl CommandMessage {
 
     pub fn with_session<C: Command>(
         cmd: C,
-        sender: OneshotSender<Response>,
+        sender: OneshotSender<T>,
         session_id: Option<SessionId>,
     ) -> serde_json::Result<Self> {
         Ok(Self {

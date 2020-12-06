@@ -162,7 +162,7 @@ impl Handler {
                     self.on_navigation_response(id, resp);
                 }
                 PendingRequest::ExternalCommand(tx) => {
-                    let _ = tx.send(resp).ok();
+                    let _ = tx.send(Ok(resp)).ok();
                 }
                 PendingRequest::InternalCommand(target_id) => {
                     if let Some(target) = self.targets.get_mut(&target_id) {
@@ -420,7 +420,7 @@ impl NavigationRequest {
 enum PendingRequest {
     CreateTarget(OneshotSender<Result<Page, CdpError>>),
     Navigate(NavigationId),
-    ExternalCommand(OneshotSender<Response>),
+    ExternalCommand(OneshotSender<Result<Response, CdpError>>),
     InternalCommand(TargetId),
 }
 

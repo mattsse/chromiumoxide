@@ -68,7 +68,7 @@ async fn execute<T: Command>(
     let msg = CommandMessage::with_session(cmd, tx, session)?;
 
     sender.send(TargetMessage::Command(msg)).await?;
-    let resp = rx.await?;
+    let resp = rx.await??;
 
     if let Some(res) = resp.result {
         let result = serde_json::from_value(res)?;
