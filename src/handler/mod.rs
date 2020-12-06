@@ -19,7 +19,7 @@ use chromiumoxid_types::{
 };
 
 use crate::handler::frame::{NavigationError, NavigationId, NavigationOk};
-use crate::page::PageInner;
+use crate::handler::target::TargetEvent;
 use crate::{
     browser::{BrowserMessage, CommandMessage},
     cdp::{
@@ -48,15 +48,20 @@ mod session;
 mod target;
 mod viewport;
 
+pub(crate) use page::PageInner;
+
 // puppeteer
 pub struct Handler {
     /// Commands that are being processed await a response from the chromium
     /// instance
     pending_commands: FnvHashMap<CallId, (PendingRequest, Instant)>,
+    /// Connection to the browser instance
     from_browser: Fuse<Receiver<HandlerMessage>>,
     // default_ctx: BrowserContext,
     contexts: HashMap<BrowserContextId, BrowserContext>,
     pages: Vec<(Fuse<Receiver<HandlerMessage>>, Arc<PageInner>)>,
+    /// Used to loop over all targets in a consistent manner
+    target_ids: Vec<TargetId>,
     /// The created and attached targets
     targets: HashMap<TargetId, Target>,
     navigations: FnvHashMap<NavigationId, NavigationRequest>,
@@ -85,6 +90,7 @@ impl Handler {
             from_browser: rx.fuse(),
             contexts: Default::default(),
             pages: Default::default(),
+            target_ids: Default::default(),
             targets: Default::default(),
             navigations: Default::default(),
             sessions: Default::default(),
@@ -94,6 +100,7 @@ impl Handler {
         }
     }
 
+    /// received a response to a navigation request like `Page.navigate`
     fn on_navigation_response(&mut self, id: NavigationId, resp: Response) {
         if let Some(nav) = self.navigations.get_mut(&id) {
             nav.set_response(resp);
@@ -102,6 +109,7 @@ impl Handler {
 
     fn on_navigation_lifecycle_completed(&mut self, event: Result<NavigationOk, NavigationError>) {}
 
+    /// Received a response to a request
     fn on_response(&mut self, resp: Response) {
         if let Some((req, _)) = self.pending_commands.remove(&resp.id) {
             match req {
@@ -193,8 +201,12 @@ impl Handler {
         }
     }
 
+    /// Fired when a new target was created on the chromium instance
+    ///
+    /// Creates a new `Target` instance and keeps track of it
     fn on_target_created(&mut self, event: EventTargetCreated) {
         let target = Target::new(event.target_info);
+        self.target_ids.push(target.target_id().clone());
         self.targets.insert(target.target_id().clone(), target);
     }
 
@@ -236,6 +248,7 @@ impl Stream for Handler {
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let pin = self.get_mut();
+        let now = Instant::now();
 
         // temporary pinning of the browser receiver should be safe as we are pinning
         // through the already pinned self. with the receivers we can also
@@ -249,22 +262,33 @@ impl Stream for Handler {
             }
         }
 
-        'outer: for n in (0..pin.pages.len()).rev() {
-            let (mut tab, inner) = pin.pages.swap_remove(n);
-            loop {
-                match Pin::new(&mut tab).poll_next(cx) {
-                    Poll::Ready(Some(msg)) => {
-                        // TODO handle err
-                        // pin.submit_command(msg).unwrap();
+        'outer: for n in (0..pin.target_ids.len()).rev() {
+            let target_id = pin.target_ids.swap_remove(n);
+            if let Some(target) = pin.targets.get_mut(&target_id) {
+                while let Some(event) = target.poll(cx, now) {
+                    match event {
+                        TargetEvent::Request(_) => {}
+                        TargetEvent::RequestTimeout(_) => {}
+                        TargetEvent::Message(msg) => {}
+                        TargetEvent::Initialized => {}
                     }
-                    Poll::Ready(None) => {
-                        // channel is done, skip
-                        continue 'outer;
-                    }
-                    Poll::Pending => break,
                 }
+
+                // loop {
+                //     match Pin::new(&mut tab).poll_next(cx) {
+                //         Poll::Ready(Some(msg)) => {
+                //             // TODO handle err
+                //             // pin.submit_command(msg).unwrap();
+                //         }
+                //         Poll::Ready(None) => {
+                //             // channel is done, skip
+                //             continue 'outer;
+                //         }
+                //         Poll::Pending => break,
+                //     }
+                // }
+                pin.target_ids.push(target_id);
             }
-            pin.pages.push((tab, inner));
         }
 
         while let Poll::Ready(Some(ev)) = Pin::new(&mut pin.conn).poll_next(cx) {
@@ -319,6 +343,7 @@ enum PendingRequest {
 /// Events used internally to communicate with the handler, which are executed
 /// in the background
 // TODO rename to BrowserMessage
+#[derive(Debug)]
 pub(crate) enum HandlerMessage {
     CreatePage(CreateTargetParams, OneshotSender<Result<Page, CdpError>>),
     GetPages(OneshotSender<Vec<Page>>),

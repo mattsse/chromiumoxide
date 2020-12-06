@@ -20,19 +20,7 @@ use crate::cdp::js_protocol;
 use crate::cdp::js_protocol::debugger::GetScriptSourceParams;
 use crate::cdp::js_protocol::runtime::{EvaluateParams, RemoteObject, ScriptId};
 use crate::element::Element;
-
-#[derive(Debug)]
-pub(crate) struct PageInner {
-    target_id: TargetId,
-    session_id: SessionId,
-    commands: Sender<CommandMessage>,
-}
-
-impl PageInner {
-    pub(crate) async fn execute<T: Command>(&self, cmd: T) -> Result<CommandResponse<T::Response>> {
-        Ok(execute(cmd, self.commands.clone(), Some(self.session_id.clone())).await?)
-    }
-}
+use crate::handler::PageInner;
 
 #[derive(Debug)]
 pub struct Page {
@@ -40,30 +28,6 @@ pub struct Page {
 }
 
 impl Page {
-    pub(crate) async fn new(target_id: TargetId, commands: Sender<CommandMessage>) -> Result<Self> {
-        // See https://vanilla.aslushnikov.com/?Target.attachToTarget
-        let resp = execute(
-            AttachToTargetParams {
-                target_id: target_id.clone(),
-                flatten: Some(true),
-            },
-            commands.clone(),
-            None,
-        )
-        .await?;
-
-        // TODO enable networking
-        // self.execute(browser_protocol::network::EnableParams::default()).await?;
-
-        let inner = Arc::new(PageInner {
-            target_id,
-            commands,
-            session_id: resp.result.session_id,
-        });
-
-        Ok(Self { inner })
-    }
-
     pub async fn execute<T: Command>(&self, cmd: T) -> Result<CommandResponse<T::Response>> {
         Ok(self.inner.execute(cmd).await?)
     }
@@ -213,7 +177,7 @@ impl Page {
 
     /// Activates (focuses) the target.
     pub async fn activate(&self) -> Result<&Self> {
-        self.execute(ActivateTargetParams::new(self.inner.target_id.clone()))
+        self.execute(ActivateTargetParams::new(self.inner.target_id().clone()))
             .await?;
         Ok(self)
     }

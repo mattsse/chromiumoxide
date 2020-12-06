@@ -4,7 +4,7 @@ use crate::cdp::browser_protocol::dom::{
     BackendNodeId, DescribeNodeParams, NodeId, QuerySelectorParams, ResolveNodeParams,
 };
 use crate::cdp::js_protocol::runtime::RemoteObjectId;
-use crate::page::PageInner;
+use crate::handler::PageInner;
 
 /// A handle to a [DOM Element](https://developer.mozilla.org/en-US/docs/Web/API/Element).
 #[derive(Debug)]

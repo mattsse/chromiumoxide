@@ -3,11 +3,10 @@ use std::collections::{HashSet, VecDeque};
 use std::time::{Duration, Instant};
 
 use futures::channel::oneshot::Sender;
-use futures::task::Poll;
+use futures::task::{Context, Poll};
 use serde_json::Value;
 
-use chromiumoxid_types::{Method, Request, Response};
-
+use crate::browser::CommandMessage;
 use crate::cdp::browser_protocol::browser::BrowserContextId;
 use crate::cdp::browser_protocol::log;
 use crate::cdp::browser_protocol::page::*;
@@ -20,16 +19,22 @@ use crate::handler::cmd::CommandChain;
 use crate::handler::emulation::EmulationManager;
 use crate::handler::frame::FrameManager;
 use crate::handler::network::NetworkManager;
+use crate::handler::page::PageHandle;
 use crate::handler::viewport::Viewport;
-use crate::page::{Page, PageInner};
+use crate::handler::{HandlerMessage, PageInner};
+use crate::page::Page;
+use chromiumoxid_types::{Method, Request, Response};
+use futures::channel::mpsc::Receiver;
+use futures::stream::{Fuse, Stream};
+use std::pin::Pin;
 
 macro_rules! advance_state {
-    ($s:ident, $now:ident, $cmds: ident, $next_state:expr ) => {{
+    ($s:ident, $cx:ident, $now:ident, $cmds: ident, $next_state:expr ) => {{
         if let Poll::Ready(poll) = $cmds.poll($now) {
             return match poll {
                 None => {
-                    $s.state = $next_state;
-                    $s.poll($now)
+                    $s.init_state = $next_state;
+                    $s.poll($cx, $now)
                 }
                 Some(Ok((method, params))) => Some(TargetEvent::Request(Request {
                     method,
@@ -50,8 +55,9 @@ pub(crate) struct Target {
     emulation_manager: EmulationManager,
     viewport: Viewport,
     session_id: Option<SessionId>,
-    page: Option<PageInner>,
-    state: TargetState,
+    page: Option<PageHandle>,
+    init_state: TargetInit,
+    queued_messages: VecDeque<TargetMessage>,
     /// The sender who initiated the creation of a page.
     initiator: Option<Sender<Result<Page, CdpError>>>,
 }
@@ -69,7 +75,8 @@ impl Target {
             viewport: Default::default(),
             session_id: None,
             page: None,
-            state: TargetState::InitializingFrame(FrameManager::init_commands()),
+            init_state: TargetInit::InitializingFrame(FrameManager::init_commands()),
+            queued_messages: Default::default(),
             initiator: None,
         }
     }
@@ -103,7 +110,7 @@ impl Target {
         // self.info.type
     }
 
-    fn goto(&mut self) {
+    pub fn goto(&mut self) {
         // queue in command
     }
 
@@ -124,7 +131,7 @@ impl Target {
 
     /// Received a response to a command issued by this target
     pub fn on_response(&mut self, resp: Response) {
-        if let Some(cmds) = self.state.commands_mut() {
+        if let Some(cmds) = self.init_state.commands_mut() {
             cmds.received_response(resp.method.as_ref());
         }
     }
@@ -174,41 +181,58 @@ impl Target {
     }
 
     /// Advance that target's state
-    pub fn poll(&mut self, now: Instant) -> Option<TargetEvent> {
-        match &mut self.state {
-            TargetState::InitializingFrame(cmds) => {
+    pub(crate) fn poll(&mut self, cx: &mut Context<'_>, now: Instant) -> Option<TargetEvent> {
+        match &mut self.init_state {
+            TargetInit::InitializingFrame(cmds) => {
                 advance_state!(
                     self,
+                    cx,
                     now,
                     cmds,
-                    TargetState::InitializingNetwork(self.network_manager.init_commands())
+                    TargetInit::InitializingNetwork(self.network_manager.init_commands())
                 );
             }
-            TargetState::InitializingNetwork(cmds) => {
+            TargetInit::InitializingNetwork(cmds) => {
                 advance_state!(
                     self,
+                    cx,
                     now,
                     cmds,
-                    TargetState::InitializingPage(Self::page_init_commands())
+                    TargetInit::InitializingPage(Self::page_init_commands())
                 );
             }
-            TargetState::InitializingPage(cmds) => {
+            TargetInit::InitializingPage(cmds) => {
                 advance_state!(
                     self,
+                    cx,
                     now,
                     cmds,
-                    TargetState::InitializingEmulation(
+                    TargetInit::InitializingEmulation(
                         self.emulation_manager.init_commands(&self.viewport),
                     )
                 );
             }
-            TargetState::InitializingEmulation(cmds) => {
-                advance_state!(self, now, cmds, TargetState::Initialized);
+            TargetInit::InitializingEmulation(cmds) => {
+                advance_state!(self, cx, now, cmds, TargetInit::Initialized);
             }
-            TargetState::Initialized => {}
+            TargetInit::Initialized => {}
         };
+        loop {
+            // Drain queued messages first.
+            if let Some(msg) = self.queued_messages.pop_front() {
+                return Some(TargetEvent::Message(msg));
+            }
 
-        None
+            if let Some(handle) = self.page.as_mut() {
+                while let Poll::Ready(Some(msg)) = Pin::new(&mut handle.rx).poll_next(cx) {
+                    self.queued_messages.push_back(msg);
+                }
+            }
+
+            if self.queued_messages.is_empty() {
+                return None;
+            }
+        }
     }
 
     pub fn set_initiator(&mut self, tx: Sender<Result<Page, CdpError>>) {
@@ -241,7 +265,7 @@ impl Target {
 
 // TODO this can be moved into the classes?
 #[derive(Debug)]
-pub enum TargetState {
+pub enum TargetInit {
     InitializingFrame(CommandChain),
     InitializingNetwork(CommandChain),
     InitializingPage(CommandChain),
@@ -249,14 +273,14 @@ pub enum TargetState {
     Initialized,
 }
 
-impl TargetState {
+impl TargetInit {
     fn commands_mut(&mut self) -> Option<&mut CommandChain> {
         match self {
-            TargetState::InitializingFrame(cmd) => Some(cmd),
-            TargetState::InitializingNetwork(cmd) => Some(cmd),
-            TargetState::InitializingPage(cmd) => Some(cmd),
-            TargetState::InitializingEmulation(cmd) => Some(cmd),
-            TargetState::Initialized => None,
+            TargetInit::InitializingFrame(cmd) => Some(cmd),
+            TargetInit::InitializingNetwork(cmd) => Some(cmd),
+            TargetInit::InitializingPage(cmd) => Some(cmd),
+            TargetInit::InitializingEmulation(cmd) => Some(cmd),
+            TargetInit::Initialized => None,
         }
     }
 
@@ -266,9 +290,20 @@ impl TargetState {
 }
 
 #[derive(Debug)]
-pub enum TargetEvent {
+pub(crate) enum TargetEvent {
+    /// When the target was initialized
+    Initialized,
+    /// An internal request
     Request(Request),
+    /// An internal request timed out
     RequestTimeout(DeadlineExceeded),
+    /// A new message arrived via a channel
+    Message(TargetMessage),
+}
+
+#[derive(Debug)]
+pub(crate) enum TargetMessage {
+    Command(CommandMessage),
 }
 
 #[derive(Debug)]
