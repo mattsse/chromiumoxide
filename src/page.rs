@@ -248,3 +248,9 @@ async fn execute<T: Command>(
         Err(anyhow!("Empty Response"))
     }
 }
+
+impl From<Arc<PageInner>> for Page {
+    fn from(inner: Arc<PageInner>) -> Self {
+        Self { inner }
+    }
+}

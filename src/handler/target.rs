@@ -1,10 +1,14 @@
 use std::borrow::Cow;
 use std::collections::{HashSet, VecDeque};
+use std::pin::Pin;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use futures::channel::oneshot::Sender;
+use futures::stream::{Fuse, Stream};
 use futures::task::{Context, Poll};
-use serde_json::Value;
+
+use chromiumoxid_types::{Method, Request, Response};
 
 use crate::browser::CommandMessage;
 use crate::cdp::browser_protocol::browser::BrowserContextId;
@@ -17,16 +21,14 @@ use crate::cdp::CdpEventMessage;
 use crate::error::{CdpError, DeadlineExceeded};
 use crate::handler::cmd::CommandChain;
 use crate::handler::emulation::EmulationManager;
-use crate::handler::frame::FrameManager;
+use crate::handler::frame::{
+    FrameEvent, FrameManager, NavigationError, NavigationId, NavigationOk,
+};
 use crate::handler::network::NetworkManager;
 use crate::handler::page::PageHandle;
 use crate::handler::viewport::Viewport;
-use crate::handler::{HandlerMessage, PageInner};
+use crate::handler::PageInner;
 use crate::page::Page;
-use chromiumoxid_types::{Method, Request, Response};
-use futures::channel::mpsc::Receiver;
-use futures::stream::{Fuse, Stream};
-use std::pin::Pin;
 
 macro_rules! advance_state {
     ($s:ident, $cx:ident, $now:ident, $cmds: ident, $next_state:expr ) => {{
@@ -57,7 +59,7 @@ pub(crate) struct Target {
     session_id: Option<SessionId>,
     page: Option<PageHandle>,
     init_state: TargetInit,
-    queued_messages: VecDeque<TargetMessage>,
+    queued_events: VecDeque<TargetEvent>,
     /// The sender who initiated the creation of a page.
     initiator: Option<Sender<Result<Page, CdpError>>>,
 }
@@ -76,7 +78,7 @@ impl Target {
             session_id: None,
             page: None,
             init_state: TargetInit::InitializingFrame(FrameManager::init_commands()),
-            queued_messages: Default::default(),
+            queued_events: Default::default(),
             initiator: None,
         }
     }
@@ -96,6 +98,25 @@ impl Target {
     /// The identifier for this target
     pub fn target_id(&self) -> &TargetId {
         &self.info.target_id
+    }
+
+    /// Whether this target is already initialized
+    pub fn is_initialized(&self) -> bool {
+        matches!(self.init_state, TargetInit::Initialized)
+    }
+
+    fn create_page(&mut self) {
+        if self.page.is_none() {
+            if let Some(session) = self.session_id.clone() {
+                let handle = PageHandle::new(self.target_id().clone(), session);
+                self.page = Some(handle);
+            }
+        }
+    }
+
+    pub(crate) fn get_or_create_page(&mut self) -> Option<&Arc<PageInner>> {
+        self.create_page();
+        self.page.as_ref().map(|p| p.inner())
     }
 
     pub fn is_page(&self) -> bool {
@@ -215,21 +236,40 @@ impl Target {
             TargetInit::InitializingEmulation(cmds) => {
                 advance_state!(self, cx, now, cmds, TargetInit::Initialized);
             }
-            TargetInit::Initialized => {}
+            TargetInit::Initialized => {
+                if let Some(initiator) = self.initiator.take() {
+                    if let Some(page) = self.get_or_create_page() {
+                        let _ = initiator.send(Ok(page.clone().into()));
+                    }
+                }
+            }
         };
         loop {
             // Drain queued messages first.
-            if let Some(msg) = self.queued_messages.pop_front() {
-                return Some(TargetEvent::Message(msg));
+            if let Some(ev) = self.queued_events.pop_front() {
+                return Some(ev);
             }
 
             if let Some(handle) = self.page.as_mut() {
                 while let Poll::Ready(Some(msg)) = Pin::new(&mut handle.rx).poll_next(cx) {
-                    self.queued_messages.push_back(msg);
+                    self.queued_events.push_back(TargetEvent::Message(msg));
                 }
             }
 
-            if self.queued_messages.is_empty() {
+            while let Some(event) = self.frame_manager.poll(now) {
+                match event {
+                    FrameEvent::NavigationResult(res) => {
+                        self.queued_events
+                            .push_back(TargetEvent::NavigationResult(res));
+                    }
+                    FrameEvent::NavigationRequest(id, req) => {
+                        self.queued_events
+                            .push_back(TargetEvent::NavigationRequest(id, req));
+                    }
+                }
+            }
+
+            if self.queued_events.is_empty() {
                 return None;
             }
         }
@@ -263,6 +303,20 @@ impl Target {
     }
 }
 
+#[derive(Debug)]
+pub(crate) enum TargetEvent {
+    /// An internal request
+    Request(Request),
+    /// An internal navigation request
+    NavigationRequest(NavigationId, NavigateParams),
+    /// Indicates that a previous requested navigation has finished
+    NavigationResult(Result<NavigationOk, NavigationError>),
+    /// An internal request timed out
+    RequestTimeout(DeadlineExceeded),
+    /// A new message arrived via a channel
+    Message(TargetMessage),
+}
+
 // TODO this can be moved into the classes?
 #[derive(Debug)]
 pub enum TargetInit {
@@ -287,18 +341,6 @@ impl TargetInit {
     fn on_response(&mut self, resp: &Response) {
         todo!()
     }
-}
-
-#[derive(Debug)]
-pub(crate) enum TargetEvent {
-    /// When the target was initialized
-    Initialized,
-    /// An internal request
-    Request(Request),
-    /// An internal request timed out
-    RequestTimeout(DeadlineExceeded),
-    /// A new message arrived via a channel
-    Message(TargetMessage),
 }
 
 #[derive(Debug)]

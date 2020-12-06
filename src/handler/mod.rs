@@ -1,29 +1,24 @@
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
 
+use chromiumoxid_types::Request as CdpRequest;
 use fnv::FnvHashMap;
 use futures::channel::mpsc::Receiver;
 use futures::channel::oneshot::Sender as OneshotSender;
 use futures::stream::{Fuse, Stream};
 use futures::task::{Context, Poll};
 use futures::StreamExt;
-use serde_json::{Error, Value};
-use smallvec::alloc::borrow::Borrow;
-use smallvec::alloc::collections::{BTreeMap, VecDeque};
 
-use chromiumoxid_types::{
-    CallId, CdpJsonEventMessage, Command, CommandResponse, Event, Message, Method, Response,
-};
+use chromiumoxid_types::{CallId, Command, CommandResponse, Message, Method, Response};
 
 use crate::handler::frame::{NavigationError, NavigationId, NavigationOk};
-use crate::handler::target::TargetEvent;
+use crate::handler::target::{TargetEvent, TargetMessage};
 use crate::{
-    browser::{BrowserMessage, CommandMessage},
+    browser::CommandMessage,
     cdp::{
-        browser_protocol::{browser::*, fetch::*, network::*, page::*, target::*},
+        browser_protocol::{browser::*, page::*, target::*},
         events::CdpEvent,
         events::CdpEventMessage,
         js_protocol::runtime::*,
@@ -102,12 +97,46 @@ impl Handler {
 
     /// received a response to a navigation request like `Page.navigate`
     fn on_navigation_response(&mut self, id: NavigationId, resp: Response) {
-        if let Some(nav) = self.navigations.get_mut(&id) {
-            nav.set_response(resp);
+        if let Some(nav) = self.navigations.remove(&id) {
+            match nav {
+                NavigationRequest::Goto(mut nav) => {
+                    if nav.navigated {
+                        let _ = nav.tx.send(Ok(resp));
+                    } else {
+                        nav.set_response(resp);
+                        self.navigations.insert(id, NavigationRequest::Goto(nav));
+                    }
+                }
+            }
         }
     }
 
-    fn on_navigation_lifecycle_completed(&mut self, event: Result<NavigationOk, NavigationError>) {}
+    fn on_navigation_lifecycle_completed(&mut self, res: Result<NavigationOk, NavigationError>) {
+        match res {
+            Ok(ok) => {
+                let id = *ok.navigation_id();
+                if let Some(nav) = self.navigations.remove(&id) {
+                    match nav {
+                        NavigationRequest::Goto(mut nav) => {
+                            if let Some(resp) = nav.response.take() {
+                                let _ = nav.tx.send(Ok(resp));
+                            } else {
+                                nav.set_navigated();
+                                self.navigations.insert(id, NavigationRequest::Goto(nav));
+                            }
+                        }
+                    }
+                }
+            }
+            Err(err) => {
+                if let Some(nav) = self.navigations.remove(err.navigation_id()) {
+                    match nav {
+                        NavigationRequest::Goto(nav) => {}
+                    }
+                }
+            }
+        }
+    }
 
     /// Received a response to a request
     fn on_response(&mut self, resp: Response) {
@@ -117,9 +146,9 @@ impl Handler {
                     match to_command_response::<CreateTargetParams>(resp) {
                         Ok(resp) => {
                             if let Some(target) = self.targets.get_mut(&resp.target_id) {
-
-                                // TODO submit navigation request to the target
-                                // and store navid -> tx in navigations
+                                // move the sender to the target that sends its page once
+                                // initialized
+                                target.set_initiator(tx);
                             } else {
                                 // TODO can this even happen?
                                 panic!("Created target not present")
@@ -145,15 +174,63 @@ impl Handler {
         }
     }
 
-    pub(crate) fn submit_command(&mut self, msg: CommandMessage) -> Result<(), CdpError> {
+    pub(crate) fn submit_external_command(
+        &mut self,
+        msg: CommandMessage,
+        now: Instant,
+    ) -> Result<(), CdpError> {
         let call_id = self
             .conn
             .submit_command(msg.method, msg.session_id, msg.params)?;
-        self.pending_commands.insert(
-            call_id,
-            (PendingRequest::ExternalCommand(msg.sender), Instant::now()),
-        );
+        self.pending_commands
+            .insert(call_id, (PendingRequest::ExternalCommand(msg.sender), now));
         Ok(())
+    }
+
+    pub(crate) fn submit_internal_command(
+        &mut self,
+        target_id: TargetId,
+        req: CdpRequest,
+        now: Instant,
+    ) -> Result<(), CdpError> {
+        let call_id =
+            self.conn
+                .submit_command(req.method, req.session_id.map(Into::into), req.params)?;
+        self.pending_commands
+            .insert(call_id, (PendingRequest::InternalCommand(target_id), now));
+        Ok(())
+    }
+
+    fn submit_navigation(
+        &mut self,
+        id: NavigationId,
+        params: NavigateParams,
+        session_id: Option<SessionId>,
+        now: Instant,
+    ) {
+        let call_id = self
+            .conn
+            .submit_command(
+                params.identifier(),
+                session_id.map(Into::into),
+                serde_json::to_value(params).unwrap(),
+            )
+            .unwrap();
+
+        self.pending_commands
+            .insert(call_id, (PendingRequest::Navigate(id), now));
+    }
+
+    /// Process a message received by the target
+    fn on_target_message(&mut self, target: &mut Target, msg: TargetMessage, now: Instant) {
+        match msg {
+            TargetMessage::Command(msg) => {
+                if msg.is_navigation() {
+                } else {
+                    self.submit_external_command(msg, now);
+                }
+            }
+        }
     }
 
     fn next_navigation_id(&mut self) -> NavigationId {
@@ -256,37 +333,37 @@ impl Stream for Handler {
         while let Poll::Ready(Some(msg)) = Pin::new(&mut pin.from_browser).poll_next(cx) {
             match msg {
                 HandlerMessage::Command(cmd) => {
-                    pin.submit_command(cmd).unwrap();
+                    pin.submit_external_command(cmd, now).unwrap();
                 }
                 _ => {}
             }
         }
 
-        'outer: for n in (0..pin.target_ids.len()).rev() {
+        for n in (0..pin.target_ids.len()).rev() {
             let target_id = pin.target_ids.swap_remove(n);
-            if let Some(target) = pin.targets.get_mut(&target_id) {
+            if let Some((id, mut target)) = pin.targets.remove_entry(&target_id) {
                 while let Some(event) = target.poll(cx, now) {
                     match event {
-                        TargetEvent::Request(_) => {}
-                        TargetEvent::RequestTimeout(_) => {}
-                        TargetEvent::Message(msg) => {}
-                        TargetEvent::Initialized => {}
+                        TargetEvent::Request(req) => {
+                            pin.submit_internal_command(target.target_id().clone(), req, now);
+                        }
+                        TargetEvent::RequestTimeout(_) => {
+                            // TODO close and remove
+                            // continue 'outer;
+                        }
+                        TargetEvent::Message(msg) => {
+                            pin.on_target_message(&mut target, msg, now);
+                        }
+                        TargetEvent::NavigationRequest(id, params) => {
+                            pin.submit_navigation(id, params, target.session_id().cloned(), now);
+                        }
+                        TargetEvent::NavigationResult(res) => {
+                            pin.on_navigation_lifecycle_completed(res)
+                        }
                     }
                 }
 
-                // loop {
-                //     match Pin::new(&mut tab).poll_next(cx) {
-                //         Poll::Ready(Some(msg)) => {
-                //             // TODO handle err
-                //             // pin.submit_command(msg).unwrap();
-                //         }
-                //         Poll::Ready(None) => {
-                //             // channel is done, skip
-                //             continue 'outer;
-                //         }
-                //         Poll::Pending => break,
-                //     }
-                // }
+                pin.targets.insert(id, target);
                 pin.target_ids.push(target_id);
             }
         }
@@ -307,7 +384,11 @@ impl Stream for Handler {
 
 #[derive(Debug)]
 pub struct NavigationInProgress<T> {
+    /// Marker to indicate whether a navigation lifecycle has completed
+    navigated: bool,
+    /// The response of the issued navigation request
     response: Option<Response>,
+    /// Sender towards the receiver who initiated the navigation request
     tx: OneshotSender<T>,
 }
 
@@ -315,18 +396,20 @@ impl<T> NavigationInProgress<T> {
     fn set_response(&mut self, resp: Response) {
         self.response = Some(resp);
     }
+
+    fn set_navigated(&mut self) {
+        self.navigated = true;
+    }
 }
 
 #[derive(Debug)]
 enum NavigationRequest {
-    CreatePage(NavigationInProgress<Result<Page, CdpError>>),
-    Goto(NavigationInProgress<Response>),
+    Goto(NavigationInProgress<Result<Response, CdpError>>),
 }
 
 impl NavigationRequest {
     fn set_response(&mut self, response: Response) {
         match self {
-            NavigationRequest::CreatePage(nav) => nav.set_response(response),
             NavigationRequest::Goto(nav) => nav.set_response(response),
         }
     }

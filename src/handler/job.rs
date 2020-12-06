@@ -1,5 +1,5 @@
 use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::task::Context;
 use std::time::{Duration, Instant};
 
 use crate::handler::REQUEST_TIMEOUT;

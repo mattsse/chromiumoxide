@@ -1,21 +1,37 @@
 use crate::cdp::browser_protocol::target::{SessionId, TargetId};
 use crate::handler::target::{TargetEvent, TargetMessage};
 use chromiumoxid_types::{Command, CommandResponse};
-use futures::channel::mpsc::Receiver;
-use futures::channel::mpsc::Sender;
+use futures::channel::mpsc::{channel, Receiver, Sender};
 use futures::channel::oneshot::channel as oneshot_channel;
 use futures::stream::Fuse;
 use std::sync::Arc;
 
 use crate::browser::CommandMessage;
 use crate::error::CdpError;
-use async_std::pin::Pin;
-use futures::task::{Context, Poll};
-use futures::SinkExt;
+use futures::{SinkExt, StreamExt};
 
 pub struct PageHandle {
     pub(crate) rx: Fuse<Receiver<TargetMessage>>,
     page: Arc<PageInner>,
+}
+
+impl PageHandle {
+    pub fn new(target_id: TargetId, session_id: SessionId) -> Self {
+        let (commands, rx) = channel(1);
+        let page = PageInner {
+            target_id,
+            session_id,
+            commands,
+        };
+        Self {
+            rx: rx.fuse(),
+            page: Arc::new(page),
+        }
+    }
+
+    pub(crate) fn inner(&self) -> &Arc<PageInner> {
+        &self.page
+    }
 }
 
 #[derive(Debug)]

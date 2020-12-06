@@ -3,9 +3,7 @@ use std::collections::VecDeque;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
-use fnv::FnvHashMap;
-
-use chromiumoxid_types::{CdpJsonEventMessage, Method};
+use chromiumoxid_types::Method;
 
 use crate::cdp::browser_protocol::network::LoaderId;
 use crate::cdp::browser_protocol::page::*;
@@ -13,7 +11,6 @@ use crate::cdp::browser_protocol::target::EventAttachedToTarget;
 use crate::cdp::js_protocol::runtime::*;
 use crate::cdp::{
     browser_protocol::page::{self, FrameId},
-    events::CdpEventMessage,
     js_protocol::runtime,
 };
 use crate::error::DeadlineExceeded;
@@ -197,7 +194,10 @@ impl FrameManager {
                 if let Some(referer) = req.referer {
                     builder = builder.referrer(referer);
                 }
-                return Some(FrameEvent::NavigationRequest(builder.build().unwrap()));
+                return Some(FrameEvent::NavigationRequest(
+                    req.id,
+                    builder.build().unwrap(),
+                ));
             }
         }
         None
@@ -332,7 +332,7 @@ impl Default for FrameManager {
 #[derive(Debug)]
 pub enum FrameEvent {
     NavigationResult(Result<NavigationOk, NavigationError>),
-    NavigationRequest(NavigateParams),
+    NavigationRequest(NavigationId, NavigateParams),
 }
 
 #[derive(Debug)]
@@ -347,10 +347,28 @@ pub enum NavigationError {
     },
 }
 
+impl NavigationError {
+    pub fn navigation_id(&self) -> &NavigationId {
+        match self {
+            NavigationError::Timeout { id, .. } => id,
+            NavigationError::FrameNotFound { id, .. } => id,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum NavigationOk {
     SameDocumentNavigation(NavigationId),
     NewDocumentNavigation(NavigationId),
+}
+
+impl NavigationOk {
+    pub fn navigation_id(&self) -> &NavigationId {
+        match self {
+            NavigationOk::SameDocumentNavigation(id) => id,
+            NavigationOk::NewDocumentNavigation(id) => id,
+        }
+    }
 }
 
 /// Tracks the progress of an issued `Page.navigate` request until completion.

@@ -20,6 +20,7 @@ use serde::Serialize;
 
 use chromiumoxid_types::*;
 
+use crate::cdp::browser_protocol::page::NavigateParams;
 use crate::cdp::browser_protocol::target::{
     CreateTargetParams, SessionId, SetDiscoverTargetsParams,
 };
@@ -172,6 +173,11 @@ impl CommandMessage {
             params: serde_json::to_value(cmd)?,
             sender,
         })
+    }
+
+    /// Whether this command is a navigation
+    pub fn is_navigation(&self) -> bool {
+        self.method.as_ref() == NavigateParams::IDENTIFIER
     }
 
     pub fn with_session<C: Command>(
