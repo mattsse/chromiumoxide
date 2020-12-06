@@ -10,16 +10,17 @@ use futures::task::{Context, Poll};
 use chromiumoxid_types::{Method, Request, Response};
 
 use crate::browser::CommandMessage;
-use crate::cdp::browser_protocol::browser::BrowserContextId;
-use crate::cdp::browser_protocol::log;
-use crate::cdp::browser_protocol::page::*;
-use crate::cdp::browser_protocol::performance;
-use crate::cdp::browser_protocol::target::{SessionId, SetAutoAttachParams, TargetId, TargetInfo};
+use crate::cdp::browser_protocol::{
+    browser::BrowserContextId,
+    log, performance,
+    target::{SessionId, SetAutoAttachParams, TargetId, TargetInfo},
+};
 use crate::cdp::events::CdpEvent;
 use crate::cdp::CdpEventMessage;
 use crate::error::{CdpError, DeadlineExceeded};
 use crate::handler::cmd::CommandChain;
 use crate::handler::emulation::EmulationManager;
+use crate::handler::frame::FrameNavigationRequest;
 use crate::handler::frame::{
     FrameEvent, FrameManager, NavigationError, NavigationId, NavigationOk,
 };
@@ -104,6 +105,10 @@ impl Target {
         matches!(self.init_state, TargetInit::Initialized)
     }
 
+    pub fn goto(&mut self, req: FrameNavigationRequest) {
+        self.frame_manager.goto(req)
+    }
+
     fn create_page(&mut self) {
         if self.page.is_none() {
             if let Some(session) = self.session_id.clone() {
@@ -125,16 +130,6 @@ impl Target {
     pub fn browser_context_id(&self) -> Option<&BrowserContextId> {
         self.info.browser_context_id.as_ref()
     }
-
-    pub fn r#type(&self) {
-        // self.info.type
-    }
-
-    pub fn goto(&mut self) {
-        // queue in command
-    }
-
-    pub fn set_viewport(&mut self) {}
 
     pub fn info(&self) -> &TargetInfo {
         &self.info
@@ -307,7 +302,7 @@ pub(crate) enum TargetEvent {
     /// An internal request
     Request(Request),
     /// An internal navigation request
-    NavigationRequest(NavigationId, NavigateParams),
+    NavigationRequest(NavigationId, Request),
     /// Indicates that a previous requested navigation has finished
     NavigationResult(Result<NavigationOk, NavigationError>),
     /// An internal request timed out

@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
-use chromiumoxid_types::Method;
+use chromiumoxid_types::{Method, Request};
 
 use crate::cdp::browser_protocol::network::LoaderId;
 use crate::cdp::browser_protocol::page::*;
@@ -89,7 +89,7 @@ pub struct FrameManager {
     /// arrive results in an error
     timeout: Duration,
     /// Track currently in progress navigation
-    pending_navigations: VecDeque<(NavigationRequest, NavigationWatcher)>,
+    pending_navigations: VecDeque<(FrameNavigationRequest, NavigationWatcher)>,
     /// The currently ongoing navigation
     navigation: Option<(NavigationWatcher, Instant)>,
 }
@@ -188,30 +188,21 @@ impl FrameManager {
             }
         } else {
             if let Some((req, watcher)) = self.pending_navigations.pop_front() {
-                let mut builder = NavigateParams::builder()
-                    .url(req.url)
-                    .frame_id(watcher.frame_id.clone());
-                if let Some(referer) = req.referer {
-                    builder = builder.referrer(referer);
-                }
-                return Some(FrameEvent::NavigationRequest(
-                    req.id,
-                    builder.build().unwrap(),
-                ));
+                return Some(FrameEvent::NavigationRequest(req.id, req.req));
             }
         }
         None
     }
 
     /// entrypoint for page navigation
-    pub fn goto(&mut self, req: NavigationRequest) {
+    pub fn goto(&mut self, req: FrameNavigationRequest) {
         if let Some(frame_id) = self.main_frame.clone() {
             self.navigate_frame(frame_id, req);
         }
     }
 
     /// Navigate a specific frame
-    pub fn navigate_frame(&mut self, frame_id: FrameId, req: NavigationRequest) {
+    pub fn navigate_frame(&mut self, frame_id: FrameId, req: FrameNavigationRequest) {
         let loader_id = self.frames.get(&frame_id).and_then(|f| f.loader_id.clone());
         let watcher = NavigationWatcher::until_page_load(req.id, frame_id, loader_id);
         self.pending_navigations.push_back((req, watcher))
@@ -332,7 +323,7 @@ impl Default for FrameManager {
 #[derive(Debug)]
 pub enum FrameEvent {
     NavigationResult(Result<NavigationOk, NavigationError>),
-    NavigationRequest(NavigationId, NavigateParams),
+    NavigationRequest(NavigationId, Request),
 }
 
 #[derive(Debug)]
@@ -412,9 +403,18 @@ impl NavigationWatcher {
 pub struct NavigationId(pub usize);
 
 #[derive(Debug)]
-pub struct NavigationRequest {
+pub struct FrameNavigationRequest {
     pub id: NavigationId,
-    pub referer: Option<String>,
-    pub url: String,
+    pub req: Request,
     pub timeout: Duration,
+}
+
+impl FrameNavigationRequest {
+    pub fn new(id: NavigationId, req: Request) -> Self {
+        Self {
+            id,
+            req,
+            timeout: Duration::from_millis(REQUEST_TIMEOUT),
+        }
+    }
 }

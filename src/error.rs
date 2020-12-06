@@ -1,5 +1,7 @@
 use std::io;
 
+use crate::cdp::browser_protocol::page::FrameId;
+use crate::handler::frame::NavigationError;
 use async_tungstenite::tungstenite;
 use futures::channel::mpsc::SendError;
 use futures::channel::oneshot::Canceled;
@@ -20,6 +22,10 @@ pub enum CdpError {
     NoResponse,
     #[error("{0}")]
     ChannelSendError(#[from] ChannelError),
+    #[error("Request timed out.")]
+    Timeout,
+    #[error("FrameId {0:?} not found.")]
+    FrameNotFound(FrameId),
 }
 
 #[derive(Debug, Error)]
@@ -39,6 +45,15 @@ impl From<Canceled> for CdpError {
 impl From<SendError> for CdpError {
     fn from(err: SendError) -> Self {
         ChannelError::from(err).into()
+    }
+}
+
+impl From<NavigationError> for CdpError {
+    fn from(err: NavigationError) -> Self {
+        match err {
+            NavigationError::Timeout { .. } => CdpError::Timeout,
+            NavigationError::FrameNotFound { frame, .. } => CdpError::FrameNotFound(frame),
+        }
     }
 }
 

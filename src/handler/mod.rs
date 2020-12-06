@@ -7,20 +7,19 @@ use chromiumoxid_types::Request as CdpRequest;
 use fnv::FnvHashMap;
 use futures::channel::mpsc::Receiver;
 use futures::channel::oneshot::Sender as OneshotSender;
-use futures::stream::{Fuse, Stream};
+use futures::stream::{Fuse, Stream, StreamExt};
 use futures::task::{Context, Poll};
-use futures::StreamExt;
 
 use chromiumoxid_types::{CallId, Command, CommandResponse, Message, Method, Response};
 
+use crate::handler::frame::FrameNavigationRequest;
 use crate::handler::frame::{NavigationError, NavigationId, NavigationOk};
 use crate::handler::target::{TargetEvent, TargetMessage};
 use crate::{
     browser::CommandMessage,
     cdp::{
-        browser_protocol::{browser::*, page::*, target::*},
-        events::CdpEvent,
-        events::CdpEventMessage,
+        browser_protocol::{browser::*, target::*},
+        events::{CdpEvent, CdpEventMessage},
     },
     conn::Connection,
     error::CdpError,
@@ -33,13 +32,13 @@ pub const REQUEST_TIMEOUT: u64 = 30000;
 
 mod browser;
 mod cmd;
-mod emulation;
-mod frame;
+pub mod emulation;
+pub mod frame;
 mod job;
-mod network;
+pub mod network;
 mod page;
 mod session;
-mod target;
+pub mod target;
 mod viewport;
 
 pub(crate) use page::PageInner;
@@ -130,7 +129,9 @@ impl Handler {
             Err(err) => {
                 if let Some(nav) = self.navigations.remove(err.navigation_id()) {
                     match nav {
-                        NavigationRequest::Goto(nav) => {}
+                        NavigationRequest::Goto(nav) => {
+                            nav.tx.send(Err(err.into()));
+                        }
                     }
                 }
             }
@@ -200,20 +201,10 @@ impl Handler {
         Ok(())
     }
 
-    fn submit_navigation(
-        &mut self,
-        id: NavigationId,
-        params: NavigateParams,
-        session_id: Option<SessionId>,
-        now: Instant,
-    ) {
+    fn submit_navigation(&mut self, id: NavigationId, req: CdpRequest, now: Instant) {
         let call_id = self
             .conn
-            .submit_command(
-                params.identifier(),
-                session_id.map(Into::into),
-                serde_json::to_value(params).unwrap(),
-            )
+            .submit_command(req.method, req.session_id.map(Into::into), req.params)
             .unwrap();
 
         self.pending_commands
@@ -225,6 +216,10 @@ impl Handler {
         match msg {
             TargetMessage::Command(msg) => {
                 if msg.is_navigation() {
+                    // TODO 1. submit navigation in target
+                    // FrameNavigationRequest::new(self.next_navigation_id(),
+                    // msg. )
+                    // target.goto()
                 } else {
                     let _ = self.submit_external_command(msg, now);
                 }
@@ -355,8 +350,8 @@ impl Stream for Handler {
                         TargetEvent::Message(msg) => {
                             pin.on_target_message(&mut target, msg, now);
                         }
-                        TargetEvent::NavigationRequest(id, params) => {
-                            pin.submit_navigation(id, params, target.session_id().cloned(), now);
+                        TargetEvent::NavigationRequest(id, req) => {
+                            pin.submit_navigation(id, req, now);
                         }
                         TargetEvent::NavigationResult(res) => {
                             pin.on_navigation_lifecycle_completed(res)
