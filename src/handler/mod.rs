@@ -17,11 +17,11 @@ use crate::handler::frame::FrameNavigationRequest;
 use crate::handler::frame::{NavigationError, NavigationId, NavigationOk};
 use crate::handler::target::{TargetEvent, TargetMessage};
 use crate::{
-    browser::CommandMessage,
     cdp::{
         browser_protocol::{browser::*, target::*},
         events::{CdpEvent, CdpEventMessage},
     },
+    cmd::CommandMessage,
     conn::Connection,
     error::CdpError,
     handler::{browser::BrowserContext, job::PeriodicJob, session::Session, target::Target},
@@ -32,7 +32,6 @@ use crate::{
 pub const REQUEST_TIMEOUT: u64 = 30000;
 
 mod browser;
-mod cmd;
 pub mod emulation;
 pub mod frame;
 mod job;
@@ -438,14 +437,6 @@ impl<T> NavigationInProgress<T> {
 #[derive(Debug)]
 enum NavigationRequest {
     Goto(NavigationInProgress<Result<Response, CdpError>>),
-}
-
-impl NavigationRequest {
-    fn set_response(&mut self, response: Response) {
-        match self {
-            NavigationRequest::Goto(nav) => nav.set_response(response),
-        }
-    }
 }
 
 #[derive(Debug)]

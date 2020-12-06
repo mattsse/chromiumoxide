@@ -8,7 +8,7 @@ use crate::cdp::browser_protocol::network::{
 use crate::cdp::browser_protocol::{
     network::EnableParams, security::SetIgnoreCertificateErrorsParams,
 };
-use crate::handler::cmd::CommandChain;
+use crate::cmd::CommandChain;
 
 #[derive(Debug)]
 pub struct NetworkManager {

@@ -8,15 +8,15 @@ use futures::{future, SinkExt};
 
 use chromiumoxid_types::*;
 
-use crate::browser::CommandMessage;
 use crate::cdp::browser_protocol;
 use crate::cdp::browser_protocol::dom::*;
 use crate::cdp::browser_protocol::network::{Cookie, GetCookiesParams, SetUserAgentOverrideParams};
 use crate::cdp::browser_protocol::page::*;
-use crate::cdp::browser_protocol::target::{ActivateTargetParams, SessionId};
+use crate::cdp::browser_protocol::target::{ActivateTargetParams, SessionId, TargetId};
 use crate::cdp::js_protocol;
 use crate::cdp::js_protocol::debugger::GetScriptSourceParams;
 use crate::cdp::js_protocol::runtime::{EvaluateParams, RemoteObject, ScriptId};
+use crate::cmd::CommandMessage;
 use crate::element::Element;
 use crate::handler::PageInner;
 
@@ -38,6 +38,16 @@ impl Page {
         }
 
         Ok(res.result.frame_id)
+    }
+
+    /// The identifier of the `Target` this page belongs to
+    pub fn target_id(&self) -> &TargetId {
+        self.inner.target_id()
+    }
+
+    /// The identifier of the `Session` target of this page is attached to
+    pub fn session_id(&self) -> &SessionId {
+        self.inner.session_id()
     }
 
     /// Returns the current url of the page

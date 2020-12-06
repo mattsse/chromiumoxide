@@ -4,7 +4,7 @@ use crate::cdp::browser_protocol::emulation::{
     ScreenOrientation, ScreenOrientationType, SetDeviceMetricsOverrideParams,
     SetTouchEmulationEnabledParams,
 };
-use crate::handler::cmd::CommandChain;
+use crate::cmd::CommandChain;
 use crate::handler::viewport::Viewport;
 
 #[derive(Debug, Default)]

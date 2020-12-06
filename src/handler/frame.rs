@@ -13,8 +13,8 @@ use crate::cdp::{
     browser_protocol::page::{self, FrameId},
     js_protocol::runtime,
 };
+use crate::cmd::CommandChain;
 use crate::error::DeadlineExceeded;
-use crate::handler::cmd::CommandChain;
 use crate::handler::REQUEST_TIMEOUT;
 
 /// TODO FrameId could optimized by rolling usize based id setup, or find better

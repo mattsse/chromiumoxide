@@ -6,7 +6,7 @@ use futures::channel::oneshot::channel as oneshot_channel;
 use futures::stream::Fuse;
 use std::sync::Arc;
 
-use crate::browser::CommandMessage;
+use crate::cmd::CommandMessage;
 use crate::error::CdpError;
 use futures::{SinkExt, StreamExt};
 

@@ -11,6 +11,7 @@ impl Default for CreateTargetParams {
 }
 
 pub mod browser;
+pub(crate) mod cmd;
 pub mod conn;
 pub mod element;
 pub mod error;

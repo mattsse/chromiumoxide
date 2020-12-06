@@ -1,15 +1,75 @@
+use futures::channel::oneshot::Sender as OneshotSender;
+use futures::task::Poll;
+use serde::Serialize;
 use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::iter::FromIterator;
 use std::time::{Duration, Instant};
 
-use futures::task::Poll;
+use chromiumoxid_types::{Command, Method, Request, Response};
 
-use chromiumoxid_types::Response;
-
-use crate::cdp::browser_protocol::target::TargetId;
-use crate::error::DeadlineExceeded;
+use crate::cdp::browser_protocol::page::NavigateParams;
+use crate::cdp::browser_protocol::target::SessionId;
+use crate::error::{CdpError, DeadlineExceeded};
 use crate::handler::REQUEST_TIMEOUT;
+
+/// Messages used internally to communicate with the connection, which is
+/// executed in the the background task.
+#[derive(Debug, Serialize)]
+pub(crate) struct CommandMessage<T = Result<Response, CdpError>> {
+    pub method: Cow<'static, str>,
+    #[serde(rename = "sessionId", skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<SessionId>,
+    pub params: serde_json::Value,
+    #[serde(skip_serializing)]
+    pub sender: OneshotSender<T>,
+}
+
+impl<T> CommandMessage<T> {
+    pub fn new<C: Command>(cmd: C, sender: OneshotSender<T>) -> serde_json::Result<Self> {
+        Ok(Self {
+            method: cmd.identifier(),
+            session_id: None,
+            params: serde_json::to_value(cmd)?,
+            sender,
+        })
+    }
+
+    /// Whether this command is a navigation
+    pub fn is_navigation(&self) -> bool {
+        self.method.as_ref() == NavigateParams::IDENTIFIER
+    }
+
+    pub fn with_session<C: Command>(
+        cmd: C,
+        sender: OneshotSender<T>,
+        session_id: Option<SessionId>,
+    ) -> serde_json::Result<Self> {
+        Ok(Self {
+            method: cmd.identifier(),
+            session_id,
+            params: serde_json::to_value(cmd)?,
+            sender,
+        })
+    }
+
+    pub fn split(self) -> (Request, OneshotSender<T>) {
+        (
+            Request {
+                method: self.method,
+                session_id: self.session_id.map(Into::into),
+                params: self.params,
+            },
+            self.sender,
+        )
+    }
+}
+
+impl Method for CommandMessage {
+    fn identifier(&self) -> Cow<'static, str> {
+        self.method.clone()
+    }
+}
 
 #[derive(Debug)]
 pub struct CommandChain {

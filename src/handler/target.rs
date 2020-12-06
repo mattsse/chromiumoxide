@@ -9,7 +9,6 @@ use futures::task::{Context, Poll};
 
 use chromiumoxid_types::{Method, Request, Response};
 
-use crate::browser::CommandMessage;
 use crate::cdp::browser_protocol::{
     browser::BrowserContextId,
     log, performance,
@@ -17,8 +16,9 @@ use crate::cdp::browser_protocol::{
 };
 use crate::cdp::events::CdpEvent;
 use crate::cdp::CdpEventMessage;
+use crate::cmd::CommandChain;
+use crate::cmd::CommandMessage;
 use crate::error::{CdpError, DeadlineExceeded};
-use crate::handler::cmd::CommandChain;
 use crate::handler::emulation::EmulationManager;
 use crate::handler::frame::FrameNavigationRequest;
 use crate::handler::frame::{
