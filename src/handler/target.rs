@@ -337,55 +337,9 @@ impl TargetInit {
             TargetInit::Initialized => None,
         }
     }
-
-    fn on_response(&mut self, resp: &Response) {
-        todo!()
-    }
 }
 
 #[derive(Debug)]
 pub(crate) enum TargetMessage {
     Command(CommandMessage),
-}
-
-#[derive(Debug)]
-pub struct Navigating {
-    /// Stores the command that triggered a page navigation until the response
-    /// clears it.
-    command: Option<Cow<'static, str>>,
-    /// The deadline when the navigation is considered failed
-    deadline: Instant,
-    /// If this navigation was triggered via a channel
-    sender: Option<Sender<Response>>,
-}
-
-#[derive(Debug)]
-pub struct WaitUntil {
-    pub started: Instant,
-    pub events: HashSet<Cow<'static, str>>,
-    pub timeout: Option<Duration>,
-}
-
-impl WaitUntil {
-    pub fn new<I, S>(started: Instant, events: I) -> Self
-    where
-        I: IntoIterator<Item = S>,
-        S: Into<Cow<'static, str>>,
-    {
-        Self {
-            started,
-            events: events.into_iter().map(Into::into).collect(),
-            timeout: None,
-        }
-    }
-}
-
-impl Default for WaitUntil {
-    fn default() -> Self {
-        WaitUntil {
-            started: Instant::now(),
-            events: std::iter::once(EventLoadEventFired::IDENTIFIER.into()).collect(),
-            timeout: None,
-        }
-    }
 }
