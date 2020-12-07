@@ -658,8 +658,8 @@ impl Generator {
                 Either::Left(size_of::<serde_json::Value>()),
             ),
             Type::Binary => (
-                FieldType::new_vec(quote! {u8}),
-                Either::Left(size_of::<u8>()),
+                FieldType::new(quote! {String}),
+                Either::Left(size_of::<String>()),
             ),
             Type::Enum(_) => {
                 let ty = format_ident!("{}", subenum_name(parent, param_name));

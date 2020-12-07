@@ -117,8 +117,9 @@ impl Page {
     ///
     /// See [`PrintToPdfParams`]
     pub async fn pdf(&self, opts: PrintToPdfParams) -> Result<Vec<u8>> {
-        let res = self.execute(opts).await?;
-        Ok(base64::decode(&res.data)?)
+        todo!()
+        // let res = self.execute(opts).await?;
+        // Ok(base64::decode(&res.data)?)
     }
 
     /// Save the current page as pdf as file
@@ -127,9 +128,10 @@ impl Page {
         opts: PrintToPdfParams,
         output: impl AsRef<Path>,
     ) -> Result<Vec<u8>> {
-        let pdf = self.pdf(opts).await?;
-        async_std::fs::write(output.as_ref(), &pdf).await?;
-        Ok(pdf)
+        todo!()
+        // let pdf = self.pdf(opts).await?;
+        // async_std::fs::write(output.as_ref(), &pdf).await?;
+        // Ok(pdf)
     }
 
     /// Enables log domain.
