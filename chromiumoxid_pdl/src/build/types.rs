@@ -245,7 +245,8 @@ impl ToTokens for FieldType {
 }
 
 pub struct FieldDefinition {
-    pub name: Ident,
+    pub name: String,
+    pub name_ident: Ident,
     pub ty: FieldType,
     pub optional: bool,
     pub deprecated: bool,
@@ -267,12 +268,19 @@ impl FieldDefinition {
             desc.extend(quote! {#[deprecated]});
         }
 
-        let attr = if self.optional {
+        let mut attr = if self.optional {
             serde_support.generate_opt_field_attr()
         } else if let Type::ArrayOf(_) = &param.r#type {
             serde_support.generate_vec_field_attr()
         } else {
             TokenStream::default()
+        };
+
+        // add accurate rename attribute
+        let name = &self.name;
+        attr = quote! {
+            #[serde(rename = #name)]
+            #attr
         };
 
         let de_enum = if self.is_enum {
@@ -291,7 +299,7 @@ impl FieldDefinition {
     }
 
     fn field_definition(&self) -> TokenStream {
-        let name = &self.name;
+        let name = &self.name_ident;
         let ty = &self.ty;
         if self.optional {
             quote! {

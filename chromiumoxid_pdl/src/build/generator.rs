@@ -448,7 +448,8 @@ impl Generator {
             };
 
             let field = FieldDefinition {
-                name: field_name,
+                name: param.name().to_string(),
+                name_ident: field_name,
                 ty,
                 optional: param.optional,
                 deprecated: param.is_deprecated(),
@@ -575,7 +576,7 @@ impl Generator {
             TokenStream::default()
         };
 
-        let attr = self.serde_support.generate_enum_derives();
+        let attr = self.serde_support.generate_derives();
 
         let ty_def = quote! {
             #desc
@@ -857,21 +858,6 @@ impl SerdeSupport {
         SerdeSupport::Feature(feature.into())
     }
 
-    fn generate_enum_derives(&self) -> TokenStream {
-        match self {
-            SerdeSupport::None => TokenStream::default(),
-            SerdeSupport::Default => quote! {
-                #[derive(Serialize, Deserialize)]
-
-            },
-            SerdeSupport::Feature(feature) => {
-                quote! {
-                    #[cfg_attr(feature = #feature, derive(Serialize, Deserialize))]
-                }
-            }
-        }
-    }
-
     fn generate_serde_import_deserialize(&self) -> TokenStream {
         match self {
             SerdeSupport::None => TokenStream::default(),
@@ -907,12 +893,10 @@ impl SerdeSupport {
             SerdeSupport::None => TokenStream::default(),
             SerdeSupport::Default => quote! {
                 #[derive(Serialize, Deserialize)]
-                #[serde(rename_all = "camelCase")]
             },
             SerdeSupport::Feature(feature) => {
                 quote! {
                     #[cfg_attr(feature = #feature, derive(Serialize, Deserialize))]
-                    #[cfg_attr(feature = #feature,  serde(rename_all = "camelCase"))]
                 }
             }
         }

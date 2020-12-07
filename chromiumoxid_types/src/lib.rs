@@ -21,6 +21,12 @@ pub struct MethodCall {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CallId(usize);
 
+impl fmt::Display for CallId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "CallId({})", self.0)
+    }
+}
+
 impl CallId {
     pub fn new(id: usize) -> Self {
         CallId(id)
@@ -125,13 +131,34 @@ pub struct Request {
     pub params: serde_json::Value,
 }
 
+impl Request {
+    pub fn new(method: Cow<'static, str>, params: serde_json::Value) -> Self {
+        Self {
+            method,
+            params,
+            session_id: None,
+        }
+    }
+
+    pub fn with_session(
+        method: Cow<'static, str>,
+        params: serde_json::Value,
+        session_id: impl Into<String>,
+    ) -> Self {
+        Self {
+            method,
+            params,
+            session_id: Some(session_id.into()),
+        }
+    }
+}
 /// A response to a [`MethodCall`] from the chromium instance
 #[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct Response {
     /// Numeric identifier for the exact request
     pub id: CallId,
-    /// The identifier for the type of request issued
-    pub method: Cow<'static, str>,
+    // /// The identifier for the type of request issued
+    // pub method: Cow<'static, str>,
     /// The response payload
     pub result: Option<serde_json::Value>,
     /// The Reason why the [`MethodCall`] failed.

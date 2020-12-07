@@ -50,14 +50,14 @@ impl Builder {
             .fields
             .iter()
             .filter(|(_, f)| f.optional)
-            .map(|(_, f)| &f.name);
+            .map(|(_, f)| &f.name_ident);
 
         let mut mandatory_param_name = vec![];
         let mut mandatory_param_ty = vec![];
         let mut assign = vec![];
 
         for field in self.mandatory() {
-            let field_name = &field.name;
+            let field_name = &field.name_ident;
             mandatory_param_name.push(field_name);
             mandatory_param_ty.push(field.ty.param_type_def());
             if field.ty.is_vec {
@@ -114,7 +114,7 @@ impl Builder {
         let mut build_fn_assigns = TokenStream::default();
 
         for field in self.fields.iter().map(|(_, f)| f) {
-            let field_name = &field.name;
+            let field_name = &field.name_ident;
             names.push(field_name);
             let builder_ty = field.ty.builder_type();
             builder_type_defs.extend(quote! {
