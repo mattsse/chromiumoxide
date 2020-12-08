@@ -60,6 +60,7 @@ impl<T: Event> Connection<T> {
         session_id: Option<SessionId>,
         params: serde_json::Value,
     ) -> serde_json::Result<CallId> {
+        log::debug!("Submit command {}", method);
         let id = self.next_call_id();
         let call = MethodCall {
             id,
@@ -82,7 +83,6 @@ impl<T: Event> Connection<T> {
         if self.pending_flush.is_none() && !self.needs_flush {
             if let Some(cmd) = self.pending_commands.pop_front() {
                 let msg = serde_json::to_string(&cmd)?;
-                dbg!(msg.clone());
                 Sink::start_send(Pin::new(&mut self.ws), msg.into())
                     .map_err(|err| CdpError::Ws(err))?;
                 self.pending_flush = Some(cmd);
@@ -104,21 +104,26 @@ impl<T: Event + Unpin> Stream for Connection<T> {
         }
 
         // send the message
-        if let Some(ev) = pin.pending_flush.take() {
+        if let Some(call) = pin.pending_flush.take() {
             if Sink::poll_ready(Pin::new(&mut pin.ws), cx).is_ready() {
+                log::warn!("Send {}", serde_json::to_string(&call).unwrap());
                 pin.needs_flush = true;
             } else {
-                pin.pending_flush = Some(ev);
+                pin.pending_flush = Some(call);
             }
         }
 
         // read from the ws
         match Stream::poll_next(Pin::new(&mut pin.ws), cx) {
             Poll::Ready(Some(Ok(msg))) => {
-                dbg!(msg.clone().to_string());
+                let s = msg.to_string();
+                log::warn!("Received {}", s);
                 return match serde_json::from_slice::<Message<T>>(&msg.into_data()) {
                     Ok(msg) => Poll::Ready(Some(Ok(msg))),
-                    Err(err) => Poll::Ready(Some(Err(err.into()))),
+                    Err(err) => {
+                        log::error!("Failed to read {}", s);
+                        Poll::Ready(Some(Err(err.into())))
+                    }
                 };
             }
             Poll::Ready(Some(Err(err))) => {

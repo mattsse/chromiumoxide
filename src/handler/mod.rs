@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -47,7 +48,7 @@ mod viewport;
 pub struct Handler {
     /// Commands that are being processed await a response from the chromium
     /// instance
-    pending_commands: FnvHashMap<CallId, (PendingRequest, Instant)>,
+    pending_commands: FnvHashMap<CallId, (PendingRequest, Cow<'static, str>, Instant)>,
     /// Connection to the browser instance
     from_browser: Fuse<Receiver<HandlerMessage>>,
     // default_ctx: BrowserContext,
@@ -152,14 +153,16 @@ impl Handler {
 
     /// Received a response to a request
     fn on_response(&mut self, resp: Response) {
-        if let Some((req, _)) = self.pending_commands.remove(&resp.id) {
+        log::debug!("Received resp {}", resp.id);
+        if let Some((req, method, _)) = self.pending_commands.remove(&resp.id) {
             match req {
                 PendingRequest::CreateTarget(tx) => {
-                    match to_command_response::<CreateTargetParams>(resp) {
+                    match to_command_response::<CreateTargetParams>(resp, method) {
                         Ok(resp) => {
                             if let Some(target) = self.targets.get_mut(&resp.target_id) {
                                 // move the sender to the target that sends its page once
                                 // initialized
+                                log::debug!("Setting initiator");
                                 target.set_initiator(tx);
                             } else {
                                 // TODO can this even happen?
@@ -179,7 +182,7 @@ impl Handler {
                 }
                 PendingRequest::InternalCommand(target_id) => {
                     if let Some(target) = self.targets.get_mut(&target_id) {
-                        target.on_response(resp);
+                        target.on_response(resp, method.as_ref());
                     }
                 }
             }
@@ -193,9 +196,11 @@ impl Handler {
     ) -> Result<()> {
         let call_id = self
             .conn
-            .submit_command(msg.method, msg.session_id, msg.params)?;
-        self.pending_commands
-            .insert(call_id, (PendingRequest::ExternalCommand(msg.sender), now));
+            .submit_command(msg.method.clone(), msg.session_id, msg.params)?;
+        self.pending_commands.insert(
+            call_id,
+            (PendingRequest::ExternalCommand(msg.sender), msg.method, now),
+        );
         Ok(())
     }
 
@@ -205,22 +210,30 @@ impl Handler {
         req: CdpRequest,
         now: Instant,
     ) -> Result<()> {
-        let call_id =
-            self.conn
-                .submit_command(req.method, req.session_id.map(Into::into), req.params)?;
-        self.pending_commands
-            .insert(call_id, (PendingRequest::InternalCommand(target_id), now));
+        let call_id = self.conn.submit_command(
+            req.method.clone(),
+            req.session_id.map(Into::into),
+            req.params,
+        )?;
+        self.pending_commands.insert(
+            call_id,
+            (PendingRequest::InternalCommand(target_id), req.method, now),
+        );
         Ok(())
     }
 
     fn submit_navigation(&mut self, id: NavigationId, req: CdpRequest, now: Instant) {
         let call_id = self
             .conn
-            .submit_command(req.method, req.session_id.map(Into::into), req.params)
+            .submit_command(
+                req.method.clone(),
+                req.session_id.map(Into::into),
+                req.params,
+            )
             .unwrap();
 
         self.pending_commands
-            .insert(call_id, (PendingRequest::Navigate(id), now));
+            .insert(call_id, (PendingRequest::Navigate(id), req.method, now));
     }
 
     /// Process a message received by the target
@@ -250,10 +263,13 @@ impl Handler {
     fn create_page(&mut self, params: CreateTargetParams, tx: OneshotSender<Result<Page>>) {
         let method = params.identifier();
         match serde_json::to_value(params) {
-            Ok(params) => match self.conn.submit_command(method, None, params) {
+            Ok(params) => match self.conn.submit_command(method.clone(), None, params) {
                 Ok(call_id) => {
-                    self.pending_commands
-                        .insert(call_id, (PendingRequest::CreateTarget(tx), Instant::now()));
+                    log::debug!("Submitted request and waiting for response");
+                    self.pending_commands.insert(
+                        call_id,
+                        (PendingRequest::CreateTarget(tx), method, Instant::now()),
+                    );
                 }
                 Err(err) => {
                     let _ = tx.send(Err(err.into())).ok();
@@ -266,6 +282,7 @@ impl Handler {
     }
 
     fn on_event(&mut self, event: CdpEventMessage) {
+        log::debug!("Received Event {}", event.identifier());
         if let Some(ref session_id) = event.session_id {
             if let Some(session) = self.sessions.get(session_id) {
                 if let Some(target) = self.targets.get_mut(session.target_id()) {
@@ -340,6 +357,7 @@ impl Stream for Handler {
                     pin.submit_external_command(cmd, now).unwrap();
                 }
                 HandlerMessage::CreatePage(params, tx) => {
+                    log::debug!("Received Create Page");
                     pin.create_page(params, tx);
                 }
                 HandlerMessage::GetPages(tx) => {
@@ -457,13 +475,14 @@ pub(crate) enum HandlerMessage {
 
 pub(crate) fn to_command_response<T: Command>(
     resp: Response,
+    method: Cow<'static, str>,
 ) -> Result<CommandResponse<T::Response>> {
     if let Some(res) = resp.result {
         let result = serde_json::from_value(res)?;
         Ok(CommandResponse {
             id: resp.id,
             result,
-            method: resp.method,
+            method,
         })
     } else if let Some(err) = resp.error {
         Err(err.into())

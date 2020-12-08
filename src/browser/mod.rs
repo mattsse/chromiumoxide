@@ -151,7 +151,7 @@ async fn ws_url_from_output(child_process: &mut Child) -> String {
         let mut line = String::new();
         loop {
             if buf.read_line(&mut line).is_ok() {
-                // check for ws in lin
+                // check for ws in line
                 if let Some(ws) = line.rsplit("listening on ").next() {
                     if ws.starts_with("ws") && ws.contains("devtools/browser") {
                         return ws.trim().to_string();
@@ -323,12 +323,30 @@ impl BrowserConfig {
 
         let args = [
             dbg_port.as_str(),
-            "--disable-gpu",
-            "--enable-logging",
-            "--verbose",
-            "--log-level=0",
+            "--disable-background-networking",
+            "--enable-features=NetworkService,NetworkServiceInProcess",
+            "--disable-background-timer-throttling",
+            "--disable-backgrounding-occluded-windows",
+            "--disable-breakpad",
+            "--disable-client-side-phishing-detection",
+            "--disable-component-extensions-with-background-pages",
+            "--disable-default-apps",
+            "--disable-dev-shm-usage",
+            "--disable-extensions",
+            "--disable-features=TranslateUI",
+            "--disable-hang-monitor",
+            "--disable-ipc-flooding-protection",
+            "--disable-popup-blocking",
+            "--disable-prompt-on-repost",
+            "--disable-renderer-backgrounding",
+            "--disable-sync",
+            "--force-color-profile=srgb",
+            "--metrics-recording-only",
             "--no-first-run",
-            "--disable-audio-output",
+            "--enable-automation",
+            "--password-store=basic",
+            "--use-mock-keychain",
+            "--enable-blink-features=IdleDetection",
         ];
 
         let mut cmd = process::Command::new(&self.executable);

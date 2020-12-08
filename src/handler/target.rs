@@ -11,8 +11,8 @@ use chromiumoxid_types::{Method, Request, Response};
 
 use crate::cdp::browser_protocol::{
     browser::BrowserContextId,
-    log, performance,
-    target::{SessionId, SetAutoAttachParams, TargetId, TargetInfo},
+    log as cdplog, performance,
+    target::{AttachToTargetParams, SessionId, SetAutoAttachParams, TargetId, TargetInfo},
 };
 use crate::cdp::events::CdpEvent;
 use crate::cdp::CdpEventMessage;
@@ -86,13 +86,14 @@ impl Target {
             viewport: Default::default(),
             session_id: None,
             page: None,
-            init_state: TargetInit::InitializingFrame(FrameManager::init_commands()),
+            init_state: TargetInit::AttachToTarget,
             queued_events: Default::default(),
             initiator: None,
         }
     }
 
     pub fn set_session_id(&mut self, id: SessionId) {
+        log::debug!("Session id set {}", id.as_ref());
         self.session_id = Some(id)
     }
 
@@ -154,9 +155,9 @@ impl Target {
     }
 
     /// Received a response to a command issued by this target
-    pub fn on_response(&mut self, resp: Response) {
+    pub fn on_response(&mut self, _resp: Response, method: &str) {
         if let Some(cmds) = self.init_state.commands_mut() {
-            cmds.received_response(resp.method.as_ref());
+            cmds.received_response(method);
         }
     }
 
@@ -207,7 +208,23 @@ impl Target {
     /// Advance that target's state
     pub(crate) fn poll(&mut self, cx: &mut Context<'_>, now: Instant) -> Option<TargetEvent> {
         match &mut self.init_state {
+            TargetInit::AttachToTarget => {
+                self.init_state = TargetInit::InitializingFrame(FrameManager::init_commands());
+                let params = AttachToTargetParams::builder()
+                    .target_id(self.target_id().clone())
+                    .flatten(true)
+                    .build()
+                    .unwrap();
+
+                return Some(TargetEvent::Request(Request::new(
+                    params.identifier(),
+                    serde_json::to_value(params).unwrap(),
+                )));
+            }
             TargetInit::InitializingFrame(cmds) => {
+                if self.session_id.is_none() {
+                    return None;
+                }
                 advance_state!(
                     self,
                     cx,
@@ -241,8 +258,12 @@ impl Target {
             }
             TargetInit::Initialized => {
                 if let Some(initiator) = self.initiator.take() {
+                    log::debug!("has initiator");
                     if let Some(page) = self.get_or_create_page() {
+                        log::debug!("sending page to initiator");
                         let _ = initiator.send(Ok(page.clone().into()));
+                    } else {
+                        self.initiator = Some(initiator);
                     }
                 }
             }
@@ -291,7 +312,7 @@ impl Target {
             .build()
             .unwrap();
         let enable_performance = performance::EnableParams::default();
-        let enable_log = log::EnableParams::default();
+        let enable_log = cdplog::EnableParams::default();
         CommandChain::new(vec![
             (attach.identifier(), serde_json::to_value(attach).unwrap()),
             (
@@ -327,6 +348,7 @@ pub enum TargetInit {
     InitializingNetwork(CommandChain),
     InitializingPage(CommandChain),
     InitializingEmulation(CommandChain),
+    AttachToTarget,
     Initialized,
 }
 
@@ -337,6 +359,7 @@ impl TargetInit {
             TargetInit::InitializingNetwork(cmd) => Some(cmd),
             TargetInit::InitializingPage(cmd) => Some(cmd),
             TargetInit::InitializingEmulation(cmd) => Some(cmd),
+            TargetInit::AttachToTarget => None,
             TargetInit::Initialized => None,
         }
     }
