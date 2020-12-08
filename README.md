@@ -8,6 +8,12 @@ chromiumoxid
 ## Generated Code
 `chromiumoxid` generates Rust code from `*.pdl` files.
 
+
+## Troubleshooting
+
+Q: A new chromium is being launched but then times out.
+A: Check that your chromium language settings are set to English. `chromiumoxid` tries to parse the debugging port from the chromium process output and that is limited to english.
+
 ## License
 
 Licensed under either of these:
