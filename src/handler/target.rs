@@ -7,8 +7,9 @@ use futures::channel::oneshot::Sender;
 use futures::stream::Stream;
 use futures::task::{Context, Poll};
 
-use chromiumoxid_types::{Method, Request, Response};
+use chromiumoxid_types::{Command, Method, Request, Response};
 
+use crate::cdp::browser_protocol::page::GetFrameTreeParams;
 use crate::cdp::browser_protocol::{
     browser::BrowserContextId,
     log as cdplog, performance,
@@ -155,18 +156,31 @@ impl Target {
     }
 
     /// Received a response to a command issued by this target
-    pub fn on_response(&mut self, _resp: Response, method: &str) {
+    pub fn on_response(&mut self, resp: Response, method: &str) {
         if let Some(cmds) = self.init_state.commands_mut() {
             cmds.received_response(method);
+        }
+        match method {
+            GetFrameTreeParams::IDENTIFIER => {
+                if let Some(resp) = resp
+                    .result
+                    .and_then(|val| GetFrameTreeParams::response_from_value(val).ok())
+                {
+                    self.frame_manager.on_frame_tree(resp.frame_tree);
+                }
+            }
+            _ => {}
         }
     }
 
     pub fn on_event(&mut self, event: CdpEventMessage) {
         match event.params {
             // `FrameManager` events
-            CdpEvent::PageFrameAttached(ev) => self.frame_manager.on_frame_attached(&ev),
+            CdpEvent::PageFrameAttached(ev) => self
+                .frame_manager
+                .on_frame_attached(ev.frame_id.clone(), Some(ev.parent_frame_id.clone())),
             CdpEvent::PageFrameDetached(ev) => self.frame_manager.on_frame_detached(&ev),
-            CdpEvent::PageFrameNavigated(ev) => self.frame_manager.on_frame_navigated(&*ev),
+            CdpEvent::PageFrameNavigated(ev) => self.frame_manager.on_frame_navigated(ev.frame),
             CdpEvent::PageNavigatedWithinDocument(ev) => {
                 self.frame_manager.on_frame_navigated_within_document(&ev)
             }
@@ -276,6 +290,7 @@ impl Target {
 
             if let Some(handle) = self.page.as_mut() {
                 while let Poll::Ready(Some(msg)) = Pin::new(&mut handle.rx).poll_next(cx) {
+                    log::warn!("Read message from page");
                     self.queued_events.push_back(TargetEvent::Message(msg));
                 }
             }

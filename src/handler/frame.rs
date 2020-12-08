@@ -6,7 +6,10 @@ use std::time::{Duration, Instant};
 use chromiumoxid_types::{Method, Request};
 
 use crate::cdp::browser_protocol::network::LoaderId;
-use crate::cdp::browser_protocol::page::*;
+use crate::cdp::browser_protocol::page::{
+    EventDomContentEventFired, EventFrameDetached, EventFrameStoppedLoading, EventLifecycleEvent,
+    EventLoadEventFired, EventNavigatedWithinDocument, Frame as CdpFrame, FrameTree,
+};
 use crate::cdp::browser_protocol::target::EventAttachedToTarget;
 use crate::cdp::js_protocol::runtime::*;
 use crate::cdp::{
@@ -56,7 +59,7 @@ impl Frame {
         }
     }
 
-    fn navigated(&mut self, frame: &page::Frame) {
+    fn navigated(&mut self, frame: &CdpFrame) {
         self.name = frame.name.clone();
         let url = if let Some(ref fragment) = frame.url_fragment {
             format!("{}{}", frame.url, fragment)
@@ -75,6 +78,20 @@ impl Frame {
             .insert(EventDomContentEventFired::IDENTIFIER.into());
         self.lifecycle_events
             .insert(EventLoadEventFired::IDENTIFIER.into());
+    }
+}
+
+impl From<CdpFrame> for Frame {
+    fn from(frame: CdpFrame) -> Self {
+        Self {
+            parent_frame: frame.parent_id.map(From::from),
+            id: frame.id,
+            loader_id: Some(frame.loader_id),
+            url: Some(frame.url),
+            child_frames: Default::default(),
+            name: frame.name,
+            lifecycle_events: Default::default(),
+        }
     }
 }
 
@@ -188,6 +205,7 @@ impl FrameManager {
             }
         } else {
             if let Some((req, watcher)) = self.pending_navigations.pop_front() {
+                log::warn!("Frame navigation request");
                 self.navigation = Some((watcher, Instant::now()));
                 return Some(FrameEvent::NavigationRequest(req.id, req.req));
             }
@@ -197,7 +215,10 @@ impl FrameManager {
 
     /// entrypoint for page navigation
     pub fn goto(&mut self, req: FrameNavigationRequest) {
+        log::warn!("Main frame: {:?}", self.main_frame);
+        log::warn!("frames: {:?}", self.frames);
         if let Some(frame_id) = self.main_frame.clone() {
+            log::warn!("Navigate frame {:?}", frame_id);
             self.navigate_frame(frame_id, req);
         }
     }
@@ -214,13 +235,28 @@ impl FrameManager {
         // _onFrameMoved
     }
 
-    pub fn on_frame_attached(&mut self, event: &EventFrameAttached) {
-        if self.frames.contains_key(&event.frame_id) {
+    pub fn on_frame_tree(&mut self, frame_tree: FrameTree) {
+        self.on_frame_attached(
+            frame_tree.frame.id.clone(),
+            frame_tree.frame.parent_id.clone().map(Into::into),
+        );
+        self.on_frame_navigated(frame_tree.frame);
+        if let Some(children) = frame_tree.child_frames {
+            for child_tree in children {
+                self.on_frame_tree(child_tree);
+            }
+        }
+    }
+    pub fn on_frame_attached(&mut self, frame_id: FrameId, parent_frame_id: Option<FrameId>) {
+        log::warn!("FRAME ATTACHED {:?}", frame_id);
+        if self.frames.contains_key(&frame_id) {
             return;
         }
-        if let Some(parent_frame) = self.frames.get_mut(&event.parent_frame_id) {
-            let frame = Frame::with_parent(event.frame_id.clone(), parent_frame);
-            self.frames.insert(event.frame_id.clone(), frame);
+        if let Some(parent_frame_id) = parent_frame_id {
+            if let Some(parent_frame) = self.frames.get_mut(&parent_frame_id) {
+                let frame = Frame::with_parent(frame_id.clone(), parent_frame);
+                self.frames.insert(frame_id.clone(), frame);
+            }
         }
     }
 
@@ -228,19 +264,20 @@ impl FrameManager {
         self.remove_frames_recursively(&event.frame_id);
     }
 
-    pub fn on_frame_navigated(&mut self, event: &EventFrameNavigated) {
-        if event.frame.parent_id.is_some() {
-            if let Some((id, mut frame)) = self.frames.remove_entry(&event.frame.id) {
-                for child in &frame.child_frames {
+    pub fn on_frame_navigated(&mut self, frame: CdpFrame) {
+        log::warn!("FAME NAVIGATED: {:?}", frame);
+        if frame.parent_id.is_some() {
+            if let Some((id, mut f)) = self.frames.remove_entry(&frame.id) {
+                for child in &f.child_frames {
                     self.remove_frames_recursively(child);
                 }
                 // this is necessary since we can't borrow mut and then remove recursively
-                frame.child_frames.clear();
-                frame.navigated(&event.frame);
-                self.frames.insert(id, frame);
+                f.child_frames.clear();
+                f.navigated(&frame);
+                self.frames.insert(id, f);
             }
         } else {
-            let mut frame = if let Some(main) = self.main_frame.take() {
+            let mut f = if let Some(main) = self.main_frame.take() {
                 // update main frame
                 let mut main_frame = self.frames.remove(&main).expect("Main frame is tracked.");
                 for child in &main_frame.child_frames {
@@ -248,16 +285,16 @@ impl FrameManager {
                 }
                 // this is necessary since we can't borrow mut and then remove recursively
                 main_frame.child_frames.clear();
-                main_frame.id = event.frame.id.clone();
+                main_frame.id = frame.id.clone();
                 main_frame
             } else {
                 // initial main frame navigation
-                let frame = Frame::new(event.frame.id.clone());
+                let frame = Frame::new(frame.id.clone());
                 frame
             };
-            frame.navigated(&event.frame);
-            self.main_frame = Some(frame.id.clone());
-            self.frames.insert(frame.id.clone(), frame);
+            f.navigated(&frame);
+            self.main_frame = Some(f.id.clone());
+            self.frames.insert(f.id.clone(), f);
         }
     }
 

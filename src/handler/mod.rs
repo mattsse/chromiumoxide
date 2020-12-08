@@ -238,9 +238,11 @@ impl Handler {
 
     /// Process a message received by the target
     fn on_target_message(&mut self, target: &mut Target, msg: TargetMessage, now: Instant) {
+        log::warn!("target message: {:?}", msg);
         match msg {
             TargetMessage::Command(msg) => {
                 if msg.is_navigation() {
+                    log::warn!("Received navigation");
                     let (req, tx) = msg.split();
                     let id = self.next_navigation_id();
                     target.goto(FrameNavigationRequest::new(id, req));
