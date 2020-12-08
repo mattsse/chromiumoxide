@@ -28,6 +28,15 @@ pub enum CdpError {
     Timeout,
     #[error("FrameId {0:?} not found.")]
     FrameNotFound(FrameId),
+    /// Error message related to a cdp response that is not a
+    /// `chromiumoxid_types::Error`
+    #[error("{0}")]
+    ChromeMessage(String),
+}
+impl CdpError {
+    pub fn msg(msg: impl Into<String>) -> Self {
+        CdpError::ChromeMessage(msg.into())
+    }
 }
 
 #[derive(Debug, Error)]

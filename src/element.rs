@@ -1,3 +1,4 @@
+use crate::error::{CdpError, Result};
 use std::sync::Arc;
 
 use crate::cdp::browser_protocol::dom::{
@@ -16,7 +17,7 @@ pub struct Element {
 }
 
 impl Element {
-    pub(crate) async fn new(tab: Arc<PageInner>, node_id: NodeId) -> anyhow::Result<Self> {
+    pub(crate) async fn new(tab: Arc<PageInner>, node_id: NodeId) -> Result<Self> {
         let backend_node_id = tab
             .execute(
                 DescribeNodeParams::builder()
@@ -40,7 +41,7 @@ impl Element {
             .result
             .object
             .object_id
-            .ok_or_else(|| anyhow::anyhow!("No object Id found for {:?}", node_id))?;
+            .ok_or_else(|| CdpError::msg(format!("No object Id found for {:?}", node_id)))?;
         Ok(Self {
             remote_object_id,
             backend_node_id,
@@ -49,7 +50,7 @@ impl Element {
         })
     }
 
-    pub async fn find_element(&self, selector: impl Into<String>) -> anyhow::Result<Self> {
+    pub async fn find_element(&self, selector: impl Into<String>) -> Result<Self> {
         // TODO downcast to Option
         let node_id = self
             .tab

@@ -1,7 +1,6 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
 use futures::channel::mpsc::Sender;
 use futures::channel::oneshot::channel as oneshot_channel;
 use futures::{future, SinkExt};
@@ -18,6 +17,7 @@ use crate::cdp::js_protocol::debugger::GetScriptSourceParams;
 use crate::cdp::js_protocol::runtime::{EvaluateParams, RemoteObject, ScriptId};
 use crate::cmd::CommandMessage;
 use crate::element::Element;
+use crate::error::{CdpError, Result};
 use crate::handler::PageInner;
 
 #[derive(Debug)]
@@ -33,8 +33,8 @@ impl Page {
     /// Navigate directly to the given URL.
     pub async fn goto(&self, params: impl Into<NavigateParams>) -> Result<FrameId> {
         let res = self.execute(params.into()).await?;
-        if let Some(res) = res.result.error_text {
-            return Err(anyhow!("{}", res));
+        if let Some(err) = res.result.error_text {
+            return Err(CdpError::ChromeMessage(err));
         }
 
         Ok(res.result.frame_id)
@@ -207,7 +207,7 @@ impl Page {
         let title: String = serde_json::from_value(
             remote_object
                 .value
-                .ok_or_else(|| anyhow!("No title found"))?,
+                .ok_or_else(|| CdpError::msg("No title found"))?,
         )?;
         if title.is_empty() {
             Ok(None)
@@ -255,7 +255,7 @@ async fn execute<T: Command>(
     } else if let Some(err) = resp.error {
         Err(err.into())
     } else {
-        Err(anyhow!("Empty Response"))
+        Err(CdpError::NoResponse)
     }
 }
 
