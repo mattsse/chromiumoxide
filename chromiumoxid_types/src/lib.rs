@@ -36,14 +36,9 @@ impl CallId {
 pub trait Command: serde::ser::Serialize + Method {
     type Response: serde::de::DeserializeOwned + fmt::Debug;
 
-    // fn create_call(&self, call_id: CallId) -> serde_json::Result<MethodCall> {
-    //     Ok(MethodCall {
-    //         id: call_id,
-    //         session_id: None,
-    //         method: self.method_name(),
-    //         params: serde_json::to_value(self)?,
-    //     })
-    // }
+    fn response_from_value(response: serde_json::Value) -> serde_json::Result<Self::Response> {
+        serde_json::from_value(response)
+    }
 }
 
 pub struct CommandResponse<T>
