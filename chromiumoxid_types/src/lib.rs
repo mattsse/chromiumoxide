@@ -1,9 +1,9 @@
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::fmt;
-
 use std::ops::Deref;
+
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 
 /// A Message sent by the client
 #[derive(Serialize, Debug, PartialEq)]
@@ -152,6 +152,7 @@ impl Request {
         }
     }
 }
+
 /// A response to a [`MethodCall`] from the chromium instance
 #[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct Response {
@@ -198,3 +199,25 @@ impl fmt::Display for Error {
 }
 
 impl std::error::Error for Error {}
+
+/// Represents a binary type as defined in CDP
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Binary(String);
+
+impl AsRef<str> for Binary {
+    fn as_ref(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl Into<String> for Binary {
+    fn into(self) -> String {
+        self.0
+    }
+}
+
+impl From<String> for Binary {
+    fn from(expr: String) -> Self {
+        Self(expr)
+    }
+}

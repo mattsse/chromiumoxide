@@ -413,7 +413,6 @@ impl Generator {
     where
         T: Iterator<Item = &'a Param<'a>> + 'a,
     {
-        // TODO return generated type information
         let name = format_ident!("{}", struct_ident);
         // also generate enums for inner enums
         let mut enum_definitions = TokenStream::default();
@@ -466,6 +465,7 @@ impl Generator {
         } else {
             quote! {#[derive(Debug, Clone, PartialEq)] }
         };
+
         let serde_derives = self.serde_support.generate_derives();
 
         let desc = dt.type_description_tokens(domain.name.as_ref());
@@ -658,8 +658,8 @@ impl Generator {
                 Either::Left(size_of::<serde_json::Value>()),
             ),
             Type::Binary => (
-                FieldType::new(quote! {String}),
-                Either::Left(size_of::<String>()),
+                FieldType::new(quote! {chromiumoxid_types::Binary}),
+                Either::Left(size_of::<chromiumoxid_types::Binary>()),
             ),
             Type::Enum(_) => {
                 let ty = format_ident!("{}", subenum_name(parent, param_name));
