@@ -7,8 +7,8 @@ use chromiumoxid_types::{Method, Request};
 
 use crate::cdp::browser_protocol::network::LoaderId;
 use crate::cdp::browser_protocol::page::{
-    EventDomContentEventFired, EventFrameDetached, EventFrameStoppedLoading, EventLifecycleEvent,
-    EventLoadEventFired, EventNavigatedWithinDocument, Frame as CdpFrame, FrameTree,
+    EventFrameDetached, EventFrameStoppedLoading, EventLifecycleEvent,
+    EventNavigatedWithinDocument, Frame as CdpFrame, FrameTree,
 };
 use crate::cdp::browser_protocol::target::EventAttachedToTarget;
 use crate::cdp::js_protocol::runtime::*;
@@ -19,6 +19,7 @@ use crate::cdp::{
 use crate::cmd::CommandChain;
 use crate::error::DeadlineExceeded;
 use crate::handler::REQUEST_TIMEOUT;
+use serde_json::map::Entry;
 
 /// TODO FrameId could optimized by rolling usize based id setup, or find better
 /// design for tracking child/parent
@@ -74,10 +75,8 @@ impl Frame {
     }
 
     fn on_loading_stopped(&mut self) {
-        self.lifecycle_events
-            .insert(EventDomContentEventFired::IDENTIFIER.into());
-        self.lifecycle_events
-            .insert(EventLoadEventFired::IDENTIFIER.into());
+        self.lifecycle_events.insert("DOMContentLoaded".into());
+        self.lifecycle_events.insert("load".into());
     }
 }
 
@@ -182,6 +181,7 @@ impl FrameManager {
     pub fn poll(&mut self, now: Instant) -> Option<FrameEvent> {
         if let Some((watcher, deadline)) = self.navigation.take() {
             if now > deadline {
+                log::warn!("frame deadline exceeded");
                 return Some(FrameEvent::NavigationResult(Err(
                     NavigationError::Timeout {
                         err: DeadlineExceeded::new(now, deadline),
@@ -206,7 +206,8 @@ impl FrameManager {
         } else {
             if let Some((req, watcher)) = self.pending_navigations.pop_front() {
                 log::warn!("Frame navigation request");
-                self.navigation = Some((watcher, Instant::now()));
+                let deadline = Instant::now() + Duration::from_millis(REQUEST_TIMEOUT);
+                self.navigation = Some((watcher, deadline));
                 return Some(FrameEvent::NavigationRequest(req.id, req.req));
             }
         }
@@ -215,18 +216,17 @@ impl FrameManager {
 
     /// entrypoint for page navigation
     pub fn goto(&mut self, req: FrameNavigationRequest) {
-        log::warn!("Main frame: {:?}", self.main_frame);
-        log::warn!("frames: {:?}", self.frames);
         if let Some(frame_id) = self.main_frame.clone() {
-            log::warn!("Navigate frame {:?}", frame_id);
             self.navigate_frame(frame_id, req);
         }
     }
 
     /// Navigate a specific frame
-    pub fn navigate_frame(&mut self, frame_id: FrameId, req: FrameNavigationRequest) {
+    pub fn navigate_frame(&mut self, frame_id: FrameId, mut req: FrameNavigationRequest) {
         let loader_id = self.frames.get(&frame_id).and_then(|f| f.loader_id.clone());
-        let watcher = NavigationWatcher::until_page_load(req.id, frame_id, loader_id);
+        let watcher = NavigationWatcher::until_page_load(req.id, frame_id.clone(), loader_id);
+        // insert the frame_id in the request if not present
+        req.set_frame_id(frame_id);
         self.pending_navigations.push_back((req, watcher))
     }
 
@@ -248,7 +248,6 @@ impl FrameManager {
         }
     }
     pub fn on_frame_attached(&mut self, frame_id: FrameId, parent_frame_id: Option<FrameId>) {
-        log::warn!("FRAME ATTACHED {:?}", frame_id);
         if self.frames.contains_key(&frame_id) {
             return;
         }
@@ -322,6 +321,7 @@ impl FrameManager {
 
     /// Fired for top level page lifecycle events (nav, load, paint, etc.)
     pub fn on_page_lifecycle_event(&mut self, event: &EventLifecycleEvent) {
+        log::warn!("on_page_lifecycle_event {:?}", event);
         if let Some(frame) = self.frames.get_mut(&event.frame_id) {
             if event.name == "init" {
                 frame.loader_id = Some(event.loader_id.clone());
@@ -421,7 +421,7 @@ impl NavigationWatcher {
     pub fn until_page_load(id: NavigationId, frame: FrameId, loader_id: Option<LoaderId>) -> Self {
         Self {
             id,
-            expected_lifecycle: std::iter::once(EventLoadEventFired::IDENTIFIER.into()).collect(),
+            expected_lifecycle: std::iter::once("load".into()).collect(),
             loader_id,
             frame_id: frame,
             same_document_navigation: false,
@@ -456,6 +456,14 @@ impl FrameNavigationRequest {
             id,
             req,
             timeout: Duration::from_millis(REQUEST_TIMEOUT),
+        }
+    }
+
+    pub fn set_frame_id(&mut self, frame_id: FrameId) {
+        if let Some(params) = self.req.params.as_object_mut() {
+            if let Entry::Vacant(entry) = params.entry("frameId") {
+                entry.insert(serde_json::Value::String(frame_id.into()));
+            }
         }
     }
 }

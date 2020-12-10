@@ -80,9 +80,9 @@ pub struct DeadlineExceeded {
 impl DeadlineExceeded {
     /// Creates a new instance
     ///
-    /// panics if `now < deadline`
+    /// panics if `now > deadline`
     pub fn new(now: Instant, deadline: Instant) -> Self {
-        assert!(now < deadline);
+        assert!(now > deadline);
         Self { now, deadline }
     }
 }

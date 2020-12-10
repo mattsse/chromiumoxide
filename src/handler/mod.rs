@@ -223,6 +223,7 @@ impl Handler {
     }
 
     fn submit_navigation(&mut self, id: NavigationId, req: CdpRequest, now: Instant) {
+        log::warn!("Submit navigation {:?}", req);
         let call_id = self
             .conn
             .submit_command(
@@ -236,11 +237,12 @@ impl Handler {
             .insert(call_id, (PendingRequest::Navigate(id), req.method, now));
     }
 
-    /// Process a message received by the target
+    /// Process a message received by the target's page via channel
     fn on_target_message(&mut self, target: &mut Target, msg: TargetMessage, now: Instant) {
         log::warn!("target message: {:?}", msg);
         match msg {
             TargetMessage::Command(msg) => {
+                // if let some
                 if msg.is_navigation() {
                     log::warn!("Received navigation");
                     let (req, tx) = msg.split();
@@ -284,7 +286,6 @@ impl Handler {
     }
 
     fn on_event(&mut self, event: CdpEventMessage) {
-        log::debug!("Received Event {}", event.identifier());
         if let Some(ref session_id) = event.session_id {
             if let Some(session) = self.sessions.get(session_id) {
                 if let Some(target) = self.targets.get_mut(session.target_id()) {
@@ -312,13 +313,14 @@ impl Handler {
 
     fn on_attached_to_target(&mut self, event: EventAttachedToTarget) {
         let session = Session::new(
-            event.session_id,
+            event.session_id.clone(),
             event.target_info.r#type,
             event.target_info.target_id,
         );
         if let Some(target) = self.targets.get_mut(session.target_id()) {
             target.set_session_id(session.session_id().clone())
         }
+        self.sessions.insert(event.session_id, session);
     }
 
     /// The session was detached from target.
@@ -348,78 +350,88 @@ impl Stream for Handler {
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let pin = self.get_mut();
-        let now = Instant::now();
 
-        // temporary pinning of the browser receiver should be safe as we are pinning
-        // through the already pinned self. with the receivers we can also
-        // safely ignore exhaustion as those are fused.
-        while let Poll::Ready(Some(msg)) = Pin::new(&mut pin.from_browser).poll_next(cx) {
-            match msg {
-                HandlerMessage::Command(cmd) => {
-                    pin.submit_external_command(cmd, now).unwrap();
+        loop {
+            let now = Instant::now();
+            // temporary pinning of the browser receiver should be safe as we are pinning
+            // through the already pinned self. with the receivers we can also
+            // safely ignore exhaustion as those are fused.
+            while let Poll::Ready(Some(msg)) = Pin::new(&mut pin.from_browser).poll_next(cx) {
+                match msg {
+                    HandlerMessage::Command(cmd) => {
+                        pin.submit_external_command(cmd, now).unwrap();
+                    }
+                    HandlerMessage::CreatePage(params, tx) => {
+                        log::debug!("Received Create Page");
+                        pin.create_page(params, tx);
+                    }
+                    HandlerMessage::GetPages(tx) => {
+                        let pages: Vec<_> = pin
+                            .targets
+                            .values_mut()
+                            .filter_map(|target| target.get_or_create_page())
+                            .map(|page| Page::from(page.clone()))
+                            .collect();
+                        let _ = tx.send(pages);
+                    }
+                    HandlerMessage::Subscribe => {}
                 }
-                HandlerMessage::CreatePage(params, tx) => {
-                    log::debug!("Received Create Page");
-                    pin.create_page(params, tx);
-                }
-                HandlerMessage::GetPages(tx) => {
-                    let pages: Vec<_> = pin
-                        .targets
-                        .values_mut()
-                        .filter_map(|target| target.get_or_create_page())
-                        .map(|page| Page::from(page.clone()))
-                        .collect();
-                    let _ = tx.send(pages);
-                }
-                HandlerMessage::Subscribe => {}
             }
-        }
 
-        for n in (0..pin.target_ids.len()).rev() {
-            let target_id = pin.target_ids.swap_remove(n);
-            if let Some((id, mut target)) = pin.targets.remove_entry(&target_id) {
-                while let Some(event) = target.poll(cx, now) {
-                    match event {
-                        TargetEvent::Request(req) => {
-                            let _ =
-                                pin.submit_internal_command(target.target_id().clone(), req, now);
-                        }
-                        TargetEvent::RequestTimeout(_) => {
-                            // TODO close and remove
-                            // continue 'outer;
-                        }
-                        TargetEvent::Message(msg) => {
-                            pin.on_target_message(&mut target, msg, now);
-                        }
-                        TargetEvent::NavigationRequest(id, req) => {
-                            pin.submit_navigation(id, req, now);
-                        }
-                        TargetEvent::NavigationResult(res) => {
-                            pin.on_navigation_lifecycle_completed(res)
+            for n in (0..pin.target_ids.len()).rev() {
+                let target_id = pin.target_ids.swap_remove(n);
+                if let Some((id, mut target)) = pin.targets.remove_entry(&target_id) {
+                    while let Some(event) = target.poll(cx, now) {
+                        match event {
+                            TargetEvent::Request(req) => {
+                                let _ = pin.submit_internal_command(
+                                    target.target_id().clone(),
+                                    req,
+                                    now,
+                                );
+                            }
+                            TargetEvent::RequestTimeout(_) => {
+                                // TODO close and remove
+                                // continue 'outer;
+                            }
+                            TargetEvent::Message(msg) => {
+                                pin.on_target_message(&mut target, msg, now);
+                            }
+                            TargetEvent::NavigationRequest(id, req) => {
+                                pin.submit_navigation(id, req, now);
+                            }
+                            TargetEvent::NavigationResult(res) => {
+                                pin.on_navigation_lifecycle_completed(res)
+                            }
                         }
                     }
-                }
 
-                pin.targets.insert(id, target);
-                pin.target_ids.push(target_id);
+                    pin.targets.insert(id, target);
+                    pin.target_ids.push(target_id);
+                }
+            }
+
+            let mut done = true;
+
+            while let Poll::Ready(Some(ev)) = Pin::new(&mut pin.conn).poll_next(cx) {
+                match ev {
+                    Ok(Message::Response(resp)) => pin.on_response(resp),
+                    Ok(Message::Event(ev)) => {
+                        pin.on_event(ev);
+                    }
+                    Err(err) => return Poll::Ready(Some(Err(err))),
+                }
+                done = false;
+            }
+
+            if pin.evict_command_timeout.is_ready(cx) {
+                // TODO evict all commands that timed out
+            }
+
+            if done {
+                return Poll::Pending;
             }
         }
-
-        while let Poll::Ready(Some(ev)) = Pin::new(&mut pin.conn).poll_next(cx) {
-            match ev {
-                Ok(Message::Response(resp)) => pin.on_response(resp),
-                Ok(Message::Event(ev)) => {
-                    pin.on_event(ev);
-                }
-                Err(err) => return Poll::Ready(Some(Err(err))),
-            }
-        }
-
-        if pin.evict_command_timeout.is_ready(cx) {
-            // TODO evict all commands that timed out
-        }
-
-        Poll::Pending
     }
 }
 

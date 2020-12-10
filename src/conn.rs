@@ -106,18 +106,17 @@ impl<T: Event + Unpin> Stream for Connection<T> {
         // send the message
         if let Some(call) = pin.pending_flush.take() {
             if Sink::poll_ready(Pin::new(&mut pin.ws), cx).is_ready() {
-                log::warn!("Send {}", serde_json::to_string(&call).unwrap());
+                log::warn!("Send {:?}", call);
                 pin.needs_flush = true;
             } else {
                 pin.pending_flush = Some(call);
             }
         }
-
         // read from the ws
         match Stream::poll_next(Pin::new(&mut pin.ws), cx) {
             Poll::Ready(Some(Ok(msg))) => {
                 let s = msg.to_string();
-                log::warn!("Received {}", s);
+                // log::warn!("Read {:?} ", s);
                 return match serde_json::from_slice::<Message<T>>(&msg.into_data()) {
                     Ok(msg) => Poll::Ready(Some(Ok(msg))),
                     Err(err) => {

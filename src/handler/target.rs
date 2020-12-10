@@ -16,6 +16,7 @@ use crate::cdp::browser_protocol::{
     target::{AttachToTargetParams, SessionId, SetAutoAttachParams, TargetId, TargetInfo},
 };
 use crate::cdp::events::CdpEvent;
+use crate::cdp::CdpEvent::TargetTargetInfoChanged;
 use crate::cdp::CdpEventMessage;
 use crate::cmd::CommandChain;
 use crate::cmd::CommandMessage;
@@ -72,6 +73,7 @@ pub struct Target {
     queued_events: VecDeque<TargetEvent>,
     /// The sender who initiated the creation of a page.
     initiator: Option<Sender<Result<Page>>>,
+    initiated: bool,
 }
 
 impl Target {
@@ -90,6 +92,7 @@ impl Target {
             init_state: TargetInit::AttachToTarget,
             queued_events: Default::default(),
             initiator: None,
+            initiated: false,
         }
     }
 
@@ -193,7 +196,10 @@ impl Target {
             CdpEvent::RuntimeExecutionContextsCleared(ev) => {
                 self.frame_manager.on_execution_context_cleared(&ev)
             }
-            CdpEvent::PageLifecycleEvent(ev) => self.frame_manager.on_page_lifecycle_event(&ev),
+            CdpEvent::PageLifecycleEvent(ev) => {
+                log::error!("Received PageLifecycleEvent");
+                self.frame_manager.on_page_lifecycle_event(&ev)
+            }
 
             // `NetworkManager` events
             CdpEvent::FetchRequestPaused(ev) => self.network_manager.on_fetch_request_paused(&*ev),
@@ -221,6 +227,9 @@ impl Target {
 
     /// Advance that target's state
     pub(crate) fn poll(&mut self, cx: &mut Context<'_>, now: Instant) -> Option<TargetEvent> {
+        if !self.initiated {
+            return None;
+        }
         match &mut self.init_state {
             TargetInit::AttachToTarget => {
                 self.init_state = TargetInit::InitializingFrame(FrameManager::init_commands());
@@ -315,7 +324,8 @@ impl Target {
     }
 
     pub fn set_initiator(&mut self, tx: Sender<Result<Page>>) {
-        self.initiator = Some(tx)
+        self.initiator = Some(tx);
+        self.initiated = true;
     }
 
     // TODO move to other location
