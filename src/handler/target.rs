@@ -9,14 +9,6 @@ use futures::task::{Context, Poll};
 
 use chromiumoxid_types::{Command, Method, Request, Response};
 
-use chromiumoxid_tmp::cdp::browser_protocol::page::GetFrameTreeParams;
-use chromiumoxid_tmp::cdp::browser_protocol::{
-    browser::BrowserContextId,
-    log as cdplog, performance,
-    target::{AttachToTargetParams, SessionId, SetAutoAttachParams, TargetId, TargetInfo},
-};
-use chromiumoxid_tmp::cdp::events::CdpEvent;
-use chromiumoxid_tmp::cdp::CdpEventMessage;
 use crate::cmd::CommandChain;
 use crate::cmd::CommandMessage;
 use crate::error::{DeadlineExceeded, Result};
@@ -30,6 +22,14 @@ use crate::handler::page::PageHandle;
 use crate::handler::viewport::Viewport;
 use crate::handler::PageInner;
 use crate::page::Page;
+use chromiumoxid_tmp::cdp::browser_protocol::page::GetFrameTreeParams;
+use chromiumoxid_tmp::cdp::browser_protocol::{
+    browser::BrowserContextId,
+    log as cdplog, performance,
+    target::{AttachToTargetParams, SessionId, SetAutoAttachParams, TargetId, TargetInfo},
+};
+use chromiumoxid_tmp::cdp::events::CdpEvent;
+use chromiumoxid_tmp::cdp::CdpEventMessage;
 
 macro_rules! advance_state {
     ($s:ident, $cx:ident, $now:ident, $cmds: ident, $next_state:expr ) => {{
@@ -197,9 +197,7 @@ impl Target {
             CdpEvent::RuntimeExecutionContextsCleared(ev) => {
                 self.frame_manager.on_execution_context_cleared(&ev)
             }
-            CdpEvent::PageLifecycleEvent(ev) => {
-                self.frame_manager.on_page_lifecycle_event(&ev)
-            }
+            CdpEvent::PageLifecycleEvent(ev) => self.frame_manager.on_page_lifecycle_event(&ev),
 
             // `NetworkManager` events
             CdpEvent::FetchRequestPaused(ev) => self.network_manager.on_fetch_request_paused(&*ev),
@@ -279,10 +277,19 @@ impl Target {
             }
             TargetInit::Initialized => {
                 if let Some(initiator) = self.initiator.take() {
-                    log::debug!("has initiator");
-                    if let Some(page) = self.get_or_create_page() {
-                        log::debug!("sending page to initiator");
-                        let _ = initiator.send(Ok(page.clone().into()));
+                    // make sure that the main frame of the page has finished loading
+                    if self
+                        .frame_manager
+                        .main_frame()
+                        .map(|frame| frame.lifecycle_events().contains("load"))
+                        .unwrap_or_default()
+                    {
+                        if let Some(page) = self.get_or_create_page() {
+                            log::debug!("sending page to initiator");
+                            let _ = initiator.send(Ok(page.clone().into()));
+                        } else {
+                            self.initiator = Some(initiator);
+                        }
                     } else {
                         self.initiator = Some(initiator);
                     }
@@ -320,7 +327,8 @@ impl Target {
         }
     }
 
-    /// Set the sender half of the channel who requested the creation of this target
+    /// Set the sender half of the channel who requested the creation of this
+    /// target
     pub fn set_initiator(&mut self, tx: Sender<Result<Page>>) {
         self.initiator = Some(tx);
         self.initialize();
