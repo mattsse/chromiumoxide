@@ -5,6 +5,9 @@ use std::time::{Duration, Instant};
 
 use chromiumoxid_types::{Method, Request};
 
+use crate::cmd::CommandChain;
+use crate::error::DeadlineExceeded;
+use crate::handler::REQUEST_TIMEOUT;
 use chromiumoxid_tmp::cdp::browser_protocol::network::LoaderId;
 use chromiumoxid_tmp::cdp::browser_protocol::page::{
     EventFrameDetached, EventFrameStoppedLoading, EventLifecycleEvent,
@@ -16,9 +19,6 @@ use chromiumoxid_tmp::cdp::{
     browser_protocol::page::{self, FrameId},
     js_protocol::runtime,
 };
-use crate::cmd::CommandChain;
-use crate::error::DeadlineExceeded;
-use crate::handler::REQUEST_TIMEOUT;
 use serde_json::map::Entry;
 
 /// TODO FrameId could optimized by rolling usize based id setup, or find better
@@ -58,6 +58,10 @@ impl Frame {
             name: None,
             lifecycle_events: Default::default(),
         }
+    }
+
+    pub fn lifecycle_events(&self) -> &HashSet<Cow<'static, str>> {
+        &self.lifecycle_events
     }
 
     fn navigated(&mut self, frame: &CdpFrame) {
@@ -111,7 +115,7 @@ pub struct FrameManager {
 }
 
 impl FrameManager {
-    /// The commands to execute in order to initialize this framemanager
+    /// The commands to execute in order to initialize this frame manager
     pub fn init_commands() -> CommandChain {
         let enable = page::EnableParams::default();
         let get_tree = page::GetFrameTreeParams::default();
@@ -181,7 +185,6 @@ impl FrameManager {
     pub fn poll(&mut self, now: Instant) -> Option<FrameEvent> {
         if let Some((watcher, deadline)) = self.navigation.take() {
             if now > deadline {
-                log::warn!("frame deadline exceeded");
                 return Some(FrameEvent::NavigationResult(Err(
                     NavigationError::Timeout {
                         err: DeadlineExceeded::new(now, deadline),
@@ -360,8 +363,12 @@ impl Default for FrameManager {
 
 #[derive(Debug)]
 pub enum FrameEvent {
+    /// A previously submitted navigation has finished
     NavigationResult(Result<NavigationOk, NavigationError>),
+    /// A new navigation request needs to be submitted
     NavigationRequest(NavigationId, Request),
+    /* /// The initial page of the target has been loaded
+     * InitialPageLoadFinished */
 }
 
 #[derive(Debug)]

@@ -12,8 +12,8 @@ use futures::Sink;
 
 use chromiumoxid_types::{CallId, Event, Message, MethodCall};
 
-use chromiumoxid_tmp::cdp::browser_protocol::target::SessionId;
 use crate::error::CdpError;
+use chromiumoxid_tmp::cdp::browser_protocol::target::SessionId;
 
 /// Exchanges the messages with the websocket
 #[must_use = "streams do nothing unless polled"]
@@ -116,7 +116,7 @@ impl<T: Event + Unpin> Stream for Connection<T> {
         match Stream::poll_next(Pin::new(&mut pin.ws), cx) {
             Poll::Ready(Some(Ok(msg))) => {
                 let s = msg.to_string();
-                // log::warn!("Read {:?} ", s);
+                log::warn!("Read {:?} ", s);
                 return match serde_json::from_slice::<Message<T>>(&msg.into_data()) {
                     Ok(msg) => Poll::Ready(Some(Ok(msg))),
                     Err(err) => {

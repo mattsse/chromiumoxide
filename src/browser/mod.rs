@@ -12,13 +12,13 @@ use futures::SinkExt;
 
 use chromiumoxid_types::*;
 
-use chromiumoxid_tmp::cdp::browser_protocol::target::CreateTargetParams;
-use chromiumoxid_tmp::cdp::CdpEventMessage;
 use crate::cmd::CommandMessage;
 use crate::conn::Connection;
 use crate::error::{CdpError, Result};
 use crate::handler::{Handler, HandlerMessage};
 use crate::page::Page;
+use chromiumoxid_tmp::cdp::browser_protocol::target::CreateTargetParams;
+use chromiumoxid_tmp::cdp::CdpEventMessage;
 
 /// A [`Browser`] is created when chromiumoxid connects to a Chromium instance.
 pub struct Browser {

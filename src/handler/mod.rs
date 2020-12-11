@@ -14,10 +14,6 @@ use chromiumoxid_types::Request as CdpRequest;
 use chromiumoxid_types::{CallId, Command, CommandResponse, Message, Method, Response};
 pub(crate) use page::PageInner;
 
-use chromiumoxid_tmp::cdp::browser_protocol::browser::*;
-use chromiumoxid_tmp::cdp::browser_protocol::target::*;
-use chromiumoxid_tmp::cdp::events::CdpEvent;
-use chromiumoxid_tmp::cdp::events::CdpEventMessage;
 use crate::cmd::CommandMessage;
 use crate::conn::Connection;
 use crate::error::{CdpError, Result};
@@ -29,6 +25,10 @@ use crate::handler::session::Session;
 use crate::handler::target::Target;
 use crate::handler::target::{TargetEvent, TargetMessage};
 use crate::page::Page;
+use chromiumoxid_tmp::cdp::browser_protocol::browser::*;
+use chromiumoxid_tmp::cdp::browser_protocol::target::*;
+use chromiumoxid_tmp::cdp::events::CdpEvent;
+use chromiumoxid_tmp::cdp::events::CdpEventMessage;
 
 /// Standard timeout in MS
 pub const REQUEST_TIMEOUT: u64 = 30000;
@@ -153,7 +153,7 @@ impl Handler {
 
     /// Received a response to a request
     fn on_response(&mut self, resp: Response) {
-        log::debug!("Received resp {}", resp.id);
+        // log::debug!("Received resp {}", resp.id);
         if let Some((req, method, _)) = self.pending_commands.remove(&resp.id) {
             match req {
                 PendingRequest::CreateTarget(tx) => {
@@ -162,7 +162,6 @@ impl Handler {
                             if let Some(target) = self.targets.get_mut(&resp.target_id) {
                                 // move the sender to the target that sends its page once
                                 // initialized
-                                log::debug!("Setting initiator");
                                 target.set_initiator(tx);
                             } else {
                                 // TODO can this even happen?
@@ -267,6 +266,8 @@ impl Handler {
             Ok(params) => match self.conn.submit_command(method.clone(), None, params) {
                 Ok(call_id) => {
                     log::debug!("Submitted request and waiting for response");
+                    // TODO insert watcher in frame
+
                     self.pending_commands.insert(
                         call_id,
                         (PendingRequest::CreateTarget(tx), method, Instant::now()),
