@@ -2,7 +2,7 @@ use chromiumoxid_types::Method;
 
 use crate::cmd::CommandChain;
 use crate::handler::viewport::Viewport;
-use chromiumoxid_tmp::cdp::browser_protocol::emulation::{
+use chromiumoxid_cdp::cdp::browser_protocol::emulation::{
     ScreenOrientation, ScreenOrientationType, SetDeviceMetricsOverrideParams,
     SetTouchEmulationEnabledParams,
 };

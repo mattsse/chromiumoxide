@@ -16,15 +16,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
     let page = browser.new_page("https://en.wikipedia.org").await?;
-    println!("PAGE:    {:?}", page);
-    let frame = page.goto("https://news.ycombinator.com/").await?;
-
+    // let frame = page.goto("https://en.wikipedia.org").await?;
     // std::thread::sleep(std::time::Duration::from_secs(5));
-    println!("current document {:?}", page.get_document().await);
+    let node = page.find_element("input#searchInput").await;
+    dbg!(node);
+    // println!("PAGE:    {:?}", page);
+    //
+    // println!("current document {:?}", page.get_document().await);
+    //
+    // let frame = page.goto("https://www.reddit.com/r/rust/").await?;
 
-    let frame = page.goto("https://www.reddit.com/r/rust/").await?;
-
-    dbg!(page);
+    // dbg!(page);
     // tab.execute(browser_protocol::network::EnableParams::default())
     //     .await?;
     //

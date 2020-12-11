@@ -22,14 +22,14 @@ use crate::handler::page::PageHandle;
 use crate::handler::viewport::Viewport;
 use crate::handler::PageInner;
 use crate::page::Page;
-use chromiumoxid_tmp::cdp::browser_protocol::page::GetFrameTreeParams;
-use chromiumoxid_tmp::cdp::browser_protocol::{
+use chromiumoxid_cdp::cdp::browser_protocol::page::GetFrameTreeParams;
+use chromiumoxid_cdp::cdp::browser_protocol::{
     browser::BrowserContextId,
     log as cdplog, performance,
     target::{AttachToTargetParams, SessionId, SetAutoAttachParams, TargetId, TargetInfo},
 };
-use chromiumoxid_tmp::cdp::events::CdpEvent;
-use chromiumoxid_tmp::cdp::CdpEventMessage;
+use chromiumoxid_cdp::cdp::events::CdpEvent;
+use chromiumoxid_cdp::cdp::CdpEventMessage;
 
 macro_rules! advance_state {
     ($s:ident, $cx:ident, $now:ident, $cmds: ident, $next_state:expr ) => {{

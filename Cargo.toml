@@ -19,7 +19,7 @@ regex = "1.4"
 futures = "0.3"
 chromiumoxid_pdl = { path = "chromiumoxid_pdl", version = "0.1.0" }
 chromiumoxid_types = { path = "chromiumoxid_types", version = "0.1.0" }
-chromiumoxid_tmp = { path = "chromiumoxid_tmp", version = "0.1.0" }
+chromiumoxid_cdp = { path = "chromiumoxid_cdp", version = "0.1.0" }
 serde_json = "1.0"
 which = "4.0.2"
 thiserror = "1.0.22"
@@ -45,5 +45,5 @@ pdl = []
 members = [
     "chromiumoxid_pdl",
     "chromiumoxid_types",
-    "chromiumoxid_tmp"
+    "chromiumoxid_cdp"
 ]

@@ -10,8 +10,8 @@ use chromiumoxid_types::{Command, Method, Request, Response};
 
 use crate::error::{DeadlineExceeded, Result};
 use crate::handler::REQUEST_TIMEOUT;
-use chromiumoxid_tmp::cdp::browser_protocol::page::NavigateParams;
-use chromiumoxid_tmp::cdp::browser_protocol::target::SessionId;
+use chromiumoxid_cdp::cdp::browser_protocol::page::NavigateParams;
+use chromiumoxid_cdp::cdp::browser_protocol::target::SessionId;
 
 /// Messages used internally to communicate with the connection, which is
 /// executed in the the background task.

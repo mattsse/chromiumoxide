@@ -1,12 +1,12 @@
 use chromiumoxid_types::Method;
 
 use crate::cmd::CommandChain;
-use chromiumoxid_tmp::cdp::browser_protocol::fetch::{EventAuthRequired, EventRequestPaused};
-use chromiumoxid_tmp::cdp::browser_protocol::network::{
+use chromiumoxid_cdp::cdp::browser_protocol::fetch::{EventAuthRequired, EventRequestPaused};
+use chromiumoxid_cdp::cdp::browser_protocol::network::{
     EventLoadingFailed, EventLoadingFinished, EventRequestServedFromCache, EventRequestWillBeSent,
     EventResponseReceived,
 };
-use chromiumoxid_tmp::cdp::browser_protocol::{
+use chromiumoxid_cdp::cdp::browser_protocol::{
     network::EnableParams, security::SetIgnoreCertificateErrorsParams,
 };
 

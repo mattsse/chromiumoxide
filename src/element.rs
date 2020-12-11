@@ -2,10 +2,10 @@ use crate::error::{CdpError, Result};
 use std::sync::Arc;
 
 use crate::handler::PageInner;
-use chromiumoxid_tmp::cdp::browser_protocol::dom::{
+use chromiumoxid_cdp::cdp::browser_protocol::dom::{
     BackendNodeId, DescribeNodeParams, NodeId, QuerySelectorParams, ResolveNodeParams,
 };
-use chromiumoxid_tmp::cdp::js_protocol::runtime::RemoteObjectId;
+use chromiumoxid_cdp::cdp::js_protocol::runtime::RemoteObjectId;
 
 /// A handle to a [DOM Element](https://developer.mozilla.org/en-US/docs/Web/API/Element).
 #[derive(Debug)]

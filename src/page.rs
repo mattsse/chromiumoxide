@@ -11,16 +11,16 @@ use crate::cmd::CommandMessage;
 use crate::element::Element;
 use crate::error::{CdpError, Result};
 use crate::handler::PageInner;
-use chromiumoxid_tmp::cdp::browser_protocol;
-use chromiumoxid_tmp::cdp::browser_protocol::dom::*;
-use chromiumoxid_tmp::cdp::browser_protocol::network::{
+use chromiumoxid_cdp::cdp::browser_protocol;
+use chromiumoxid_cdp::cdp::browser_protocol::dom::*;
+use chromiumoxid_cdp::cdp::browser_protocol::network::{
     Cookie, GetCookiesParams, SetUserAgentOverrideParams,
 };
-use chromiumoxid_tmp::cdp::browser_protocol::page::*;
-use chromiumoxid_tmp::cdp::browser_protocol::target::{ActivateTargetParams, SessionId, TargetId};
-use chromiumoxid_tmp::cdp::js_protocol;
-use chromiumoxid_tmp::cdp::js_protocol::debugger::GetScriptSourceParams;
-use chromiumoxid_tmp::cdp::js_protocol::runtime::{EvaluateParams, RemoteObject, ScriptId};
+use chromiumoxid_cdp::cdp::browser_protocol::page::*;
+use chromiumoxid_cdp::cdp::browser_protocol::target::{ActivateTargetParams, SessionId, TargetId};
+use chromiumoxid_cdp::cdp::js_protocol;
+use chromiumoxid_cdp::cdp::js_protocol::debugger::GetScriptSourceParams;
+use chromiumoxid_cdp::cdp::js_protocol::runtime::{EvaluateParams, RemoteObject, ScriptId};
 
 #[derive(Debug)]
 pub struct Page {

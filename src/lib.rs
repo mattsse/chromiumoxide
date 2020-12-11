@@ -1,4 +1,4 @@
-// use chromiumoxid_tmp::cdp::browser_protocol::target::CreateTargetParams;
+// use chromiumoxid_cdp::cdp::browser_protocol::target::CreateTargetParams;
 //
 // // Include all the types
 // include!(concat!(env!("OUT_DIR"), "/cdp.rs"));

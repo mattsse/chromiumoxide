@@ -13,7 +13,7 @@ use futures::Sink;
 use chromiumoxid_types::{CallId, Event, Message, MethodCall};
 
 use crate::error::CdpError;
-use chromiumoxid_tmp::cdp::browser_protocol::target::SessionId;
+use chromiumoxid_cdp::cdp::browser_protocol::target::SessionId;
 
 /// Exchanges the messages with the websocket
 #[must_use = "streams do nothing unless polled"]

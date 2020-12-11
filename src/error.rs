@@ -2,7 +2,7 @@ use std::io;
 
 use crate::handler::frame::NavigationError;
 use async_tungstenite::tungstenite;
-use chromiumoxid_tmp::cdp::browser_protocol::page::FrameId;
+use chromiumoxid_cdp::cdp::browser_protocol::page::FrameId;
 use futures::channel::mpsc::SendError;
 use futures::channel::oneshot::Canceled;
 use std::time::Instant;

@@ -8,14 +8,14 @@ use chromiumoxid_types::{Method, Request};
 use crate::cmd::CommandChain;
 use crate::error::DeadlineExceeded;
 use crate::handler::REQUEST_TIMEOUT;
-use chromiumoxid_tmp::cdp::browser_protocol::network::LoaderId;
-use chromiumoxid_tmp::cdp::browser_protocol::page::{
+use chromiumoxid_cdp::cdp::browser_protocol::network::LoaderId;
+use chromiumoxid_cdp::cdp::browser_protocol::page::{
     EventFrameDetached, EventFrameStoppedLoading, EventLifecycleEvent,
     EventNavigatedWithinDocument, Frame as CdpFrame, FrameTree,
 };
-use chromiumoxid_tmp::cdp::browser_protocol::target::EventAttachedToTarget;
-use chromiumoxid_tmp::cdp::js_protocol::runtime::*;
-use chromiumoxid_tmp::cdp::{
+use chromiumoxid_cdp::cdp::browser_protocol::target::EventAttachedToTarget;
+use chromiumoxid_cdp::cdp::js_protocol::runtime::*;
+use chromiumoxid_cdp::cdp::{
     browser_protocol::page::{self, FrameId},
     js_protocol::runtime,
 };

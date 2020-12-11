@@ -25,10 +25,10 @@ use crate::handler::session::Session;
 use crate::handler::target::Target;
 use crate::handler::target::{TargetEvent, TargetMessage};
 use crate::page::Page;
-use chromiumoxid_tmp::cdp::browser_protocol::browser::*;
-use chromiumoxid_tmp::cdp::browser_protocol::target::*;
-use chromiumoxid_tmp::cdp::events::CdpEvent;
-use chromiumoxid_tmp::cdp::events::CdpEventMessage;
+use chromiumoxid_cdp::cdp::browser_protocol::browser::*;
+use chromiumoxid_cdp::cdp::browser_protocol::target::*;
+use chromiumoxid_cdp::cdp::events::CdpEvent;
+use chromiumoxid_cdp::cdp::events::CdpEventMessage;
 
 /// Standard timeout in MS
 pub const REQUEST_TIMEOUT: u64 = 30000;
