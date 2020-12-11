@@ -1,4 +1,4 @@
-use crate::cdp::browser_protocol::browser::BrowserContextId;
+use chromiumoxid_tmp::cdp::browser_protocol::browser::BrowserContextId;
 
 /// BrowserContexts provide a way to operate multiple independent browser
 /// sessions.

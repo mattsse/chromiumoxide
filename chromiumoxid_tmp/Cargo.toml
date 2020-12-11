@@ -1,0 +1,15 @@
+[package]
+name = "chromiumoxid_tmp"
+version = "0.1.0"
+authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[build-dependencies]
+chromiumoxid_pdl = { path = "../chromiumoxid_pdl", version = "0.1.0" }
+
+[dependencies]
+chromiumoxid_pdl = { path = "../chromiumoxid_pdl", version = "0.1.0" }
+chromiumoxid_types = { path = "../chromiumoxid_types", version = "0.1.0" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

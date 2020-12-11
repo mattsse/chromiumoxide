@@ -12,8 +12,8 @@ use futures::SinkExt;
 
 use chromiumoxid_types::*;
 
-use crate::cdp::browser_protocol::target::CreateTargetParams;
-use crate::cdp::CdpEventMessage;
+use chromiumoxid_tmp::cdp::browser_protocol::target::CreateTargetParams;
+use chromiumoxid_tmp::cdp::CdpEventMessage;
 use crate::cmd::CommandMessage;
 use crate::conn::Connection;
 use crate::error::{CdpError, Result};

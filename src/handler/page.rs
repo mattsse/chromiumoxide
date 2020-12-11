@@ -1,4 +1,4 @@
-use crate::cdp::browser_protocol::target::{SessionId, TargetId};
+use chromiumoxid_tmp::cdp::browser_protocol::target::{SessionId, TargetId};
 use crate::handler::target::TargetMessage;
 use chromiumoxid_types::{Command, CommandResponse};
 use futures::channel::mpsc::{channel, Receiver, Sender};

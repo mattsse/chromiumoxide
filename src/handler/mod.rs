@@ -14,10 +14,10 @@ use chromiumoxid_types::Request as CdpRequest;
 use chromiumoxid_types::{CallId, Command, CommandResponse, Message, Method, Response};
 pub(crate) use page::PageInner;
 
-use crate::cdp::browser_protocol::browser::*;
-use crate::cdp::browser_protocol::target::*;
-use crate::cdp::events::CdpEvent;
-use crate::cdp::events::CdpEventMessage;
+use chromiumoxid_tmp::cdp::browser_protocol::browser::*;
+use chromiumoxid_tmp::cdp::browser_protocol::target::*;
+use chromiumoxid_tmp::cdp::events::CdpEvent;
+use chromiumoxid_tmp::cdp::events::CdpEventMessage;
 use crate::cmd::CommandMessage;
 use crate::conn::Connection;
 use crate::error::{CdpError, Result};
@@ -223,7 +223,6 @@ impl Handler {
     }
 
     fn submit_navigation(&mut self, id: NavigationId, req: CdpRequest, now: Instant) {
-        log::warn!("Submit navigation {:?}", req);
         let call_id = self
             .conn
             .submit_command(
@@ -239,12 +238,10 @@ impl Handler {
 
     /// Process a message received by the target's page via channel
     fn on_target_message(&mut self, target: &mut Target, msg: TargetMessage, now: Instant) {
-        log::warn!("target message: {:?}", msg);
         match msg {
             TargetMessage::Command(msg) => {
                 // if let some
                 if msg.is_navigation() {
-                    log::warn!("Received navigation");
                     let (req, tx) = msg.split();
                     let id = self.next_navigation_id();
                     target.goto(FrameNavigationRequest::new(id, req));

@@ -9,15 +9,14 @@ use futures::task::{Context, Poll};
 
 use chromiumoxid_types::{Command, Method, Request, Response};
 
-use crate::cdp::browser_protocol::page::GetFrameTreeParams;
-use crate::cdp::browser_protocol::{
+use chromiumoxid_tmp::cdp::browser_protocol::page::GetFrameTreeParams;
+use chromiumoxid_tmp::cdp::browser_protocol::{
     browser::BrowserContextId,
     log as cdplog, performance,
     target::{AttachToTargetParams, SessionId, SetAutoAttachParams, TargetId, TargetInfo},
 };
-use crate::cdp::events::CdpEvent;
-use crate::cdp::CdpEvent::TargetTargetInfoChanged;
-use crate::cdp::CdpEventMessage;
+use chromiumoxid_tmp::cdp::events::CdpEvent;
+use chromiumoxid_tmp::cdp::CdpEventMessage;
 use crate::cmd::CommandChain;
 use crate::cmd::CommandMessage;
 use crate::error::{DeadlineExceeded, Result};
@@ -47,6 +46,8 @@ macro_rules! advance_state {
                 })),
                 Some(Err(err)) => Some(TargetEvent::RequestTimeout(err)),
             };
+        } else {
+            return None;
         }
     }};
 }
@@ -71,9 +72,10 @@ pub struct Target {
     init_state: TargetInit,
     /// Currently queued events to report to the `Handler`
     queued_events: VecDeque<TargetEvent>,
-    /// The sender who initiated the creation of a page.
+    /// The sender who requested the page.
     initiator: Option<Sender<Result<Page>>>,
-    initiated: bool,
+    /// Used to tracked whether this target should initialize its state
+    initialize: bool,
 }
 
 impl Target {
@@ -92,12 +94,11 @@ impl Target {
             init_state: TargetInit::AttachToTarget,
             queued_events: Default::default(),
             initiator: None,
-            initiated: false,
+            initialize: false,
         }
     }
 
     pub fn set_session_id(&mut self, id: SessionId) {
-        log::debug!("Session id set {}", id.as_ref());
         self.session_id = Some(id)
     }
 
@@ -197,7 +198,6 @@ impl Target {
                 self.frame_manager.on_execution_context_cleared(&ev)
             }
             CdpEvent::PageLifecycleEvent(ev) => {
-                log::error!("Received PageLifecycleEvent");
                 self.frame_manager.on_page_lifecycle_event(&ev)
             }
 
@@ -219,15 +219,13 @@ impl Target {
             CdpEvent::NetworkLoadingFailed(ev) => {
                 self.network_manager.on_network_loading_failed(&ev)
             }
-            // Other
-            // CdpEvent::PageLoadEventFired(ev) => self.frame_manager.on_load_event_fired(&ev),
             _ => {}
         }
     }
 
     /// Advance that target's state
     pub(crate) fn poll(&mut self, cx: &mut Context<'_>, now: Instant) -> Option<TargetEvent> {
-        if !self.initiated {
+        if !self.initialize {
             return None;
         }
         match &mut self.init_state {
@@ -299,7 +297,6 @@ impl Target {
 
             if let Some(handle) = self.page.as_mut() {
                 while let Poll::Ready(Some(msg)) = Pin::new(&mut handle.rx).poll_next(cx) {
-                    log::warn!("Read message from page");
                     self.queued_events.push_back(TargetEvent::Message(msg));
                 }
             }
@@ -323,9 +320,15 @@ impl Target {
         }
     }
 
+    /// Set the sender half of the channel who requested the creation of this target
     pub fn set_initiator(&mut self, tx: Sender<Result<Page>>) {
         self.initiator = Some(tx);
-        self.initiated = true;
+        self.initialize();
+    }
+
+    /// Start with the initialization process
+    pub fn initialize(&mut self) {
+        self.initialize = true;
     }
 
     // TODO move to other location

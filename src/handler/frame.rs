@@ -5,14 +5,14 @@ use std::time::{Duration, Instant};
 
 use chromiumoxid_types::{Method, Request};
 
-use crate::cdp::browser_protocol::network::LoaderId;
-use crate::cdp::browser_protocol::page::{
+use chromiumoxid_tmp::cdp::browser_protocol::network::LoaderId;
+use chromiumoxid_tmp::cdp::browser_protocol::page::{
     EventFrameDetached, EventFrameStoppedLoading, EventLifecycleEvent,
     EventNavigatedWithinDocument, Frame as CdpFrame, FrameTree,
 };
-use crate::cdp::browser_protocol::target::EventAttachedToTarget;
-use crate::cdp::js_protocol::runtime::*;
-use crate::cdp::{
+use chromiumoxid_tmp::cdp::browser_protocol::target::EventAttachedToTarget;
+use chromiumoxid_tmp::cdp::js_protocol::runtime::*;
+use chromiumoxid_tmp::cdp::{
     browser_protocol::page::{self, FrameId},
     js_protocol::runtime,
 };
@@ -205,7 +205,6 @@ impl FrameManager {
             }
         } else {
             if let Some((req, watcher)) = self.pending_navigations.pop_front() {
-                log::warn!("Frame navigation request");
                 let deadline = Instant::now() + Duration::from_millis(REQUEST_TIMEOUT);
                 self.navigation = Some((watcher, deadline));
                 return Some(FrameEvent::NavigationRequest(req.id, req.req));
@@ -264,7 +263,6 @@ impl FrameManager {
     }
 
     pub fn on_frame_navigated(&mut self, frame: CdpFrame) {
-        log::warn!("FAME NAVIGATED: {:?}", frame);
         if frame.parent_id.is_some() {
             if let Some((id, mut f)) = self.frames.remove_entry(&frame.id) {
                 for child in &f.child_frames {
@@ -321,7 +319,6 @@ impl FrameManager {
 
     /// Fired for top level page lifecycle events (nav, load, paint, etc.)
     pub fn on_page_lifecycle_event(&mut self, event: &EventLifecycleEvent) {
-        log::warn!("on_page_lifecycle_event {:?}", event);
         if let Some(frame) = self.frames.get_mut(&event.frame_id) {
             if event.name == "init" {
                 frame.loader_id = Some(event.loader_id.clone());

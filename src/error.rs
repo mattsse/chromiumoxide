@@ -1,6 +1,6 @@
 use std::io;
 
-use crate::cdp::browser_protocol::page::FrameId;
+use chromiumoxid_tmp::cdp::browser_protocol::page::FrameId;
 use crate::handler::frame::NavigationError;
 use async_tungstenite::tungstenite;
 use futures::channel::mpsc::SendError;

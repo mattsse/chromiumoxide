@@ -1,6 +1,6 @@
 use chromiumoxid_types::Method;
 
-use crate::cdp::browser_protocol::emulation::{
+use chromiumoxid_tmp::cdp::browser_protocol::emulation::{
     ScreenOrientation, ScreenOrientationType, SetDeviceMetricsOverrideParams,
     SetTouchEmulationEnabledParams,
 };

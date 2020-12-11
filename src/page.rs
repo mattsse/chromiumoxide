@@ -7,14 +7,14 @@ use futures::{future, SinkExt};
 
 use chromiumoxid_types::*;
 
-use crate::cdp::browser_protocol;
-use crate::cdp::browser_protocol::dom::*;
-use crate::cdp::browser_protocol::network::{Cookie, GetCookiesParams, SetUserAgentOverrideParams};
-use crate::cdp::browser_protocol::page::*;
-use crate::cdp::browser_protocol::target::{ActivateTargetParams, SessionId, TargetId};
-use crate::cdp::js_protocol;
-use crate::cdp::js_protocol::debugger::GetScriptSourceParams;
-use crate::cdp::js_protocol::runtime::{EvaluateParams, RemoteObject, ScriptId};
+use chromiumoxid_tmp::cdp::browser_protocol;
+use chromiumoxid_tmp::cdp::browser_protocol::dom::*;
+use chromiumoxid_tmp::cdp::browser_protocol::network::{Cookie, GetCookiesParams, SetUserAgentOverrideParams};
+use chromiumoxid_tmp::cdp::browser_protocol::page::*;
+use chromiumoxid_tmp::cdp::browser_protocol::target::{ActivateTargetParams, SessionId, TargetId};
+use chromiumoxid_tmp::cdp::js_protocol;
+use chromiumoxid_tmp::cdp::js_protocol::debugger::GetScriptSourceParams;
+use chromiumoxid_tmp::cdp::js_protocol::runtime::{EvaluateParams, RemoteObject, ScriptId};
 use crate::cmd::CommandMessage;
 use crate::element::Element;
 use crate::error::{CdpError, Result};

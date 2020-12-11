@@ -12,7 +12,7 @@ use futures::Sink;
 
 use chromiumoxid_types::{CallId, Event, Message, MethodCall};
 
-use crate::cdp::browser_protocol::target::SessionId;
+use chromiumoxid_tmp::cdp::browser_protocol::target::SessionId;
 use crate::error::CdpError;
 
 /// Exchanges the messages with the websocket
