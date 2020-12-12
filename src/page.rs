@@ -16,11 +16,11 @@ use chromiumoxid_cdp::cdp::js_protocol::debugger::GetScriptSourceParams;
 use chromiumoxid_cdp::cdp::js_protocol::runtime::{EvaluateParams, RemoteObject, ScriptId};
 use chromiumoxid_types::*;
 
-use crate::box_model::Point;
 use crate::element::Element;
 use crate::error::{CdpError, Result};
 use crate::handler::target::TargetMessage;
 use crate::handler::PageInner;
+use crate::layout::Point;
 
 #[derive(Debug)]
 pub struct Page {

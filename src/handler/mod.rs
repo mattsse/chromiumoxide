@@ -13,8 +13,8 @@ use chromiumoxid_cdp::cdp::browser_protocol::browser::*;
 use chromiumoxid_cdp::cdp::browser_protocol::target::*;
 use chromiumoxid_cdp::cdp::events::CdpEvent;
 use chromiumoxid_cdp::cdp::events::CdpEventMessage;
+use chromiumoxid_types::Request as CdpRequest;
 use chromiumoxid_types::{CallId, Message, Method, Response};
-use chromiumoxid_types::{CommandResponse, Request as CdpRequest};
 pub(crate) use page::PageInner;
 
 use crate::cmd::{to_command_response, CommandMessage};
@@ -26,7 +26,7 @@ use crate::handler::frame::{NavigationError, NavigationId, NavigationOk};
 use crate::handler::job::PeriodicJob;
 use crate::handler::session::Session;
 use crate::handler::target::Target;
-use crate::handler::target::{TargetEvent, TargetMessage};
+use crate::handler::target::TargetEvent;
 use crate::page::Page;
 
 /// Standard timeout in MS

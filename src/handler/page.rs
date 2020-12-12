@@ -6,10 +6,10 @@ use futures::channel::oneshot::channel as oneshot_channel;
 use futures::stream::Fuse;
 use std::sync::Arc;
 
-use crate::box_model::Point;
 use crate::cmd::{to_command_response, CommandMessage};
 use crate::error::{CdpError, Result};
 use crate::keys;
+use crate::layout::Point;
 use chromiumoxid_cdp::cdp::browser_protocol::dom::{
     NodeId, QuerySelectorAllParams, QuerySelectorParams,
 };
@@ -17,7 +17,6 @@ use chromiumoxid_cdp::cdp::browser_protocol::input::{
     DispatchKeyEventParams, DispatchKeyEventType, DispatchMouseEventParams, DispatchMouseEventType,
     MouseButton,
 };
-use chromiumoxid_cdp::cdp::browser_protocol::page::FrameId;
 use chromiumoxid_cdp::cdp::js_protocol::runtime::{
     CallFunctionOnParams, CallFunctionOnReturns, RemoteObjectId,
 };
@@ -60,10 +59,12 @@ impl PageInner {
         Ok(execute(cmd, self.sender.clone(), Some(self.session_id.clone())).await?)
     }
 
+    /// The identifier of this page's target
     pub fn target_id(&self) -> &TargetId {
         &self.target_id
     }
 
+    /// The identifier of this page's target's session
     pub fn session_id(&self) -> &SessionId {
         &self.session_id
     }
