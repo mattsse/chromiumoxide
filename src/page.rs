@@ -1,8 +1,6 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use futures::future;
-
 use chromiumoxid_types::*;
 
 use crate::element::Element;
@@ -25,6 +23,7 @@ pub struct Page {
 }
 
 impl Page {
+    /// Execute a command and return the `Command::Response`
     pub async fn execute<T: Command>(&self, cmd: T) -> Result<CommandResponse<T::Response>> {
         Ok(self.inner.execute(cmd).await?)
     }
@@ -69,33 +68,24 @@ impl Page {
         Ok(resp.result.root)
     }
 
+    /// Returns the first element in the document which matches the given CSS
+    /// selector.
+    ///
+    /// Execute a query selector on the document's node.
     pub async fn find_element(&self, selector: impl Into<String>) -> Result<Element> {
         let root = self.get_document().await?.node_id;
-        let node_id = self
-            .execute(QuerySelectorParams::new(root, selector))
-            .await?
-            .node_id;
-
+        let node_id = self.inner.find_element(selector, root).await?;
         Ok(Element::new(Arc::clone(&self.inner), node_id).await?)
     }
 
+    /// Return all `Element`s in the document that match the given selector
     pub async fn find_elements(&self, selector: impl Into<String>) -> Result<Vec<Element>> {
         let root = self.get_document().await?.node_id;
-        let resp = self
-            .execute(QuerySelectorAllParams::new(root, selector))
-            .await?;
-
-        Ok(future::join_all(
-            resp.result
-                .node_ids
-                .into_iter()
-                .map(|id| Element::new(Arc::clone(&self.inner), id)),
-        )
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()?)
+        let node_ids = self.inner.find_elements(selector, root).await?;
+        Ok(Element::from_nodes(&self.inner, &node_ids).await?)
     }
 
+    /// Describes node given its id
     pub async fn describe_node(&self, node_id: NodeId) -> Result<Node> {
         let resp = self
             .execute(
@@ -115,25 +105,28 @@ impl Page {
     /// Print the current page as pdf.
     ///
     /// See [`PrintToPdfParams`]
+    ///
+    /// # Note Generating a pdf is currently only supported in Chrome headless.
     pub async fn pdf(&self, opts: PrintToPdfParams) -> Result<Vec<u8>> {
-        todo!()
-        // let res = self.execute(opts).await?;
-        // Ok(base64::decode(&res.data)?)
+        let res = self.execute(opts).await?;
+        Ok(base64::decode(&res.data)?)
     }
 
-    /// Save the current page as pdf as file
+    /// Save the current page as pdf as file to the `output` path and return the
+    /// pdf contents.
+    ///
+    /// # Note Generating a pdf is currently only supported in Chrome headless.
     pub async fn save_pdf(
         &self,
         opts: PrintToPdfParams,
         output: impl AsRef<Path>,
     ) -> Result<Vec<u8>> {
-        todo!()
-        // let pdf = self.pdf(opts).await?;
-        // async_std::fs::write(output.as_ref(), &pdf).await?;
-        // Ok(pdf)
+        let pdf = self.pdf(opts).await?;
+        async_std::fs::write(output.as_ref(), &pdf).await?;
+        Ok(pdf)
     }
 
-    /// Enables log domain.
+    /// Enables log domain. Enabled by default.
     ///
     /// Sends the entries collected so far to the client by means of the
     /// entryAdded notification.
@@ -156,7 +149,7 @@ impl Page {
         Ok(self)
     }
 
-    /// Enables runtime domain.
+    /// Enables runtime domain. Activated by default.
     pub async fn enable_runtime(&self) -> Result<&Self> {
         self.execute(js_protocol::runtime::EnableParams::default())
             .await?;
@@ -170,14 +163,14 @@ impl Page {
         Ok(self)
     }
 
-    /// Enables Debugger
+    /// Enables Debugger. Enabled by default.
     pub async fn enable_debugger(&self) -> Result<&Self> {
         self.execute(js_protocol::debugger::EnableParams::default())
             .await?;
         Ok(self)
     }
 
-    /// Disables Debugger
+    /// Disables Debugger.
     pub async fn disable_debugger(&self) -> Result<&Self> {
         self.execute(js_protocol::debugger::DisableParams::default())
             .await?;

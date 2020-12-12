@@ -2,6 +2,7 @@ use std::io;
 
 use crate::handler::frame::NavigationError;
 use async_tungstenite::tungstenite;
+use base64::DecodeError;
 use chromiumoxid_cdp::cdp::browser_protocol::page::FrameId;
 use futures::channel::mpsc::SendError;
 use futures::channel::oneshot::Canceled;
@@ -32,6 +33,8 @@ pub enum CdpError {
     /// `chromiumoxid_types::Error`
     #[error("{0}")]
     ChromeMessage(String),
+    #[error("{0}")]
+    DecodeError(#[from] DecodeError),
 }
 impl CdpError {
     pub fn msg(msg: impl Into<String>) -> Self {

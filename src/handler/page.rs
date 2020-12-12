@@ -8,6 +8,9 @@ use std::sync::Arc;
 
 use crate::cmd::{to_command_response, CommandMessage};
 use crate::error::Result;
+use chromiumoxid_cdp::cdp::browser_protocol::dom::{
+    NodeId, QuerySelectorAllParams, QuerySelectorParams,
+};
 use futures::{SinkExt, StreamExt};
 
 #[derive(Debug)]
@@ -53,6 +56,28 @@ impl PageInner {
 
     pub fn session_id(&self) -> &SessionId {
         &self.session_id
+    }
+
+    /// Returns the first element in the node which matches the given CSS
+    /// selector.
+    pub async fn find_element(&self, selector: impl Into<String>, node: NodeId) -> Result<NodeId> {
+        Ok(self
+            .execute(QuerySelectorParams::new(node, selector))
+            .await?
+            .node_id)
+    }
+
+    /// Return all `Element`s inside the node that match the given selector
+    pub(crate) async fn find_elements(
+        &self,
+        selector: impl Into<String>,
+        node: NodeId,
+    ) -> Result<Vec<NodeId>> {
+        Ok(self
+            .execute(QuerySelectorAllParams::new(node, selector))
+            .await?
+            .result
+            .node_ids)
     }
 }
 

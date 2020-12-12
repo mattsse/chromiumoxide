@@ -240,6 +240,12 @@ impl AsRef<str> for Binary {
     }
 }
 
+impl AsRef<[u8]> for Binary {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
+}
+
 impl Into<String> for Binary {
     fn into(self) -> String {
         self.0
