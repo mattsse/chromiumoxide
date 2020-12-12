@@ -9,6 +9,7 @@ use std::sync::Arc;
 use crate::cmd::{to_command_response, CommandMessage};
 use crate::error::{CdpError, Result};
 use crate::keys;
+use crate::keys::KeyDefinition;
 use crate::layout::Point;
 use chromiumoxid_cdp::cdp::browser_protocol::dom::{
     NodeId, QuerySelectorAllParams, QuerySelectorParams,
@@ -131,30 +132,35 @@ impl PageInner {
         Ok(self)
     }
 
+    /// This simulates pressing keys on the page.
+    ///
+    /// # Note The `input` is treated as series of `KeyDefinition`s, where each
+    /// char is inserted as a separate keystroke. So sending
+    /// `page.type_str("Enter")` will be processed as a series of single
+    /// keystrokes:  `["E", "n", "t", "e", "r"]`. To simulate pressing the
+    /// actual Enter key instead use `page.press_key(
+    /// keys::get_key_definition("Enter").unwrap())`.
     pub async fn type_str(&self, input: impl AsRef<str>) -> Result<&Self> {
-        for c in input.as_ref().split("") {
-            // split call above will have empty string at start and end which we won't type
-            if c.is_empty() {
-                continue;
-            }
-            self.press_key(c).await?;
+        for c in input.as_ref().split("").filter(|s| !s.is_empty()) {
+            let key = keys::get_key_definition(key.as_ref())
+                .ok_or_else(|| CdpError::msg(format!("Key not found: {}", key.as_ref())))?;
+            self.press_key(key).await?;
         }
         Ok(self)
     }
 
-    pub async fn press_key(&self, key: impl AsRef<str>) -> Result<&Self> {
-        let definition = keys::get_key_definition(key.as_ref())
-            .ok_or_else(|| CdpError::msg(format!("Key not found: {}", key.as_ref())))?;
-
+    /// Uses the `DispatchKeyEvent` mechanism to simulate pressing keyboard
+    /// keys.
+    pub async fn press_key(&self, key_definition: &KeyDefinition) -> Result<&Self> {
         let mut cmd = DispatchKeyEventParams::builder();
 
         // See https://github.com/GoogleChrome/puppeteer/blob/62da2366c65b335751896afbb0206f23c61436f1/lib/Input.js#L114-L115
         // And https://github.com/GoogleChrome/puppeteer/blob/62da2366c65b335751896afbb0206f23c61436f1/lib/Input.js#L52
-        let key_down_event_type = if let Some(txt) = definition.text {
+        let key_down_event_type = if let Some(txt) = key_definition.text {
             cmd = cmd.text(txt);
             DispatchKeyEventType::KeyDown
-        } else if definition.key.len() == 1 {
-            cmd = cmd.text(definition.key);
+        } else if key_definition.key.len() == 1 {
+            cmd = cmd.text(key_definition.key);
             DispatchKeyEventType::KeyDown
         } else {
             DispatchKeyEventType::RawKeyDown
@@ -162,10 +168,10 @@ impl PageInner {
 
         cmd = cmd
             .r#type(DispatchKeyEventType::KeyDown)
-            .key(definition.key)
-            .code(definition.code)
-            .windows_virtual_key_code(definition.key_code)
-            .native_virtual_key_code(definition.key_code);
+            .key(key_definition.key)
+            .code(key_definition.code)
+            .windows_virtual_key_code(key_definition.key_code)
+            .native_virtual_key_code(key_definition.key_code);
 
         self.execute(cmd.clone().r#type(key_down_event_type).build().unwrap())
             .await?;

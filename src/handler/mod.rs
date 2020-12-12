@@ -191,6 +191,7 @@ impl Handler {
         }
     }
 
+    /// Submit a command initiated via channel
     pub(crate) fn submit_external_command(
         &mut self,
         msg: CommandMessage,

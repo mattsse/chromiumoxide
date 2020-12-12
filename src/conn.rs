@@ -60,7 +60,6 @@ impl<T: Event> Connection<T> {
         session_id: Option<SessionId>,
         params: serde_json::Value,
     ) -> serde_json::Result<CallId> {
-        log::debug!("Submit command {}", method);
         let id = self.next_call_id();
         let call = MethodCall {
             id,
@@ -105,7 +104,6 @@ impl<T: Event + Unpin> Stream for Connection<T> {
         // send the message
         if let Some(call) = pin.pending_flush.take() {
             if Sink::poll_ready(Pin::new(&mut pin.ws), cx).is_ready() {
-                log::warn!("Send {:?}", call);
                 pin.needs_flush = true;
             } else {
                 pin.pending_flush = Some(call);
@@ -115,7 +113,6 @@ impl<T: Event + Unpin> Stream for Connection<T> {
         match Stream::poll_next(Pin::new(&mut pin.ws), cx) {
             Poll::Ready(Some(Ok(msg))) => {
                 let s = msg.to_string();
-                log::warn!("Read {:?} ", s);
                 return match serde_json::from_slice::<Message<T>>(&msg.into_data()) {
                     Ok(msg) => Poll::Ready(Some(Ok(msg))),
                     Err(err) => {

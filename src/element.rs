@@ -13,6 +13,7 @@ use chromiumoxid_cdp::cdp::js_protocol::runtime::{
 
 use crate::error::{CdpError, Result};
 use crate::handler::PageInner;
+use crate::keys::KeyDefinition;
 use crate::layout::{ElementQuad, Point};
 
 /// Represents a [DOM Element](https://developer.mozilla.org/en-US/docs/Web/API/Element).
@@ -177,7 +178,7 @@ impl Element {
     }
 
     /// Press the key
-    pub async fn press_key(&self, key: impl AsRef<str>) -> Result<&Self> {
+    pub async fn press_key(&self, key: KeyDefinition) -> Result<&Self> {
         self.tab.press_key(key).await?;
         Ok(self)
     }
