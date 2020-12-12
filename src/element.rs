@@ -164,21 +164,48 @@ impl Element {
         Ok(self)
     }
 
-    /// Click on the element
+    /// This focuses the element by click on it
     pub async fn click(&self) -> Result<&Self> {
         let center = self.scroll_into_view().await?.clickable_point().await?;
         self.tab.click_point(center).await?;
         Ok(self)
     }
 
-    /// Type the input into the element
+    /// Type the input after clicking on the element
+    ///
+    /// # Example type text into an input element
+    ///
+    /// ```no_run
+    /// # use chromiumoxid::page::Page;
+    /// # use chromiumoxid::error::Result;
+    /// # async fn demo(page: Page) -> Result<()> {
+    ///     let element = page.find_element("input#searchInput").await?;
+    ///     element.type_str("this goes into the input field").await?;
+    ///     # Ok(())
+    /// # }
+    /// ```
     pub async fn type_str(&self, input: impl AsRef<str>) -> Result<&Self> {
         self.tab.type_str(input).await?;
         Ok(self)
     }
 
-    /// Press the key
-    pub async fn press_key(&self, key: KeyDefinition) -> Result<&Self> {
+    /// Presses the key after focusing the element.
+    ///
+    /// # Example type text into an input element and hit enter
+    ///
+    /// ```no_run
+    /// # use chromiumoxid::page::Page;
+    /// # use chromiumoxid::error::Result;
+    /// # use chromiumoxid::keys;
+    /// # async fn demo(page: Page) -> Result<()> {
+    ///     let element = page.find_element("input#searchInput").await?;
+    ///     element.type_str("this goes into the input field").await?
+    ///          .press_key(keys::get_key_definition("Enter").unwrap()).await?;
+    ///     # Ok(())
+    /// # }
+    /// ```
+    pub async fn press_key(&self, key: &KeyDefinition) -> Result<&Self> {
+        self.click().await?;
         self.tab.press_key(key).await?;
         Ok(self)
     }

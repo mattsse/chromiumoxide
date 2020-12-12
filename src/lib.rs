@@ -16,8 +16,6 @@ pub mod conn;
 pub mod element;
 pub mod error;
 pub mod handler;
-pub mod keyboard;
 pub mod keys;
 pub mod layout;
 pub mod page;
-pub mod query;

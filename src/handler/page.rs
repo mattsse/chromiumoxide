@@ -142,8 +142,8 @@ impl PageInner {
     /// keys::get_key_definition("Enter").unwrap())`.
     pub async fn type_str(&self, input: impl AsRef<str>) -> Result<&Self> {
         for c in input.as_ref().split("").filter(|s| !s.is_empty()) {
-            let key = keys::get_key_definition(key.as_ref())
-                .ok_or_else(|| CdpError::msg(format!("Key not found: {}", key.as_ref())))?;
+            let key = keys::get_key_definition(c)
+                .ok_or_else(|| CdpError::msg(format!("Key not found: {}", c)))?;
             self.press_key(key).await?;
         }
         Ok(self)
