@@ -1,17 +1,19 @@
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
-use futures::future;
+use futures::{future, Future, FutureExt, Stream};
 
 use chromiumoxid_cdp::cdp::browser_protocol::dom::{
-    BackendNodeId, DescribeNodeParams, GetContentQuadsParams, NodeId, ResolveNodeParams,
+    BackendNodeId, DescribeNodeParams, GetContentQuadsParams, Node, NodeId, ResolveNodeParams,
 };
 use chromiumoxid_cdp::cdp::js_protocol::runtime::{
-    CallFunctionOnParams, CallFunctionOnReturns, RemoteObjectId, RemoteObjectType,
+    CallFunctionOnReturns, RemoteObjectId, RemoteObjectType,
 };
 
-use crate::box_model::{ElementQuad, Point};
 use crate::error::{CdpError, Result};
 use crate::handler::PageInner;
+use crate::layout::{ElementQuad, Point};
 
 /// A handle to a [DOM Element](https://developer.mozilla.org/en-US/docs/Web/API/Element).
 #[derive(Debug)]
@@ -166,38 +168,88 @@ impl Element {
         Ok(self)
     }
 
+    /// Type the input into the element
     pub async fn type_str(&self, input: impl AsRef<str>) -> Result<&Self> {
         self.tab.type_str(input).await?;
         Ok(self)
     }
 
+    /// Press the key
     pub async fn press_key(&self, key: impl AsRef<str>) -> Result<&Self> {
         self.tab.press_key(key).await?;
         Ok(self)
     }
 
+    /// The description of the element's node
+    pub async fn description(&self) -> Result<Node> {
+        Ok(self
+            .tab
+            .execute(
+                DescribeNodeParams::builder()
+                    .backend_node_id(self.backend_node_id)
+                    .depth(100)
+                    .build(),
+            )
+            .await?
+            .result
+            .node)
+    }
+
+    /// Attributes of the `Element` node in the form of flat array `[name1,
+    /// value1, name2, value2]
+    pub async fn attributes(&self) -> Result<Vec<String>> {
+        let node = self.description().await?;
+        Ok(node.attributes.unwrap_or_default())
+    }
+
+    /// Returns the value of the element's attribute
+    pub async fn attribute(&self, attribute: impl AsRef<str>) -> Result<Option<String>> {
+        let js_fn = format!(
+            "function() {{ return this.getAttribute('{}'); }}",
+            attribute.as_ref()
+        );
+        let resp = self.call_js_fn(js_fn, false).await?;
+        if let Some(value) = resp.result.value {
+            Ok(serde_json::from_value(value)?)
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// A `Stream` over all attributes and their values
+    pub async fn iter_attributes(
+        &self,
+    ) -> Result<impl Stream<Item = (String, Result<Option<String>>)> + '_> {
+        let attributes = self.attributes().await?;
+        Ok(AttributeStream {
+            attributes,
+            fut: None,
+            element: self,
+        })
+    }
+
     /// The inner text of this element.
     pub async fn inner_text(&self) -> Result<Option<String>> {
-        Ok(self.get_string_property("innerText").await?)
+        Ok(self.string_property("innerText").await?)
     }
 
     /// The inner HTML of this element.
     pub async fn inner_html(&self) -> Result<Option<String>> {
-        Ok(self.get_string_property("innerHTML").await?)
+        Ok(self.string_property("innerHTML").await?)
     }
 
     /// The outer HTML of this element.
     pub async fn outer_html(&self) -> Result<Option<String>> {
-        Ok(self.get_string_property("outerHTML").await?)
+        Ok(self.string_property("outerHTML").await?)
     }
 
     /// Returns the string property of the element.
     ///
     /// If the property is an empty String, `None` is returned.
-    pub async fn get_string_property(&self, property: impl AsRef<str>) -> Result<Option<String>> {
+    pub async fn string_property(&self, property: impl AsRef<str>) -> Result<Option<String>> {
         let property = property.as_ref();
         let value = self
-            .get_property(property)
+            .property(property)
             .await?
             .ok_or_else(|| CdpError::NotFound)?;
         let txt: String = serde_json::from_value(value)?;
@@ -209,12 +261,46 @@ impl Element {
     }
 
     /// Returns the javascript `property` of this element
-    pub async fn get_property(
-        &self,
-        property: impl AsRef<str>,
-    ) -> Result<Option<serde_json::Value>> {
+    pub async fn property(&self, property: impl AsRef<str>) -> Result<Option<serde_json::Value>> {
         let js_fn = format!("function() {{ return this.{}; }}", property.as_ref());
         let resp = self.call_js_fn(js_fn, false).await?;
         Ok(resp.result.value)
+    }
+}
+
+/// Stream over all element's attributes
+#[must_use = "streams do nothing unless polled"]
+pub struct AttributeStream<'a> {
+    attributes: Vec<String>,
+    fut: Option<(
+        String,
+        Pin<Box<dyn Future<Output = Result<Option<String>>> + 'a>>,
+    )>,
+    element: &'a Element,
+}
+
+impl<'a> Stream for AttributeStream<'a> {
+    type Item = (String, Result<Option<String>>);
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let pin = self.get_mut();
+
+        if pin.fut.is_none() {
+            if let Some(name) = pin.attributes.pop() {
+                let fut = Box::pin(pin.element.attribute(name.clone()));
+                pin.fut = Some((name, fut));
+            } else {
+                return Poll::Ready(None);
+            }
+        }
+
+        if let Some((name, mut fut)) = pin.fut.take() {
+            if let Poll::Ready(res) = fut.poll_unpin(cx) {
+                return Poll::Ready(Some((name, res)));
+            } else {
+                pin.fut = Some((name, fut));
+            }
+        }
+        Poll::Pending
     }
 }
