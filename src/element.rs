@@ -112,7 +112,32 @@ impl Element {
             .ok_or_else(|| CdpError::msg("Node is either not visible or not an HTMLElement"))
     }
 
-    /// Calls function with given declaration on the element
+    /// Submits a javascript function to the page and returns the evaluated
+    /// result
+    ///
+    /// # Example get the element as JSON object
+    ///
+    /// ```no_run
+    /// # use chromiumoxid::element::Element;
+    /// # use chromiumoxid::error::Result;
+    /// # async fn demo(element: Element) -> Result<()> {
+    ///     let js_fn = "function() { return this; }";
+    ///     let element_json = element.call_js_fn(js_fn, false).await?;
+    ///     # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Execute an async javascript function
+    ///
+    /// ```no_run
+    /// # use chromiumoxid::element::Element;
+    /// # use chromiumoxid::error::Result;
+    /// # async fn demo(element: Element) -> Result<()> {
+    ///     let js_fn = "async function() { return this; }";
+    ///     let element_json = element.call_js_fn(js_fn, true).await?;
+    ///     # Ok(())
+    /// # }
+    /// ```
     pub async fn call_js_fn(
         &self,
         function_declaration: impl Into<String>,
@@ -128,6 +153,10 @@ impl Element {
             .await?)
     }
 
+    /// Scrolls the element into view.
+    ///
+    /// Fails if the element's node is not a HTML element or is detached from
+    /// the document
     pub async fn scroll_into_view(&self) -> Result<&Self> {
         let resp = self
             .call_js_fn(
