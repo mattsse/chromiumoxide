@@ -5,19 +5,25 @@ use std::ops::Deref;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
-/// A Message sent by the client
+/// A Request sent by the client, identified by the `id`
 #[derive(Serialize, Debug, PartialEq)]
 pub struct MethodCall {
     /// Identifier for this method call
     ///
     /// [`MethodCall`] id's must be unique for every session
     pub id: CallId,
+    /// The method identifier
+    pub method: Cow<'static, str>,
+    /// The CDP session id of any
     #[serde(rename = "sessionId", skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
-    pub method: Cow<'static, str>,
+    /// The payload of the request
     pub params: serde_json::Value,
 }
 
+/// Identifier for a request send to the chromium server
+///
+/// All requests (`MethodCall`) must contain a unique identifier.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CallId(usize);
 
@@ -28,19 +34,25 @@ impl fmt::Display for CallId {
 }
 
 impl CallId {
+    /// Create a new id
     pub fn new(id: usize) -> Self {
         CallId(id)
     }
 }
 
+/// Trait that all the request types have to implement.
 pub trait Command: serde::ser::Serialize + Method {
+    /// The type of the response this request triggers on the chromium server
     type Response: serde::de::DeserializeOwned + fmt::Debug;
 
+    /// deserialize the response from json
     fn response_from_value(response: serde_json::Value) -> serde_json::Result<Self::Response> {
         serde_json::from_value(response)
     }
 }
 
+/// A generic, successful,  response of a request where the `result` has been
+/// serialized into the `Command::Response` type.
 pub struct CommandResponse<T>
 where
     T: fmt::Debug,
@@ -50,6 +62,10 @@ where
     pub method: Cow<'static, str>,
 }
 
+/// Represents the successfully deserialization of an incoming response.
+///
+/// A response can either contain the result (`Command::Response`) are an error
+/// `Error`.
 pub type CommandResult<T> = Result<CommandResponse<T>, Error>;
 
 impl<T: fmt::Debug> Deref for CommandResponse<T> {
@@ -60,12 +76,15 @@ impl<T: fmt::Debug> Deref for CommandResponse<T> {
     }
 }
 
+/// A received `Event` from the websocket where the `params` is deserialized as
+/// json
 #[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct CdpJsonEventMessage {
     /// Name of the method
     pub method: Cow<'static, str>,
+    /// The session this event is meant for.
     pub session_id: Option<String>,
-    /// Json params
+    /// Json payload of the event
     pub params: serde_json::Value,
 }
 
@@ -81,10 +100,14 @@ impl Event for CdpJsonEventMessage {
     }
 }
 
+/// A trait that mark
 pub trait Event: Method + DeserializeOwned {
+    /// The identifier of the session this event was meant for.
     fn session_id(&self) -> Option<&str>;
 }
 
+/// `Method`s are message types that contain the field `method =
+/// Self::identifier()` in their json body.
 pub trait Method {
     /// The whole string identifier for this method like: `DOM.removeNode`
     fn identifier(&self) -> Cow<'static, str>;
@@ -117,12 +140,15 @@ pub trait Method {
     }
 }
 
-/// A cdp request
+/// A Wrapper for json serialized requests
 #[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct Request {
+    /// The identifier for the type of this request.
     pub method: Cow<'static, str>,
+    /// The session this request targets
     #[serde(rename = "sessionId", skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
+    /// The serialized `Command` payload
     pub params: serde_json::Value,
 }
 
@@ -161,15 +187,22 @@ pub struct Response {
     pub error: Option<Error>,
 }
 
-// TODO impl custom deserialize https://users.rust-lang.org/t/how-to-deserialize-untagged-enums-fast/28331/4
+/// An incoming message read from the web socket can either be a response to a
+/// previously submitted `Request`, identified by an identifier `id`, or an
+/// `Event` emitted by the server.
 #[derive(Deserialize, Debug, Clone)]
 #[serde(untagged)]
 #[allow(clippy::large_enum_variant)]
 pub enum Message<T = CdpJsonEventMessage> {
+    /// A response for a request
     Response(Response),
+    /// An emitted event from the server
     Event(T),
 }
 
+/// A response can either contain the `Command::Response` type in the `result`
+/// field of the payload or an `Error` in the `error` field if the request
+/// resulted in an error.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseError {
     pub id: CallId,
@@ -179,6 +212,8 @@ pub struct ResponseError {
     pub message: String,
 }
 
+/// Represents the error type emitted by the chromium server for failed
+/// requests.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Error {
     /// Error code
@@ -195,7 +230,7 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// Represents a binary type as defined in CDP
+/// Represents a binary type as defined in the CDP protocol.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Binary(String);
 

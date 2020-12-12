@@ -31,7 +31,7 @@ use chromiumoxid_cdp::cdp::events::CdpEvent;
 use chromiumoxid_cdp::cdp::events::CdpEventMessage;
 
 /// Standard timeout in MS
-pub const REQUEST_TIMEOUT: u64 = 30000;
+pub const REQUEST_TIMEOUT: u64 = 30_000;
 
 mod browser;
 pub mod emulation;
@@ -43,6 +43,8 @@ mod session;
 pub mod target;
 mod viewport;
 
+/// The handler that monitors the state of the chromium browser and drives all
+/// the requests and events.
 #[must_use = "streams do nothing unless polled"]
 #[derive(Debug)]
 pub struct Handler {
@@ -53,7 +55,6 @@ pub struct Handler {
     from_browser: Fuse<Receiver<HandlerMessage>>,
     // default_ctx: BrowserContext,
     contexts: HashMap<BrowserContextId, BrowserContext>,
-    pages: Vec<(Fuse<Receiver<HandlerMessage>>, Arc<PageInner>)>,
     /// Used to loop over all targets in a consistent manner
     target_ids: Vec<TargetId>,
     /// The created and attached targets
@@ -73,6 +74,8 @@ pub struct Handler {
 }
 
 impl Handler {
+    /// Create a new `Handler` that drives the connection and listens for
+    /// messages on the receiver `rx`.
     pub(crate) fn new(mut conn: Connection<CdpEventMessage>, rx: Receiver<HandlerMessage>) -> Self {
         let discover = SetDiscoverTargetsParams::new(true);
         let _ = conn.submit_command(
@@ -85,7 +88,6 @@ impl Handler {
             pending_commands: Default::default(),
             from_browser: rx.fuse(),
             contexts: Default::default(),
-            pages: Default::default(),
             target_ids: Default::default(),
             targets: Default::default(),
             navigations: Default::default(),
@@ -110,30 +112,33 @@ impl Handler {
     fn on_navigation_response(&mut self, id: NavigationId, resp: Response) {
         if let Some(nav) = self.navigations.remove(&id) {
             match nav {
-                NavigationRequest::Goto(mut nav) => {
+                NavigationRequest::Navigate(mut nav) => {
                     if nav.navigated {
                         let _ = nav.tx.send(Ok(resp));
                     } else {
                         nav.set_response(resp);
-                        self.navigations.insert(id, NavigationRequest::Goto(nav));
+                        self.navigations
+                            .insert(id, NavigationRequest::Navigate(nav));
                     }
                 }
             }
         }
     }
 
+    /// A navigation has finished.
     fn on_navigation_lifecycle_completed(&mut self, res: Result<NavigationOk, NavigationError>) {
         match res {
             Ok(ok) => {
                 let id = *ok.navigation_id();
                 if let Some(nav) = self.navigations.remove(&id) {
                     match nav {
-                        NavigationRequest::Goto(mut nav) => {
+                        NavigationRequest::Navigate(mut nav) => {
                             if let Some(resp) = nav.response.take() {
                                 let _ = nav.tx.send(Ok(resp));
                             } else {
                                 nav.set_navigated();
-                                self.navigations.insert(id, NavigationRequest::Goto(nav));
+                                self.navigations
+                                    .insert(id, NavigationRequest::Navigate(nav));
                             }
                         }
                     }
@@ -142,7 +147,7 @@ impl Handler {
             Err(err) => {
                 if let Some(nav) = self.navigations.remove(err.navigation_id()) {
                     match nav {
-                        NavigationRequest::Goto(nav) => {
+                        NavigationRequest::Navigate(nav) => {
                             let _ = nav.tx.send(Err(err.into()));
                         }
                     }
@@ -151,9 +156,8 @@ impl Handler {
         }
     }
 
-    /// Received a response to a request
+    /// Received a response to a request.
     fn on_response(&mut self, resp: Response) {
-        // log::debug!("Received resp {}", resp.id);
         if let Some((req, method, _)) = self.pending_commands.remove(&resp.id) {
             match req {
                 PendingRequest::CreateTarget(tx) => {
@@ -221,6 +225,8 @@ impl Handler {
         Ok(())
     }
 
+    /// Send the Request over to the server and store its identifier to handle
+    /// the response once received.
     fn submit_navigation(&mut self, id: NavigationId, req: CdpRequest, now: Instant) {
         let call_id = self
             .conn
@@ -244,8 +250,10 @@ impl Handler {
                     let (req, tx) = msg.split();
                     let id = self.next_navigation_id();
                     target.goto(FrameNavigationRequest::new(id, req));
-                    self.navigations
-                        .insert(id, NavigationRequest::Goto(NavigationInProgress::new(tx)));
+                    self.navigations.insert(
+                        id,
+                        NavigationRequest::Navigate(NavigationInProgress::new(tx)),
+                    );
                 } else {
                     let _ = self.submit_external_command(msg, now);
                 }
@@ -253,21 +261,28 @@ impl Handler {
         }
     }
 
+    /// An identifier for queued `NavigationRequest`s.
     fn next_navigation_id(&mut self) -> NavigationId {
         let id = NavigationId(self.next_navigation_id);
         self.next_navigation_id = self.next_navigation_id.wrapping_add(1);
         id
     }
 
-    /// Create a new page and send it to the receiver
+    /// Create a new page and send it to the receiver when ready
+    ///
+    /// First a `CreateTargetParams` is send to the server, this will trigger
+    /// `EventTargetCreated` which results in a new `Target` being created.
+    /// Once the response to the request is received the initialization process
+    /// of the target kicks in. This triggers a queue of initialization requests
+    /// of the `Target`, once those are all processed and the `url` fo the
+    /// `CreateTargetParams` has finished loading (The `Target`'s `Page` is
+    /// ready and idle), the `Target` sends its newly created `Page` as response
+    /// to the initiator (`tx`) of the `CreateTargetParams` request.
     fn create_page(&mut self, params: CreateTargetParams, tx: OneshotSender<Result<Page>>) {
         let method = params.identifier();
         match serde_json::to_value(params) {
             Ok(params) => match self.conn.submit_command(method.clone(), None, params) {
                 Ok(call_id) => {
-                    log::debug!("Submitted request and waiting for response");
-                    // TODO insert watcher in frame
-
                     self.pending_commands.insert(
                         call_id,
                         (PendingRequest::CreateTarget(tx), method, Instant::now()),
@@ -283,6 +298,7 @@ impl Handler {
         }
     }
 
+    /// Process an incoming event read from the websocket
     fn on_event(&mut self, event: CdpEventMessage) {
         if let Some(ref session_id) = event.session_id {
             if let Some(session) = self.sessions.get(session_id) {
@@ -309,6 +325,7 @@ impl Handler {
         self.targets.insert(target.target_id().clone(), target);
     }
 
+    /// A new session is attached to a target
     fn on_attached_to_target(&mut self, event: EventAttachedToTarget) {
         let session = Session::new(
             event.session_id.clone(),
@@ -333,6 +350,7 @@ impl Handler {
         }
     }
 
+    /// Fired when the target was destroyed in the browser
     fn on_target_destroyed(&mut self, event: EventTargetDestroyed) {
         if let Some(target) = self.targets.remove(&event.target_id) {
             // TODO shutdown?
@@ -360,7 +378,6 @@ impl Stream for Handler {
                         pin.submit_external_command(cmd, now).unwrap();
                     }
                     HandlerMessage::CreatePage(params, tx) => {
-                        log::debug!("Received Create Page");
                         pin.create_page(params, tx);
                     }
                     HandlerMessage::GetPages(tx) => {
@@ -372,7 +389,9 @@ impl Stream for Handler {
                             .collect();
                         let _ = tx.send(pages);
                     }
-                    HandlerMessage::Subscribe => {}
+                    HandlerMessage::Subscribe => {
+                        // TODO implement subscriptions
+                    }
                 }
             }
 
@@ -389,8 +408,7 @@ impl Stream for Handler {
                                 );
                             }
                             TargetEvent::RequestTimeout(_) => {
-                                // TODO close and remove
-                                // continue 'outer;
+                                continue;
                             }
                             TargetEvent::Message(msg) => {
                                 pin.on_target_message(&mut target, msg, now);
@@ -427,19 +445,21 @@ impl Stream for Handler {
             }
 
             if done {
+                // no events/responses were read from the websocket
                 return Poll::Pending;
             }
         }
     }
 }
 
+/// Wraps the sender half of the channel who requested a navigation
 #[derive(Debug)]
 pub struct NavigationInProgress<T> {
     /// Marker to indicate whether a navigation lifecycle has completed
     navigated: bool,
     /// The response of the issued navigation request
     response: Option<Response>,
-    /// Sender towards the receiver who initiated the navigation request
+    /// Sender who initiated the navigation request
     tx: OneshotSender<T>,
 }
 
@@ -452,25 +472,43 @@ impl<T> NavigationInProgress<T> {
         }
     }
 
+    /// The response to the cdp request has arrived
     fn set_response(&mut self, resp: Response) {
         self.response = Some(resp);
     }
 
+    /// The navigation process has finished, the page finished loading.
     fn set_navigated(&mut self) {
         self.navigated = true;
     }
 }
 
+/// Request type for navigation
 #[derive(Debug)]
 enum NavigationRequest {
-    Goto(NavigationInProgress<Result<Response>>),
+    /// Represents a simple `NavigateParams` ("Page.navigate")
+    Navigate(NavigationInProgress<Result<Response>>),
+    // TODO are there more?
 }
 
+/// Different kind of submitted request submitted from the  `Handler` to the
+/// `Connection` and being waited on for the response.
 #[derive(Debug)]
 enum PendingRequest {
+    /// A Request to create a new `Target` that results in the creation of a
+    /// `Page` that represents a browser page.
     CreateTarget(OneshotSender<Result<Page>>),
+    /// A Request to navigate a specific `Target`.
+    ///
+    /// Navigation requests are not automatically completed once the response to
+    /// the raw cdp navigation request (like `NavigateParams`) arrives, but only
+    /// after the `Target` notifies the `Handler` that the `Page` has finished
+    /// loading, which comes after the response.
     Navigate(NavigationId),
+    /// A common request received via a channel (`Page`).
     ExternalCommand(OneshotSender<Result<Response>>),
+    /// Requests that are initiated directly from a `Target` (all the
+    /// initialization commands).
     InternalCommand(TargetId),
 }
 
