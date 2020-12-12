@@ -6,10 +6,16 @@ use futures::channel::oneshot::channel as oneshot_channel;
 use futures::stream::Fuse;
 use std::sync::Arc;
 
+use crate::box_model::Point;
 use crate::cmd::{to_command_response, CommandMessage};
-use crate::error::Result;
+use crate::error::{CdpError, Result};
+use crate::keys;
 use chromiumoxid_cdp::cdp::browser_protocol::dom::{
     NodeId, QuerySelectorAllParams, QuerySelectorParams,
+};
+use chromiumoxid_cdp::cdp::browser_protocol::input::{
+    DispatchKeyEventParams, DispatchKeyEventType, DispatchMouseEventParams, DispatchMouseEventType,
+    MouseButton,
 };
 use futures::{SinkExt, StreamExt};
 
@@ -78,6 +84,88 @@ impl PageInner {
             .await?
             .result
             .node_ids)
+    }
+
+    /// Moves the mouse to this point (dispatches a mouseMoved event)
+    pub async fn move_mouse_to_point(&self, point: Point) -> Result<&Self> {
+        let cmd = DispatchMouseEventParams::builder()
+            .r#type(DispatchMouseEventType::MouseMoved)
+            .x(point.x)
+            .y(point.y)
+            .build()
+            .unwrap();
+        self.execute(cmd).await?;
+        Ok(self)
+    }
+
+    pub async fn click_point(&self, point: Point) -> Result<&Self> {
+        use serde::Serializer;
+        let cmd = DispatchMouseEventParams::builder()
+            .x(point.x)
+            .y(point.y)
+            .button(MouseButton::Left)
+            .click_count(1);
+
+        self.execute(
+            cmd.clone()
+                .r#type(DispatchMouseEventType::MousePressed)
+                .build()
+                .unwrap(),
+        )
+        .await?;
+
+        self.execute(
+            cmd.r#type(DispatchMouseEventType::MouseReleased)
+                .build()
+                .unwrap(),
+        )
+        .await?;
+        Ok(self)
+    }
+
+    pub async fn type_str(&self, input: impl AsRef<str>) -> Result<&Self> {
+        for c in input.as_ref().split("") {
+            // split call above will have empty string at start and end which we won't type
+            if c == "" {
+                continue;
+            }
+            self.press_key(c).await?;
+        }
+        Ok(self)
+    }
+
+    pub async fn press_key(&self, key: impl AsRef<str>) -> Result<&Self> {
+        let definition = keys::get_key_definition(key.as_ref())
+            .ok_or_else(|| CdpError::msg(format!("Key not found: {}", key.as_ref())))?;
+
+        let mut cmd = DispatchKeyEventParams::builder();
+
+        // See https://github.com/GoogleChrome/puppeteer/blob/62da2366c65b335751896afbb0206f23c61436f1/lib/Input.js#L114-L115
+        // And https://github.com/GoogleChrome/puppeteer/blob/62da2366c65b335751896afbb0206f23c61436f1/lib/Input.js#L52
+        let key_down_event_type = if let Some(txt) = definition.text {
+            cmd = cmd.text(txt);
+            DispatchKeyEventType::KeyDown
+        } else {
+            if definition.key.len() == 1 {
+                cmd = cmd.text(definition.key);
+                DispatchKeyEventType::KeyDown
+            } else {
+                DispatchKeyEventType::RawKeyDown
+            }
+        };
+
+        cmd = cmd
+            .r#type(DispatchKeyEventType::KeyDown)
+            .key(definition.key)
+            .code(definition.code)
+            .windows_virtual_key_code(definition.key_code)
+            .native_virtual_key_code(definition.key_code);
+
+        self.execute(cmd.clone().r#type(key_down_event_type).build().unwrap())
+            .await?;
+        self.execute(cmd.r#type(DispatchKeyEventType::KeyUp).build().unwrap())
+            .await?;
+        Ok(self)
     }
 }
 

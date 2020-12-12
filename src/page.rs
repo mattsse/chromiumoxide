@@ -1,11 +1,6 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use chromiumoxid_types::*;
-
-use crate::element::Element;
-use crate::error::{CdpError, Result};
-use crate::handler::PageInner;
 use chromiumoxid_cdp::cdp::browser_protocol;
 use chromiumoxid_cdp::cdp::browser_protocol::dom::*;
 use chromiumoxid_cdp::cdp::browser_protocol::network::{
@@ -16,6 +11,12 @@ use chromiumoxid_cdp::cdp::browser_protocol::target::{ActivateTargetParams, Sess
 use chromiumoxid_cdp::cdp::js_protocol;
 use chromiumoxid_cdp::cdp::js_protocol::debugger::GetScriptSourceParams;
 use chromiumoxid_cdp::cdp::js_protocol::runtime::{EvaluateParams, RemoteObject, ScriptId};
+use chromiumoxid_types::*;
+
+use crate::box_model::Point;
+use crate::element::Element;
+use crate::error::{CdpError, Result};
+use crate::handler::PageInner;
 
 #[derive(Debug)]
 pub struct Page {
@@ -29,13 +30,13 @@ impl Page {
     }
 
     /// Navigate directly to the given URL.
-    pub async fn goto(&self, params: impl Into<NavigateParams>) -> Result<FrameId> {
+    pub async fn goto(&self, params: impl Into<NavigateParams>) -> Result<&Self> {
         let res = self.execute(params.into()).await?;
         if let Some(err) = res.result.error_text {
             return Err(CdpError::ChromeMessage(err));
         }
 
-        Ok(res.result.frame_id)
+        Ok(self)
     }
 
     /// The identifier of the `Target` this page belongs to
@@ -100,6 +101,17 @@ impl Page {
 
     pub async fn close(self) {
         todo!()
+    }
+
+    /// Moves the mouse to this point (dispatches a mouseMoved event)
+    pub async fn move_mouse_to_point(&self, point: Point) -> Result<&Self> {
+        self.inner.move_mouse_to_point(point).await?;
+        Ok(self)
+    }
+
+    pub async fn click_point(&self, point: Point) -> Result<&Self> {
+        self.inner.click_point(point).await?;
+        Ok(self)
     }
 
     /// Print the current page as pdf.

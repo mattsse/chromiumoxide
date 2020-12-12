@@ -1,13 +1,17 @@
-use crate::error::{CdpError, Result};
-use futures::future;
 use std::sync::Arc;
 
-use crate::handler::PageInner;
+use futures::future;
+
 use chromiumoxid_cdp::cdp::browser_protocol::dom::{
-    BackendNodeId, DescribeNodeParams, NodeId,
-    ResolveNodeParams,
+    BackendNodeId, DescribeNodeParams, GetContentQuadsParams, NodeId, ResolveNodeParams,
 };
-use chromiumoxid_cdp::cdp::js_protocol::runtime::RemoteObjectId;
+use chromiumoxid_cdp::cdp::js_protocol::runtime::{
+    CallFunctionOnParams, CallFunctionOnReturns, RemoteObjectId, RemoteObjectType,
+};
+
+use crate::box_model::{ElementQuad, Point};
+use crate::error::{CdpError, Result};
+use crate::handler::PageInner;
 
 /// A handle to a [DOM Element](https://developer.mozilla.org/en-US/docs/Web/API/Element).
 #[derive(Debug)]
@@ -75,6 +79,105 @@ impl Element {
 
     /// Return all `Element`s in the document that match the given selector
     pub async fn find_elements(&self, selector: impl Into<String>) -> Result<Vec<Element>> {
-        Ok(Element::from_nodes(&self.tab, &self.tab.find_elements(selector, self.node_id).await?).await?)
+        Ok(Element::from_nodes(
+            &self.tab,
+            &self.tab.find_elements(selector, self.node_id).await?,
+        )
+        .await?)
+    }
+
+    /// Returns the best `Point` of this node to execute a click on.
+    pub async fn clickable_point(&self) -> Result<Point> {
+        let content_quads = self
+            .tab
+            .execute(
+                GetContentQuadsParams::builder()
+                    .backend_node_id(self.backend_node_id)
+                    .build(),
+            )
+            .await?;
+        content_quads
+            .quads
+            .iter()
+            .filter(|q| q.inner().len() == 8)
+            .map(|q| ElementQuad::from_quad(q))
+            .filter(|q| q.quad_area() > 1.)
+            .map(|q| q.quad_center())
+            .next()
+            .ok_or_else(|| CdpError::msg("Node is either not visible or not an HTMLElement"))
+    }
+
+    /// Calls function with given declaration on the element
+    pub async fn call_js_fn(
+        &self,
+        function_declaration: &str,
+        await_promise: bool,
+    ) -> Result<CallFunctionOnReturns> {
+        let resp = self
+            .tab
+            .execute(
+                CallFunctionOnParams::builder()
+                    .object_id(self.remote_object_id.clone())
+                    .function_declaration(function_declaration)
+                    .generate_preview(true)
+                    .await_promise(await_promise)
+                    .build()
+                    .unwrap(),
+            )
+            .await?;
+        Ok(resp.result)
+    }
+
+    pub async fn scroll_into_view(&self) -> Result<&Self> {
+        let resp = self
+            .call_js_fn(
+                "async function() {
+                if (!this.isConnected)
+                    return 'Node is detached from document';
+                if (this.nodeType !== Node.ELEMENT_NODE)
+                    return 'Node is not of type HTMLElement';
+
+                const visibleRatio = await new Promise(resolve => {
+                    const observer = new IntersectionObserver(entries => {
+                        resolve(entries[0].intersectionRatio);
+                        observer.disconnect();
+                    });
+                    observer.observe(this);
+                });
+
+                if (visibleRatio !== 1.0)
+                    this.scrollIntoView({
+                        block: 'center',
+                        inline: 'center',
+                        behavior: 'instant'
+                    });
+                return false;
+            }",
+                true,
+            )
+            .await?;
+
+        if resp.result.r#type == RemoteObjectType::String {
+            let error_text = resp.result.value.unwrap().as_str().unwrap().to_string();
+            return Err(CdpError::ScrollingFailed(error_text));
+        }
+        Ok(self)
+    }
+
+    /// Click on the element
+    pub async fn click(&self) -> Result<&Self> {
+        let center = self.scroll_into_view().await?.clickable_point().await?;
+        self.tab.click_point(center).await?;
+        Ok(self)
+    }
+
+    pub async fn type_str(&self, input: impl AsRef<str>) -> Result<&Self> {
+        self.tab.type_str(input).await?;
+        Ok(self)
+    }
+
+    pub async fn press_key(&self, key: impl AsRef<str>) -> Result<&Self> {
+        self.tab.press_key(key).await?;
+        Ok(self)
     }
 }

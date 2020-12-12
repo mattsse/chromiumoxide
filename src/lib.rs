@@ -10,6 +10,7 @@
 //     }
 // }
 
+pub mod box_model;
 pub mod browser;
 pub(crate) mod cmd;
 pub mod conn;
@@ -17,5 +18,6 @@ pub mod element;
 pub mod error;
 pub mod handler;
 pub mod keyboard;
+pub mod keys;
 pub mod page;
 pub mod query;

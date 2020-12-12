@@ -35,6 +35,8 @@ pub enum CdpError {
     ChromeMessage(String),
     #[error("{0}")]
     DecodeError(#[from] DecodeError),
+    #[error("{0}")]
+    ScrollingFailed(String),
 }
 impl CdpError {
     pub fn msg(msg: impl Into<String>) -> Self {
