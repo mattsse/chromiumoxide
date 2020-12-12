@@ -5,10 +5,11 @@ authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
 edition = "2018"
 license = "MIT OR APACHE-2.0"
 readme = "README.md"
+homepage = "https://github.com/mattsse/chromiumoxid"
 repository = "https://github.com/mattsse/chromiumoxid"
-
-[build-dependencies]
-chromiumoxid_pdl = { path = "chromiumoxid_pdl", version = "0.1.0" }
+description = "Library for interacting with a chrome instance with the chrome devtools protocol"
+keywords = ["chrome", "chromedriver", "puppeteer", "automation"]
+categories = ["web-programming", "api-bindings", "development-tools::testing"]
 
 [dependencies]
 async-tungstenite = { version = "0.10", features = ["async-std-runtime"] }
@@ -16,7 +17,6 @@ serde = { version = "1.0", features = ["derive"] }
 async-std = { version = "1.6", features = ["attributes", "unstable"] }
 anyhow = "1.0"
 futures = "0.3"
-chromiumoxid_pdl = { path = "chromiumoxid_pdl", version = "0.1.0" }
 chromiumoxid_types = { path = "chromiumoxid_types", version = "0.1.0" }
 chromiumoxid_cdp = { path = "chromiumoxid_cdp", version = "0.1.0" }
 serde_json = "1.0"
