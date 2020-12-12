@@ -12,7 +12,7 @@ use futures::SinkExt;
 
 use chromiumoxid_types::*;
 
-use crate::cmd::CommandMessage;
+use crate::cmd::{to_command_response, CommandMessage};
 use crate::conn::Connection;
 use crate::error::{CdpError, Result};
 use crate::handler::{Handler, HandlerMessage};
@@ -120,19 +120,7 @@ impl Browser {
             .send(HandlerMessage::Command(msg))
             .await?;
         let resp = rx.await??;
-
-        if let Some(res) = resp.result {
-            let result = serde_json::from_value(res)?;
-            Ok(CommandResponse {
-                id: resp.id,
-                result,
-                method,
-            })
-        } else if let Some(err) = resp.error {
-            Err(err.into())
-        } else {
-            Err(CdpError::NoResponse)
-        }
+        to_command_response::<T>(resp, method)
     }
 }
 

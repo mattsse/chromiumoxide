@@ -6,12 +6,31 @@ use std::collections::VecDeque;
 use std::iter::FromIterator;
 use std::time::{Duration, Instant};
 
-use chromiumoxid_types::{Command, Method, Request, Response};
+use chromiumoxid_types::{Command, CommandResponse, Method, Request, Response};
 
-use crate::error::{DeadlineExceeded, Result};
+use crate::error::{CdpError, DeadlineExceeded, Result};
 use crate::handler::REQUEST_TIMEOUT;
 use chromiumoxid_cdp::cdp::browser_protocol::page::NavigateParams;
 use chromiumoxid_cdp::cdp::browser_protocol::target::SessionId;
+
+/// Deserialize a response
+pub(crate) fn to_command_response<T: Command>(
+    resp: Response,
+    method: Cow<'static, str>,
+) -> Result<CommandResponse<T::Response>> {
+    if let Some(res) = resp.result {
+        let result = serde_json::from_value(res)?;
+        Ok(CommandResponse {
+            id: resp.id,
+            result,
+            method,
+        })
+    } else if let Some(err) = resp.error {
+        Err(err.into())
+    } else {
+        Err(CdpError::NoResponse)
+    }
+}
 
 /// Messages used internally to communicate with the connection, which is
 /// executed in the the background task.

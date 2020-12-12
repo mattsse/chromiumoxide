@@ -6,8 +6,8 @@ use futures::channel::oneshot::channel as oneshot_channel;
 use futures::stream::Fuse;
 use std::sync::Arc;
 
-use crate::cmd::CommandMessage;
-use crate::error::{CdpError, Result};
+use crate::cmd::{to_command_response, CommandMessage};
+use crate::error::Result;
 use futures::{SinkExt, StreamExt};
 
 #[derive(Debug)]
@@ -56,7 +56,7 @@ impl PageInner {
     }
 }
 
-async fn execute<T: Command>(
+pub(crate) async fn execute<T: Command>(
     cmd: T,
     mut sender: Sender<TargetMessage>,
     session: Option<SessionId>,
@@ -67,17 +67,5 @@ async fn execute<T: Command>(
 
     sender.send(TargetMessage::Command(msg)).await?;
     let resp = rx.await??;
-
-    if let Some(res) = resp.result {
-        let result = serde_json::from_value(res)?;
-        Ok(CommandResponse {
-            id: resp.id,
-            result,
-            method,
-        })
-    } else if let Some(err) = resp.error {
-        Err(err.into())
-    } else {
-        Err(CdpError::NoResponse)
-    }
+    to_command_response::<T>(resp, method)
 }

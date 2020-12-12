@@ -1,7 +1,6 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::time::Instant;
 
 use fnv::FnvHashMap;
@@ -11,12 +10,12 @@ use futures::stream::{Fuse, Stream, StreamExt};
 use futures::task::{Context, Poll};
 
 use chromiumoxid_types::Request as CdpRequest;
-use chromiumoxid_types::{CallId, Command, CommandResponse, Message, Method, Response};
+use chromiumoxid_types::{CallId, Message, Method, Response};
 pub(crate) use page::PageInner;
 
-use crate::cmd::CommandMessage;
+use crate::cmd::{to_command_response, CommandMessage};
 use crate::conn::Connection;
-use crate::error::{CdpError, Result};
+use crate::error::Result;
 use crate::handler::browser::BrowserContext;
 use crate::handler::frame::FrameNavigationRequest;
 use crate::handler::frame::{NavigationError, NavigationId, NavigationOk};
@@ -521,22 +520,4 @@ pub(crate) enum HandlerMessage {
     GetPages(OneshotSender<Vec<Page>>),
     Command(CommandMessage),
     Subscribe,
-}
-
-pub(crate) fn to_command_response<T: Command>(
-    resp: Response,
-    method: Cow<'static, str>,
-) -> Result<CommandResponse<T::Response>> {
-    if let Some(res) = resp.result {
-        let result = serde_json::from_value(res)?;
-        Ok(CommandResponse {
-            id: resp.id,
-            result,
-            method,
-        })
-    } else if let Some(err) = resp.error {
-        Err(err.into())
-    } else {
-        Err(CdpError::NoResponse)
-    }
 }

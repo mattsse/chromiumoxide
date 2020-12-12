@@ -1,13 +1,10 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use futures::channel::mpsc::Sender;
-use futures::channel::oneshot::channel as oneshot_channel;
-use futures::{future, SinkExt};
+use futures::future;
 
 use chromiumoxid_types::*;
 
-use crate::cmd::CommandMessage;
 use crate::element::Element;
 use crate::error::{CdpError, Result};
 use crate::handler::PageInner;
@@ -232,32 +229,6 @@ impl Page {
             .await?
             .result
             .script_source)
-    }
-}
-
-async fn execute<T: Command>(
-    cmd: T,
-    mut sender: Sender<CommandMessage>,
-    session: Option<SessionId>,
-) -> Result<CommandResponse<T::Response>> {
-    let (tx, rx) = oneshot_channel();
-    let method = cmd.identifier();
-    let msg = CommandMessage::with_session(cmd, tx, session)?;
-
-    sender.send(msg).await?;
-    let resp = rx.await??;
-
-    if let Some(res) = resp.result {
-        let result = serde_json::from_value(res)?;
-        Ok(CommandResponse {
-            id: resp.id,
-            result,
-            method,
-        })
-    } else if let Some(err) = resp.error {
-        Err(err.into())
-    } else {
-        Err(CdpError::NoResponse)
     }
 }
 
