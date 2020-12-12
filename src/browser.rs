@@ -122,6 +122,16 @@ impl Browser {
         let resp = rx.await??;
         to_command_response::<T>(resp, method)
     }
+
+    /// Return all of the pages of the browser
+    pub async fn pages(&self) -> Result<Vec<Page>> {
+        let (tx, rx) = oneshot_channel();
+        self.sender
+            .clone()
+            .send(HandlerMessage::GetPages(tx))
+            .await?;
+        Ok(rx?)
+    }
 }
 
 impl Drop for Browser {

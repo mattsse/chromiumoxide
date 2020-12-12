@@ -9,8 +9,12 @@ use futures::channel::oneshot::Sender as OneshotSender;
 use futures::stream::{Fuse, Stream, StreamExt};
 use futures::task::{Context, Poll};
 
-use chromiumoxid_types::Request as CdpRequest;
+use chromiumoxid_cdp::cdp::browser_protocol::browser::*;
+use chromiumoxid_cdp::cdp::browser_protocol::target::*;
+use chromiumoxid_cdp::cdp::events::CdpEvent;
+use chromiumoxid_cdp::cdp::events::CdpEventMessage;
 use chromiumoxid_types::{CallId, Message, Method, Response};
+use chromiumoxid_types::{CommandResponse, Request as CdpRequest};
 pub(crate) use page::PageInner;
 
 use crate::cmd::{to_command_response, CommandMessage};
@@ -24,10 +28,6 @@ use crate::handler::session::Session;
 use crate::handler::target::Target;
 use crate::handler::target::{TargetEvent, TargetMessage};
 use crate::page::Page;
-use chromiumoxid_cdp::cdp::browser_protocol::browser::*;
-use chromiumoxid_cdp::cdp::browser_protocol::target::*;
-use chromiumoxid_cdp::cdp::events::CdpEvent;
-use chromiumoxid_cdp::cdp::events::CdpEventMessage;
 
 /// Standard timeout in MS
 pub const REQUEST_TIMEOUT: u64 = 30_000;
@@ -241,22 +241,18 @@ impl Handler {
     }
 
     /// Process a message received by the target's page via channel
-    fn on_target_message(&mut self, target: &mut Target, msg: TargetMessage, now: Instant) {
-        match msg {
-            TargetMessage::Command(msg) => {
-                // if let some
-                if msg.is_navigation() {
-                    let (req, tx) = msg.split();
-                    let id = self.next_navigation_id();
-                    target.goto(FrameNavigationRequest::new(id, req));
-                    self.navigations.insert(
-                        id,
-                        NavigationRequest::Navigate(NavigationInProgress::new(tx)),
-                    );
-                } else {
-                    let _ = self.submit_external_command(msg, now);
-                }
-            }
+    fn on_target_message(&mut self, target: &mut Target, msg: CommandMessage, now: Instant) {
+        // if let some
+        if msg.is_navigation() {
+            let (req, tx) = msg.split();
+            let id = self.next_navigation_id();
+            target.goto(FrameNavigationRequest::new(id, req));
+            self.navigations.insert(
+                id,
+                NavigationRequest::Navigate(NavigationInProgress::new(tx)),
+            );
+        } else {
+            let _ = self.submit_external_command(msg, now);
         }
     }
 
@@ -409,7 +405,7 @@ impl Stream for Handler {
                             TargetEvent::RequestTimeout(_) => {
                                 continue;
                             }
-                            TargetEvent::Message(msg) => {
+                            TargetEvent::Command(msg) => {
                                 pin.on_target_message(&mut target, msg, now);
                             }
                             TargetEvent::NavigationRequest(id, req) => {

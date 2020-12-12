@@ -110,22 +110,17 @@ impl Element {
     /// Calls function with given declaration on the element
     pub async fn call_js_fn(
         &self,
-        function_declaration: &str,
+        function_declaration: impl Into<String>,
         await_promise: bool,
     ) -> Result<CallFunctionOnReturns> {
-        let resp = self
+        Ok(self
             .tab
-            .execute(
-                CallFunctionOnParams::builder()
-                    .object_id(self.remote_object_id.clone())
-                    .function_declaration(function_declaration)
-                    .generate_preview(true)
-                    .await_promise(await_promise)
-                    .build()
-                    .unwrap(),
+            .call_js_fn(
+                function_declaration,
+                await_promise,
+                self.remote_object_id.clone(),
             )
-            .await?;
-        Ok(resp.result)
+            .await?)
     }
 
     pub async fn scroll_into_view(&self) -> Result<&Self> {
@@ -179,5 +174,47 @@ impl Element {
     pub async fn press_key(&self, key: impl AsRef<str>) -> Result<&Self> {
         self.tab.press_key(key).await?;
         Ok(self)
+    }
+
+    /// The inner text of this element.
+    pub async fn inner_text(&self) -> Result<Option<String>> {
+        Ok(self.get_string_property("innerText").await?)
+    }
+
+    /// The inner HTML of this element.
+    pub async fn inner_html(&self) -> Result<Option<String>> {
+        Ok(self.get_string_property("innerHTML").await?)
+    }
+
+    /// The outer HTML of this element.
+    pub async fn outer_html(&self) -> Result<Option<String>> {
+        Ok(self.get_string_property("outerHTML").await?)
+    }
+
+    /// Returns the string property of the element.
+    ///
+    /// If the property is an empty String, `None` is returned.
+    pub async fn get_string_property(&self, property: impl AsRef<str>) -> Result<Option<String>> {
+        let property = property.as_ref();
+        let value = self
+            .get_property(property)
+            .await?
+            .ok_or_else(|| CdpError::NotFound)?;
+        let txt: String = serde_json::from_value(value)?;
+        if txt.is_empty() {
+            Ok(Some(txt))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Returns the javascript `property` of this element
+    pub async fn get_property(
+        &self,
+        property: impl AsRef<str>,
+    ) -> Result<Option<serde_json::Value>> {
+        let js_fn = format!("function() {{ return this.{}; }}", property.as_ref());
+        let resp = self.call_js_fn(js_fn, false).await?;
+        Ok(resp.result.value)
     }
 }

@@ -1,6 +1,9 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use futures::channel::oneshot::channel as oneshot_channel;
+use futures::SinkExt;
+
 use chromiumoxid_cdp::cdp::browser_protocol;
 use chromiumoxid_cdp::cdp::browser_protocol::dom::*;
 use chromiumoxid_cdp::cdp::browser_protocol::network::{
@@ -16,6 +19,7 @@ use chromiumoxid_types::*;
 use crate::box_model::Point;
 use crate::element::Element;
 use crate::error::{CdpError, Result};
+use crate::handler::target::TargetMessage;
 use crate::handler::PageInner;
 
 #[derive(Debug)]
@@ -50,9 +54,25 @@ impl Page {
     }
 
     /// Returns the current url of the page
-    pub async fn current_url(&self) -> Result<String> {
-        let res = self.execute(GetFrameTreeParams::default()).await?;
-        Ok(res.result.frame_tree.frame.url)
+    pub async fn url(&self) -> Result<Option<String>> {
+        let (tx, rx) = oneshot_channel();
+        self.inner
+            .sender()
+            .clone()
+            .send(TargetMessage::Url(tx))
+            .await?;
+        Ok(rx.await?)
+    }
+
+    /// Return the main frame of the page
+    pub async fn mainframe(&self) -> Result<Option<FrameId>> {
+        let (tx, rx) = oneshot_channel();
+        self.inner
+            .sender()
+            .clone()
+            .send(TargetMessage::MainFrame(tx))
+            .await?;
+        Ok(rx.await?)
     }
 
     /// Allows overriding user agent with the given string.
@@ -223,6 +243,28 @@ impl Page {
     /// Evaluates expression on global object.
     pub async fn evaluate(&self, evaluate: impl Into<EvaluateParams>) -> Result<RemoteObject> {
         Ok(self.execute(evaluate.into()).await?.result.result)
+    }
+
+    /// Returns the HTML content of the page
+    pub async fn content(&self) -> Result<String> {
+        let resp = self
+            .evaluate(
+                "{
+          let retVal = '';
+          if (document.doctype) {
+            retVal = new XMLSerializer().serializeToString(document.doctype);
+          }
+          if (document.documentElement) {
+            retVal += document.documentElement.outerHTML;
+          }
+          retVal
+      }
+      ",
+            )
+            .await?;
+        dbg!(resp.clone());
+        let value = resp.value.ok_or_else(|| CdpError::NotFound)?;
+        Ok(serde_json::from_value(value)?)
     }
 
     /// Returns source for the script with given id.

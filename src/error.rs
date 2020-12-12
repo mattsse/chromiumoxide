@@ -37,6 +37,8 @@ pub enum CdpError {
     DecodeError(#[from] DecodeError),
     #[error("{0}")]
     ScrollingFailed(String),
+    #[error("Requested value not found.")]
+    NotFound,
 }
 impl CdpError {
     pub fn msg(msg: impl Into<String>) -> Self {

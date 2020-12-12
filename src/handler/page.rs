@@ -17,6 +17,10 @@ use chromiumoxid_cdp::cdp::browser_protocol::input::{
     DispatchKeyEventParams, DispatchKeyEventType, DispatchMouseEventParams, DispatchMouseEventType,
     MouseButton,
 };
+use chromiumoxid_cdp::cdp::browser_protocol::page::FrameId;
+use chromiumoxid_cdp::cdp::js_protocol::runtime::{
+    CallFunctionOnParams, CallFunctionOnReturns, RemoteObjectId,
+};
 use futures::{SinkExt, StreamExt};
 
 #[derive(Debug)]
@@ -31,7 +35,7 @@ impl PageHandle {
         let page = PageInner {
             target_id,
             session_id,
-            commands,
+            sender: commands,
         };
         Self {
             rx: rx.fuse(),
@@ -48,12 +52,12 @@ impl PageHandle {
 pub(crate) struct PageInner {
     target_id: TargetId,
     session_id: SessionId,
-    commands: Sender<TargetMessage>,
+    sender: Sender<TargetMessage>,
 }
 
 impl PageInner {
     pub(crate) async fn execute<T: Command>(&self, cmd: T) -> Result<CommandResponse<T::Response>> {
-        Ok(execute(cmd, self.commands.clone(), Some(self.session_id.clone())).await?)
+        Ok(execute(cmd, self.sender.clone(), Some(self.session_id.clone())).await?)
     }
 
     pub fn target_id(&self) -> &TargetId {
@@ -62,6 +66,10 @@ impl PageInner {
 
     pub fn session_id(&self) -> &SessionId {
         &self.session_id
+    }
+
+    pub(crate) fn sender(&self) -> &Sender<TargetMessage> {
+        &self.sender
     }
 
     /// Returns the first element in the node which matches the given CSS
@@ -99,7 +107,6 @@ impl PageInner {
     }
 
     pub async fn click_point(&self, point: Point) -> Result<&Self> {
-        use serde::Serializer;
         let cmd = DispatchMouseEventParams::builder()
             .x(point.x)
             .y(point.y)
@@ -166,6 +173,28 @@ impl PageInner {
         self.execute(cmd.r#type(DispatchKeyEventType::KeyUp).build().unwrap())
             .await?;
         Ok(self)
+    }
+
+    /// Calls function with given declaration on the remote object with the
+    /// matching id
+    pub async fn call_js_fn(
+        &self,
+        function_declaration: impl Into<String>,
+        await_promise: bool,
+        remote_object_id: RemoteObjectId,
+    ) -> Result<CallFunctionOnReturns> {
+        let resp = self
+            .execute(
+                CallFunctionOnParams::builder()
+                    .object_id(remote_object_id)
+                    .function_declaration(function_declaration)
+                    .generate_preview(true)
+                    .await_promise(await_promise)
+                    .build()
+                    .unwrap(),
+            )
+            .await?;
+        Ok(resp.result)
     }
 }
 

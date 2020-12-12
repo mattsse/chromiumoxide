@@ -22,7 +22,7 @@ use crate::handler::page::PageHandle;
 use crate::handler::viewport::Viewport;
 use crate::handler::PageInner;
 use crate::page::Page;
-use chromiumoxid_cdp::cdp::browser_protocol::page::GetFrameTreeParams;
+use chromiumoxid_cdp::cdp::browser_protocol::page::{FrameId, GetFrameTreeParams};
 use chromiumoxid_cdp::cdp::browser_protocol::{
     browser::BrowserContextId,
     log as cdplog, performance,
@@ -304,7 +304,18 @@ impl Target {
 
             if let Some(handle) = self.page.as_mut() {
                 while let Poll::Ready(Some(msg)) = Pin::new(&mut handle.rx).poll_next(cx) {
-                    self.queued_events.push_back(TargetEvent::Message(msg));
+                    match msg {
+                        TargetMessage::Command(cmd) => {
+                            self.queued_events.push_back(TargetEvent::Command(cmd));
+                        }
+                        TargetMessage::MainFrame(tx) => {
+                            let _ = tx.send(self.frame_manager.main_frame().map(|f| f.id.clone()));
+                        }
+                        TargetMessage::Url(tx) => {
+                            let _ = tx
+                                .send(self.frame_manager.main_frame().and_then(|f| f.url.clone()));
+                        }
+                    }
                 }
             }
 
@@ -373,8 +384,8 @@ pub(crate) enum TargetEvent {
     NavigationResult(Result<NavigationOk, NavigationError>),
     /// An internal request timed out
     RequestTimeout(DeadlineExceeded),
-    /// A new message arrived via a channel
-    Message(TargetMessage),
+    /// A new command arrived via a channel
+    Command(CommandMessage),
 }
 
 // TODO this can be moved into the classes?
@@ -403,5 +414,10 @@ impl TargetInit {
 
 #[derive(Debug)]
 pub(crate) enum TargetMessage {
+    /// Execute a command within the session of this target
     Command(CommandMessage),
+    /// Return the main frame of this target
+    MainFrame(Sender<Option<FrameId>>),
+    /// Return the url of this target's page
+    Url(Sender<Option<String>>),
 }
