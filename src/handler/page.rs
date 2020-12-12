@@ -134,7 +134,7 @@ impl PageInner {
     pub async fn type_str(&self, input: impl AsRef<str>) -> Result<&Self> {
         for c in input.as_ref().split("") {
             // split call above will have empty string at start and end which we won't type
-            if c == "" {
+            if c.is_empty() {
                 continue;
             }
             self.press_key(c).await?;
@@ -153,13 +153,11 @@ impl PageInner {
         let key_down_event_type = if let Some(txt) = definition.text {
             cmd = cmd.text(txt);
             DispatchKeyEventType::KeyDown
+        } else if definition.key.len() == 1 {
+            cmd = cmd.text(definition.key);
+            DispatchKeyEventType::KeyDown
         } else {
-            if definition.key.len() == 1 {
-                cmd = cmd.text(definition.key);
-                DispatchKeyEventType::KeyDown
-            } else {
-                DispatchKeyEventType::RawKeyDown
-            }
+            DispatchKeyEventType::RawKeyDown
         };
 
         cmd = cmd

@@ -1,15 +1,15 @@
 use chromiumoxid::browser::{Browser, BrowserConfig};
 
-use futures::StreamExt;
 use chromiumoxid_cdp::cdp::browser_protocol::page::PrintToPdfParams;
+use chromiumoxid_cdp::cdp::js_protocol::runtime::EvaluateParams;
+use futures::StreamExt;
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     pretty_env_logger::init();
 
     let (browser, mut fut) =
-        // Browser::connect(std::env::var("CDP_URL").unwrap()).await?;
-        Browser::launch(BrowserConfig::builder().build().unwrap()).await?;
+        Browser::launch(BrowserConfig::builder().with_head().build().unwrap()).await?;
 
     let handle = async_std::task::spawn(async move {
         loop {
@@ -21,7 +21,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // std::thread::sleep(std::time::Duration::from_secs(5));
     let node = page.find_element("input#searchInput").await?;
 
-    node.
+    dbg!(node.attribute("type").await);
+
+    // dbg!(node.click()
+    //     .await?
+    //     .type_str("rust")
+    //     .await?.outer_html().await?);
+    //     .press_key("Enter")
+    //     .await;
     println!("done");
     // println!("PAGE:    {:?}", page);
     //

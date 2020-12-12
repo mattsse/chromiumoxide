@@ -206,12 +206,10 @@ impl FrameManager {
                     },
                 )));
             }
-        } else {
-            if let Some((req, watcher)) = self.pending_navigations.pop_front() {
-                let deadline = Instant::now() + Duration::from_millis(REQUEST_TIMEOUT);
-                self.navigation = Some((watcher, deadline));
-                return Some(FrameEvent::NavigationRequest(req.id, req.req));
-            }
+        } else if let Some((req, watcher)) = self.pending_navigations.pop_front() {
+            let deadline = Instant::now() + Duration::from_millis(REQUEST_TIMEOUT);
+            self.navigation = Some((watcher, deadline));
+            return Some(FrameEvent::NavigationRequest(req.id, req.req));
         }
         None
     }
@@ -256,7 +254,7 @@ impl FrameManager {
         if let Some(parent_frame_id) = parent_frame_id {
             if let Some(parent_frame) = self.frames.get_mut(&parent_frame_id) {
                 let frame = Frame::with_parent(frame_id.clone(), parent_frame);
-                self.frames.insert(frame_id.clone(), frame);
+                self.frames.insert(frame_id, frame);
             }
         }
     }
@@ -289,8 +287,7 @@ impl FrameManager {
                 main_frame
             } else {
                 // initial main frame navigation
-                let frame = Frame::new(frame.id.clone());
-                frame
+                Frame::new(frame.id.clone())
             };
             f.navigated(&frame);
             self.main_frame = Some(f.id.clone());
@@ -301,6 +298,9 @@ impl FrameManager {
     pub fn on_frame_navigated_within_document(&mut self, event: &EventNavigatedWithinDocument) {
         if let Some(frame) = self.frames.get_mut(&event.frame_id) {
             frame.navigated_within_url(event.url.clone());
+        }
+        if let Some((watcher, _)) = self.navigation.as_mut() {
+            watcher.on_frame_navigated_within_document(event);
         }
     }
 

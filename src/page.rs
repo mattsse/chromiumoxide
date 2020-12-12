@@ -263,7 +263,7 @@ impl Page {
             )
             .await?;
         dbg!(resp.clone());
-        let value = resp.value.ok_or_else(|| CdpError::NotFound)?;
+        let value = resp.value.ok_or(CdpError::NotFound)?;
         Ok(serde_json::from_value(value)?)
     }
 

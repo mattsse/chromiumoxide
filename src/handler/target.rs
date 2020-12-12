@@ -160,10 +160,12 @@ impl Target {
     }
 
     /// Received a response to a command issued by this target
+
     pub fn on_response(&mut self, resp: Response, method: &str) {
         if let Some(cmds) = self.init_state.commands_mut() {
             cmds.received_response(method);
         }
+        #[allow(clippy::single_match)] // allow for now
         match method {
             GetFrameTreeParams::IDENTIFIER => {
                 if let Some(resp) = resp
@@ -182,7 +184,7 @@ impl Target {
             // `FrameManager` events
             CdpEvent::PageFrameAttached(ev) => self
                 .frame_manager
-                .on_frame_attached(ev.frame_id.clone(), Some(ev.parent_frame_id.clone())),
+                .on_frame_attached(ev.frame_id.clone(), Some(ev.parent_frame_id)),
             CdpEvent::PageFrameDetached(ev) => self.frame_manager.on_frame_detached(&ev),
             CdpEvent::PageFrameNavigated(ev) => self.frame_manager.on_frame_navigated(ev.frame),
             CdpEvent::PageNavigatedWithinDocument(ev) => {
@@ -241,9 +243,7 @@ impl Target {
                 )));
             }
             TargetInit::InitializingFrame(cmds) => {
-                if self.session_id.is_none() {
-                    return None;
-                }
+                self.session_id.as_ref()?;
                 advance_state!(
                     self,
                     cx,

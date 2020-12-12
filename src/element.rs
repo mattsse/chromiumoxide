@@ -15,12 +15,14 @@ use crate::error::{CdpError, Result};
 use crate::handler::PageInner;
 use crate::layout::{ElementQuad, Point};
 
-/// A handle to a [DOM Element](https://developer.mozilla.org/en-US/docs/Web/API/Element).
+/// Represents a [DOM Element](https://developer.mozilla.org/en-US/docs/Web/API/Element).
 #[derive(Debug)]
 pub struct Element {
     /// The Unique object identifier
     pub remote_object_id: RemoteObjectId,
+    /// Identifier of the backend node.
     pub backend_node_id: BackendNodeId,
+    /// The identifier of the node this element represents.
     pub node_id: NodeId,
     tab: Arc<PageInner>,
 }
@@ -63,7 +65,7 @@ impl Element {
     pub(crate) async fn from_nodes(tab: &Arc<PageInner>, node_ids: &[NodeId]) -> Result<Vec<Self>> {
         Ok(future::join_all(
             node_ids
-                .into_iter()
+                .iter()
                 .copied()
                 .map(|id| Element::new(Arc::clone(tab), id)),
         )
@@ -248,10 +250,7 @@ impl Element {
     /// If the property is an empty String, `None` is returned.
     pub async fn string_property(&self, property: impl AsRef<str>) -> Result<Option<String>> {
         let property = property.as_ref();
-        let value = self
-            .property(property)
-            .await?
-            .ok_or_else(|| CdpError::NotFound)?;
+        let value = self.property(property).await?.ok_or(CdpError::NotFound)?;
         let txt: String = serde_json::from_value(value)?;
         if txt.is_empty() {
             Ok(Some(txt))
@@ -268,14 +267,16 @@ impl Element {
     }
 }
 
+pub type AttributeValueFuture<'a> = Option<(
+    String,
+    Pin<Box<dyn Future<Output = Result<Option<String>>> + 'a>>,
+)>;
+
 /// Stream over all element's attributes
 #[must_use = "streams do nothing unless polled"]
 pub struct AttributeStream<'a> {
     attributes: Vec<String>,
-    fut: Option<(
-        String,
-        Pin<Box<dyn Future<Output = Result<Option<String>>> + 'a>>,
-    )>,
+    fut: AttributeValueFuture<'a>,
     element: &'a Element,
 }
 

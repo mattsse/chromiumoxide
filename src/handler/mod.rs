@@ -515,5 +515,6 @@ pub(crate) enum HandlerMessage {
     CreatePage(CreateTargetParams, OneshotSender<Result<Page>>),
     GetPages(OneshotSender<Vec<Page>>),
     Command(CommandMessage),
+    #[allow(unused)] // allow until implemented
     Subscribe,
 }

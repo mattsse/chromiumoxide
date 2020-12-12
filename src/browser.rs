@@ -91,6 +91,11 @@ impl Browser {
         &self.debug_ws_url
     }
 
+    /// The config of the spawned chromium instance if any.
+    pub fn config(&self) -> Option<&BrowserConfig> {
+        self.config.as_ref()
+    }
+
     /// Create a new browser page
     pub async fn new_page(&self, params: impl Into<CreateTargetParams>) -> Result<Page> {
         let (tx, rx) = oneshot_channel();
@@ -358,7 +363,7 @@ impl BrowserConfig {
             cmd.arg(format!("--user-data-dir={}", user_data.display()));
         }
 
-        if let Some((width, height)) = self.window_size.clone() {
+        if let Some((width, height)) = self.window_size {
             cmd.arg(format!("--window-size={},{}", width, height));
         }
 

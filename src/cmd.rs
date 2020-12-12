@@ -100,6 +100,9 @@ pub struct CommandChain {
     timeout: Duration,
 }
 
+pub type NextCommand =
+    Poll<Option<Result<(Cow<'static, str>, serde_json::Value), DeadlineExceeded>>>;
+
 impl CommandChain {
     /// Creates a new `CommandChain` from an `Iterator`.
     ///
@@ -133,23 +136,18 @@ impl CommandChain {
 
     /// Return the next command to process or `None` if done.
     /// If the response timeout an error is returned instead
-    pub fn poll(
-        &mut self,
-        now: Instant,
-    ) -> Poll<Option<Result<(Cow<'static, str>, serde_json::Value), DeadlineExceeded>>> {
+    pub fn poll(&mut self, now: Instant) -> NextCommand {
         if let Some((_, deadline)) = self.waiting.as_ref() {
             if now > *deadline {
                 Poll::Ready(Some(Err(DeadlineExceeded::new(now, *deadline))))
             } else {
                 Poll::Pending
             }
+        } else if let Some((method, val)) = self.cmds.pop_front() {
+            self.waiting = Some((method.clone(), now + self.timeout));
+            Poll::Ready(Some(Ok((method, val))))
         } else {
-            if let Some((method, val)) = self.cmds.pop_front() {
-                self.waiting = Some((method.clone(), now + self.timeout));
-                Poll::Ready(Some(Ok((method, val))))
-            } else {
-                Poll::Ready(None)
-            }
+            Poll::Ready(None)
         }
     }
 }

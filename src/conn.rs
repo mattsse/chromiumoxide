@@ -83,8 +83,7 @@ impl<T: Event> Connection<T> {
         if self.pending_flush.is_none() && !self.needs_flush {
             if let Some(cmd) = self.pending_commands.pop_front() {
                 let msg = serde_json::to_string(&cmd)?;
-                Sink::start_send(Pin::new(&mut self.ws), msg.into())
-                    .map_err(|err| CdpError::Ws(err))?;
+                Sink::start_send(Pin::new(&mut self.ws), msg.into())?;
                 self.pending_flush = Some(cmd);
             }
         }
