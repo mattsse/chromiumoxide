@@ -130,7 +130,7 @@ impl Browser {
             .clone()
             .send(HandlerMessage::GetPages(tx))
             .await?;
-        Ok(rx?)
+        Ok(rx.await?)
     }
 }
 
