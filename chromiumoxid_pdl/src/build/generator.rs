@@ -484,6 +484,12 @@ impl Generator {
                 self.store_size(&struct_ident, size);
                 let struct_def = quote! {
                     pub struct #name( #wrapped_ty);
+
+                    impl #name {
+                        pub fn inner(&self) -> &#wrapped_ty {
+                            &self.0
+                        }
+                    }
                 };
 
                 // add Hash +  Eq for integer and string types
@@ -586,6 +592,7 @@ impl Generator {
                 #(#vars),*
             }
         };
+        // TODO add renames
 
         // from str to string impl
         let vars: Vec<_> = variants
@@ -792,13 +799,13 @@ fn generate_enum_str_fns(name: &Ident, vars: &[Ident], str_vals: &[Vec<String>])
     }
 
     quote! {
-        impl #name {
-        pub fn as_str(&self) -> &'static str {
-            match self {
-                #( #name::#vars => #as_str_idents ),*
+        impl AsRef<str> for #name {
+            fn as_ref(&self) -> &str {
+                match self {
+                    #( #name::#vars => #as_str_idents ),*
+                }
             }
         }
-    }
 
     impl ::std::str::FromStr for #name {
         type Err = String;
@@ -944,15 +951,32 @@ impl SerdeSupport {
         }
     }
 
+    pub(crate) fn generate_rename(&self, rename: &str) -> TokenStream {
+        match self {
+            SerdeSupport::None => TokenStream::default(),
+            SerdeSupport::Default => quote! {
+                 #[serde(rename = #rename)]
+            },
+            SerdeSupport::Feature(feature) => {
+                quote! {
+                     #[cfg_attr(feature = #feature, serde(rename = #rename))]
+                }
+            }
+        }
+    }
+
     fn generate_variant(&self, var: &Variant) -> TokenStream {
         let v = format_ident!("{}", var.name.to_camel_case());
+        let rename = self.generate_rename(var.name.as_ref());
         if let Some(desc) = var.description.as_ref() {
             quote! {
                 #[doc = #desc]
+                #rename
                 #v
             }
         } else {
             quote! {
+                #rename
                 #v
             }
         }
