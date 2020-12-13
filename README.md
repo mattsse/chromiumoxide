@@ -2,7 +2,7 @@ chromiumoxide
 =====================
 ![Build](https://github.com/mattsse/chromiumoxide/workflows/Continuous%20integration/badge.svg)
 
-chromiumoxide provides a high-level and async API to control Chrome or Chromium over the [DevTools Protocol](https://chromedevtools.github.io/devtools-protocol/). chromiumoxide comes with support for all types of the [Chrome DevTools Protocol](https://chromedevtools.github.io/devtools-protocol/). chromiumoxide can launch [headless](https://developers.google.com/web/updates/2017/04/headless-chrome) or can be configured to run full (non-headless) Chrome or Chromium or connect to running Chrome or Chromium instance.
+chromiumoxide provides a high-level and async API to control Chrome or Chromium over the [DevTools Protocol](https://chromedevtools.github.io/devtools-protocol/). It comes with support for all types of the [Chrome DevTools Protocol](https://chromedevtools.github.io/devtools-protocol/) and can launch [headless](https://developers.google.com/web/updates/2017/04/headless-chrome) or can be configured to run full (non-headless) Chrome or Chromium or connect to running instance.
 
 
 ⚠️ The API is still unstable, subject to change, untested and incomplete. However all message types, as defined in the protocol definition files ([browser_protocol.pdl](chromiumoxide_cdp/browser_protocol.pdl) and [js_protocol.pdl](chromiumoxide_cdp/js_protocol.pdl)) are supported. PRs, feature requests and issues are welcome.
