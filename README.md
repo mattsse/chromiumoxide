@@ -97,6 +97,7 @@ All Events are bundled in single enum (`CdpEvent`)
 ## Troubleshooting
 
 Q: A new chromium instance is being launched but then times out.
+
 A: Check that your chromium language settings are set to English. `chromiumoxide` tries to parse the debugging port from the chromium process output and that is limited to english.
 
 ## License
