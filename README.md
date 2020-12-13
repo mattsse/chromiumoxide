@@ -4,7 +4,7 @@ chromiumoxide
 [![Crates.io](https://img.shields.io/crates/v/chromiumoxide.svg)](https://crates.io/crates/chromiumoxide)
 [![Documentation](https://docs.rs/chromiumoxide/badge.svg)](https://docs.rs/chromiumoxide)
 
-chromiumoxide provides a high-level and async API to control Chrome or Chromium over the [DevTools Protocol](https://chromedevtools.github.io/devtools-protocol/). It comes with support for all types of the [Chrome DevTools Protocol](https://chromedevtools.github.io/devtools-protocol/) and can launch [headless](https://developers.google.com/web/updates/2017/04/headless-chrome) or can be configured to run full (non-headless) Chrome or Chromium or connect to running instance.
+chromiumoxide provides a high-level and async API to control Chrome or Chromium over the [DevTools Protocol](https://chromedevtools.github.io/devtools-protocol/). It comes with support for all types of the [Chrome DevTools Protocol](https://chromedevtools.github.io/devtools-protocol/) and can launch a [headless](https://developers.google.com/web/updates/2017/04/headless-chrome) or full (non-headless) Chrome or Chromium instance or connect to an already running instance.
 
 
 ⚠️ The API is still unstable, subject to change, untested and incomplete. However all message types, as defined in the protocol definition files ([browser_protocol.pdl](chromiumoxide_cdp/browser_protocol.pdl) and [js_protocol.pdl](chromiumoxide_cdp/js_protocol.pdl)) are supported. PRs, feature requests and issues are welcome.
