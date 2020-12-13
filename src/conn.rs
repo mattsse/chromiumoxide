@@ -112,13 +112,9 @@ impl<T: Event + Unpin> Stream for Connection<T> {
         // read from the ws
         match Stream::poll_next(Pin::new(&mut pin.ws), cx) {
             Poll::Ready(Some(Ok(msg))) => {
-                let s = msg.to_string();
                 return match serde_json::from_slice::<Message<T>>(&msg.into_data()) {
                     Ok(msg) => Poll::Ready(Some(Ok(msg))),
-                    Err(err) => {
-                        log::error!("Failed to read {}", s);
-                        Poll::Ready(Some(Err(err.into())))
-                    }
+                    Err(err) => Poll::Ready(Some(Err(err.into()))),
                 };
             }
             Poll::Ready(Some(Err(err))) => {

@@ -193,9 +193,12 @@ impl Element {
     }
 
     /// This focuses the element by click on it
+    ///
+    /// Bear in mind that if `click()` triggers a navigation this element may be
+    /// not exist anymore.
     pub async fn click(&self) -> Result<&Self> {
         let center = self.scroll_into_view().await?.clickable_point().await?;
-        self.tab.click_point(center).await?;
+        self.tab.click(center).await?;
         Ok(self)
     }
 
@@ -224,7 +227,6 @@ impl Element {
     /// ```no_run
     /// # use chromiumoxide::page::Page;
     /// # use chromiumoxide::error::Result;
-    /// # use chromiumoxide::keys;
     /// # async fn demo(page: Page) -> Result<()> {
     ///     let element = page.find_element("input#searchInput").await?;
     ///     element.click().await?.type_str("this goes into the input field").await?

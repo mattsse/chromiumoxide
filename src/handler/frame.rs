@@ -10,7 +10,7 @@ use crate::error::DeadlineExceeded;
 use crate::handler::REQUEST_TIMEOUT;
 use chromiumoxide_cdp::cdp::browser_protocol::network::LoaderId;
 use chromiumoxide_cdp::cdp::browser_protocol::page::{
-    EventFrameDetached, EventFrameStoppedLoading, EventLifecycleEvent,
+    EventFrameDetached, EventFrameStartedLoading, EventFrameStoppedLoading, EventLifecycleEvent,
     EventNavigatedWithinDocument, Frame as CdpFrame, FrameTree,
 };
 use chromiumoxide_cdp::cdp::browser_protocol::target::EventAttachedToTarget;
@@ -81,6 +81,14 @@ impl Frame {
     fn on_loading_stopped(&mut self) {
         self.lifecycle_events.insert("DOMContentLoaded".into());
         self.lifecycle_events.insert("load".into());
+    }
+
+    fn on_loading_started(&mut self) {
+        self.lifecycle_events.clear();
+    }
+
+    pub fn is_loaded(&self) -> bool {
+        self.lifecycle_events.contains("load")
     }
 }
 
@@ -307,6 +315,13 @@ impl FrameManager {
     pub fn on_frame_stopped_loading(&mut self, event: &EventFrameStoppedLoading) {
         if let Some(frame) = self.frames.get_mut(&event.frame_id) {
             frame.on_loading_stopped();
+        }
+    }
+
+    /// Fired when frame has started loading.
+    pub fn on_frame_started_loading(&mut self, event: &EventFrameStartedLoading) {
+        if let Some(frame) = self.frames.get_mut(&event.frame_id) {
+            frame.on_loading_started();
         }
     }
 

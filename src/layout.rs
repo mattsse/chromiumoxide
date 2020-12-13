@@ -10,6 +10,11 @@ pub struct Point {
 }
 
 impl Point {
+    /// Create a new Point instance
+    pub fn new(x: f64, y: f64) -> Self {
+        Self { x, y }
+    }
+
     fn area(&self, other: &Self) -> f64 {
         (self.x * other.y - other.x * self.y) / 2.
     }

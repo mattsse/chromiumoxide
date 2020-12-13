@@ -33,6 +33,12 @@ impl Page {
         Ok(self.inner.execute(cmd).await?)
     }
 
+    /// This resolves once the navigation finished and the page is loaded
+    pub async fn wait_for_navigation(&self) -> Result<&Self> {
+        self.inner.wait_for_navigation().await?;
+        Ok(self)
+    }
+
     /// Navigate directly to the given URL.
     pub async fn goto(&self, params: impl Into<NavigateParams>) -> Result<&Self> {
         let res = self.execute(params.into()).await?;
@@ -129,8 +135,27 @@ impl Page {
         Ok(self)
     }
 
-    pub async fn click_point(&self, point: Point) -> Result<&Self> {
-        self.inner.click_point(point).await?;
+    /// Performs a mouse click event at the point's location.
+    ///
+    /// Bear in mind that if `click()` triggers a navigation the new page is not
+    /// immediately loaded when `click()` resolves. To wait until navigation is
+    /// finished an additional `wait_for_navigation()` is required:
+    ///
+    /// # Example
+    ///
+    /// Trigger a navigation and wait until the triggered navigation is finished
+    ///
+    /// ```no_run
+    /// # use chromiumoxide::page::Page;
+    /// # use chromiumoxide::error::Result;
+    /// # use chromiumoxide::layout::Point;
+    /// # async fn demo(page: Page, point: Point) -> Result<()> {
+    ///     let html = page.click(point).await?.wait_for_navigation().await?.content();
+    ///     # Ok(())
+    /// # }
+    /// ```
+    pub async fn click(&self, point: Point) -> Result<&Self> {
+        self.inner.click(point).await?;
         Ok(self)
     }
 
@@ -262,7 +287,6 @@ impl Page {
       ",
             )
             .await?;
-        dbg!(resp.clone());
         let value = resp.value.ok_or(CdpError::NotFound)?;
         Ok(serde_json::from_value(value)?)
     }

@@ -11,7 +11,7 @@ use chromiumoxide_types::{Command, Method, Request, Response};
 
 use crate::cmd::CommandChain;
 use crate::cmd::CommandMessage;
-use crate::error::{DeadlineExceeded, Result};
+use crate::error::{CdpError, DeadlineExceeded, Result};
 use crate::handler::emulation::EmulationManager;
 use crate::handler::frame::FrameNavigationRequest;
 use crate::handler::frame::{
@@ -72,6 +72,8 @@ pub struct Target {
     init_state: TargetInit,
     /// Currently queued events to report to the `Handler`
     queued_events: VecDeque<TargetEvent>,
+    /// Senders that need to be notified once the main frame has loaded
+    wait_until_frame_loaded: Vec<Sender<Result<String>>>,
     /// The sender who requested the page.
     initiator: Option<Sender<Result<Page>>>,
     /// Used to tracked whether this target should initialize its state
@@ -92,6 +94,7 @@ impl Target {
             session_id: None,
             page: None,
             init_state: TargetInit::AttachToTarget,
+            wait_until_frame_loaded: Default::default(),
             queued_events: Default::default(),
             initiator: None,
             initialize: false,
@@ -200,6 +203,9 @@ impl Target {
                 self.frame_manager.on_execution_context_cleared(&ev)
             }
             CdpEvent::PageLifecycleEvent(ev) => self.frame_manager.on_page_lifecycle_event(&ev),
+            CdpEvent::PageFrameStartedLoading(ev) => {
+                self.frame_manager.on_frame_started_loading(&ev);
+            }
 
             // `NetworkManager` events
             CdpEvent::FetchRequestPaused(ev) => self.network_manager.on_fetch_request_paused(&*ev),
@@ -281,11 +287,10 @@ impl Target {
                     if self
                         .frame_manager
                         .main_frame()
-                        .map(|frame| frame.lifecycle_events().contains("load"))
+                        .map(|frame| frame.is_loaded())
                         .unwrap_or_default()
                     {
                         if let Some(page) = self.get_or_create_page() {
-                            log::debug!("sending page to initiator");
                             let _ = initiator.send(Ok(page.clone().into()));
                         } else {
                             self.initiator = Some(initiator);
@@ -297,6 +302,14 @@ impl Target {
             }
         };
         loop {
+            if let Some(frame) = self.frame_manager.main_frame() {
+                if frame.is_loaded() {
+                    while let Some(tx) = self.wait_until_frame_loaded.pop() {
+                        let _ = tx.send(frame.url.clone().ok_or(CdpError::NotFound));
+                    }
+                }
+            }
+
             // Drain queued messages first.
             if let Some(ev) = self.queued_events.pop_front() {
                 return Some(ev);
@@ -314,6 +327,17 @@ impl Target {
                         TargetMessage::Url(tx) => {
                             let _ = tx
                                 .send(self.frame_manager.main_frame().and_then(|f| f.url.clone()));
+                        }
+                        TargetMessage::WaitForNavigation(tx) => {
+                            if let Some(frame) = self.frame_manager.main_frame() {
+                                if frame.is_loaded() {
+                                    let _ = tx.send(frame.url.clone().ok_or(CdpError::NotFound));
+                                } else {
+                                    self.wait_until_frame_loaded.push(tx);
+                                }
+                            } else {
+                                self.wait_until_frame_loaded.push(tx);
+                            }
                         }
                     }
                 }
@@ -420,4 +444,6 @@ pub(crate) enum TargetMessage {
     MainFrame(Sender<Option<FrameId>>),
     /// Return the url of this target's page
     Url(Sender<Option<String>>),
+    /// A Message that resolves when the frame finished loading a new url
+    WaitForNavigation(Sender<Result<String>>),
 }

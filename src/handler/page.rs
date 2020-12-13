@@ -60,6 +60,17 @@ impl PageInner {
         Ok(execute(cmd, self.sender.clone(), Some(self.session_id.clone())).await?)
     }
 
+    /// This responds with the current url of the page, once the navigation
+    /// finished and the page is loaded
+    pub(crate) async fn wait_for_navigation(&self) -> Result<String> {
+        let (tx, rx) = oneshot_channel();
+        self.sender
+            .clone()
+            .send(TargetMessage::WaitForNavigation(tx))
+            .await?;
+        Ok(rx.await??)
+    }
+
     /// The identifier of this page's target
     pub fn target_id(&self) -> &TargetId {
         &self.target_id
@@ -108,7 +119,8 @@ impl PageInner {
         Ok(self)
     }
 
-    pub async fn click_point(&self, point: Point) -> Result<&Self> {
+    /// Performs a mouse click event at the point's location
+    pub async fn click(&self, point: Point) -> Result<&Self> {
         let cmd = DispatchMouseEventParams::builder()
             .x(point.x)
             .y(point.y)
