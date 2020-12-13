@@ -9,7 +9,6 @@ use std::sync::Arc;
 use crate::cmd::{to_command_response, CommandMessage};
 use crate::error::{CdpError, Result};
 use crate::keys;
-use crate::keys::KeyDefinition;
 use crate::layout::Point;
 use chromiumoxid_cdp::cdp::browser_protocol::dom::{
     NodeId, QuerySelectorAllParams, QuerySelectorParams,
@@ -56,6 +55,7 @@ pub(crate) struct PageInner {
 }
 
 impl PageInner {
+    /// Execute a PDL command and return its response
     pub(crate) async fn execute<T: Command>(&self, cmd: T) -> Result<CommandResponse<T::Response>> {
         Ok(execute(cmd, self.sender.clone(), Some(self.session_id.clone())).await?)
     }
@@ -142,16 +142,17 @@ impl PageInner {
     /// keys::get_key_definition("Enter").unwrap())`.
     pub async fn type_str(&self, input: impl AsRef<str>) -> Result<&Self> {
         for c in input.as_ref().split("").filter(|s| !s.is_empty()) {
-            let key = keys::get_key_definition(c)
-                .ok_or_else(|| CdpError::msg(format!("Key not found: {}", c)))?;
-            self.press_key(key).await?;
+            self.press_key(c).await?;
         }
         Ok(self)
     }
 
     /// Uses the `DispatchKeyEvent` mechanism to simulate pressing keyboard
     /// keys.
-    pub async fn press_key(&self, key_definition: &KeyDefinition) -> Result<&Self> {
+    pub async fn press_key(&self, key: impl AsRef<str>) -> Result<&Self> {
+        let key = key.as_ref();
+        let key_definition = keys::get_key_definition(key)
+            .ok_or_else(|| CdpError::msg(format!("Key not found: {}", key)))?;
         let mut cmd = DispatchKeyEventParams::builder();
 
         // See https://github.com/GoogleChrome/puppeteer/blob/62da2366c65b335751896afbb0206f23c61436f1/lib/Input.js#L114-L115

@@ -13,7 +13,6 @@ use chromiumoxid_cdp::cdp::js_protocol::runtime::{
 
 use crate::error::{CdpError, Result};
 use crate::handler::PageInner;
-use crate::keys::KeyDefinition;
 use crate::layout::{ElementQuad, Point};
 
 /// Represents a [DOM Element](https://developer.mozilla.org/en-US/docs/Web/API/Element).
@@ -200,7 +199,7 @@ impl Element {
         Ok(self)
     }
 
-    /// Type the input after clicking on the element
+    /// Type the input
     ///
     /// # Example type text into an input element
     ///
@@ -209,7 +208,7 @@ impl Element {
     /// # use chromiumoxid::error::Result;
     /// # async fn demo(page: Page) -> Result<()> {
     ///     let element = page.find_element("input#searchInput").await?;
-    ///     element.type_str("this goes into the input field").await?;
+    ///     element.click().await?.type_str("this goes into the input field").await?;
     ///     # Ok(())
     /// # }
     /// ```
@@ -218,7 +217,7 @@ impl Element {
         Ok(self)
     }
 
-    /// Presses the key after focusing the element.
+    /// Presses the key.
     ///
     /// # Example type text into an input element and hit enter
     ///
@@ -228,13 +227,12 @@ impl Element {
     /// # use chromiumoxid::keys;
     /// # async fn demo(page: Page) -> Result<()> {
     ///     let element = page.find_element("input#searchInput").await?;
-    ///     element.type_str("this goes into the input field").await?
-    ///          .press_key(keys::get_key_definition("Enter").unwrap()).await?;
+    ///     element.click().await?.type_str("this goes into the input field").await?
+    ///          .press_key("Enter").await?;
     ///     # Ok(())
     /// # }
     /// ```
-    pub async fn press_key(&self, key: &KeyDefinition) -> Result<&Self> {
-        self.click().await?;
+    pub async fn press_key(&self, key: impl AsRef<str>) -> Result<&Self> {
         self.tab.press_key(key).await?;
         Ok(self)
     }

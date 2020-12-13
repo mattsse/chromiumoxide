@@ -232,7 +232,7 @@ impl Default for BrowserConfigBuilder {
             window_size: None,
             port: 0,
             executable: None,
-            extensions: vec![],
+            extensions: Vec::new(),
             process_envs: None,
             user_data_dir: None,
         }
