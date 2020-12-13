@@ -101,7 +101,7 @@ impl<'a> EventBuilder<'a> {
             }
             impl chromiumoxide_types::Event for CdpEventMessage {
                 fn session_id(&self) -> Option<&str> {
-                    self.session_id.as_ref().map(|x| x.as_str())
+                    self.session_id.as_deref()
                 }
             }
 
@@ -112,7 +112,7 @@ impl<'a> EventBuilder<'a> {
             }
 
             impl CdpEvent {
-                pub fn to_json(self) -> serde_json::Result<serde_json::Value> {
+                pub fn into_json(self) -> serde_json::Result<serde_json::Value> {
                     match self {
                         #(CdpEvent::#var_idents(inner) => serde_json::to_value(inner),)*
                          CdpEvent::Other(val) => Ok(val)
@@ -219,7 +219,7 @@ impl<'a> EventBuilder<'a> {
                             })
                         }
                     }
-                    const FIELDS: &'static [&'static str] = &["method", "sessionId", "params"];
+                    const FIELDS: &[&str] = &["method", "sessionId", "params"];
                     deserializer.deserialize_struct("CdpEventMessage", FIELDS, MessageVisitor)
                 }
             }
@@ -232,7 +232,7 @@ impl<'a> EventBuilder<'a> {
                     Ok(chromiumoxide_types::CdpJsonEventMessage {
                         method: self.identifier(),
                         session_id: self.session_id,
-                        params: self.params.to_json()?
+                        params: self.params.into_json()?
                     })
                 }
            }

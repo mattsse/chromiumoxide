@@ -202,7 +202,7 @@ impl Generator {
             let version = format!("{}.{}", pdl.version.major, pdl.version.minor);
             let module_name = format_ident!("{}", self.protocol_mods[idx]);
             let module = quote! {
-                #[allow(clippy::too_many_arguments)]
+                #[allow(clippy::wrong_self_convention)]
                 pub mod #module_name{
                     /// The version of this protocol definition
                     pub const VERSION : &str = #version;
