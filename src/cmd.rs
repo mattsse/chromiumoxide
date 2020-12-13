@@ -6,12 +6,12 @@ use std::collections::VecDeque;
 use std::iter::FromIterator;
 use std::time::{Duration, Instant};
 
-use chromiumoxid_types::{Command, CommandResponse, Method, Request, Response};
+use chromiumoxide_types::{Command, CommandResponse, Method, Request, Response};
 
 use crate::error::{CdpError, DeadlineExceeded, Result};
 use crate::handler::REQUEST_TIMEOUT;
-use chromiumoxid_cdp::cdp::browser_protocol::page::NavigateParams;
-use chromiumoxid_cdp::cdp::browser_protocol::target::SessionId;
+use chromiumoxide_cdp::cdp::browser_protocol::page::NavigateParams;
+use chromiumoxide_cdp::cdp::browser_protocol::target::SessionId;
 
 /// Deserialize a response
 pub(crate) fn to_command_response<T: Command>(

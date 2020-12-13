@@ -1,12 +1,12 @@
 [package]
-name = "chromiumoxid"
+name = "chromiumoxide"
 version = "0.1.0"
 authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
 edition = "2018"
 license = "MIT OR APACHE-2.0"
 readme = "README.md"
-homepage = "https://github.com/mattsse/chromiumoxid"
-repository = "https://github.com/mattsse/chromiumoxid"
+homepage = "https://github.com/mattsse/chromiumoxide"
+repository = "https://github.com/mattsse/chromiumoxide"
 description = "Library for interacting with a chrome instance with the chrome devtools protocol"
 keywords = ["chrome", "chromedriver", "puppeteer", "automation"]
 categories = ["web-programming", "api-bindings", "development-tools::testing"]
@@ -17,8 +17,8 @@ serde = { version = "1.0", features = ["derive"] }
 async-std = { version = "1.6", features = ["attributes", "unstable"] }
 anyhow = "1.0"
 futures = "0.3"
-chromiumoxid_types = { path = "chromiumoxid_types", version = "0.1.0" }
-chromiumoxid_cdp = { path = "chromiumoxid_cdp", version = "0.1.0" }
+chromiumoxide_types = { path = "chromiumoxide_types", version = "0.1.0" }
+chromiumoxide_cdp = { path = "chromiumoxide_cdp", version = "0.1.0" }
 serde_json = "1.0"
 which = "4.0.2"
 thiserror = "1.0.22"
@@ -37,7 +37,7 @@ chrono = "0.4"
 
 [workspace]
 members = [
-    "chromiumoxid_pdl",
-    "chromiumoxid_types",
-    "chromiumoxid_cdp"
+    "chromiumoxide_pdl",
+    "chromiumoxide_types",
+    "chromiumoxide_cdp"
 ]

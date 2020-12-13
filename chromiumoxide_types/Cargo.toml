@@ -1,12 +1,12 @@
 [package]
-name = "chromiumoxid_types"
+name = "chromiumoxide_types"
 version = "0.1.0"
 authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
 edition = "2018"
-description = "Contains the essential types necessary for using chromiumoxid"
+description = "Contains the essential types necessary for using chromiumoxide"
 license = "MIT OR APACHE-2.0"
-homepage = "https://github.com/mattsse/chromiumoxid"
-repository = "https://github.com/mattsse/chromiumoxid"
+homepage = "https://github.com/mattsse/chromiumoxide"
+repository = "https://github.com/mattsse/chromiumoxide"
 readme = "../README.md"
 include = ["src/**/*", "LICENSE-*"]
 

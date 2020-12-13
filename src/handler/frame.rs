@@ -3,19 +3,19 @@ use std::collections::VecDeque;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
-use chromiumoxid_types::{Method, Request};
+use chromiumoxide_types::{Method, Request};
 
 use crate::cmd::CommandChain;
 use crate::error::DeadlineExceeded;
 use crate::handler::REQUEST_TIMEOUT;
-use chromiumoxid_cdp::cdp::browser_protocol::network::LoaderId;
-use chromiumoxid_cdp::cdp::browser_protocol::page::{
+use chromiumoxide_cdp::cdp::browser_protocol::network::LoaderId;
+use chromiumoxide_cdp::cdp::browser_protocol::page::{
     EventFrameDetached, EventFrameStoppedLoading, EventLifecycleEvent,
     EventNavigatedWithinDocument, Frame as CdpFrame, FrameTree,
 };
-use chromiumoxid_cdp::cdp::browser_protocol::target::EventAttachedToTarget;
-use chromiumoxid_cdp::cdp::js_protocol::runtime::*;
-use chromiumoxid_cdp::cdp::{
+use chromiumoxide_cdp::cdp::browser_protocol::target::EventAttachedToTarget;
+use chromiumoxide_cdp::cdp::js_protocol::runtime::*;
+use chromiumoxide_cdp::cdp::{
     browser_protocol::page::{self, FrameId},
     js_protocol::runtime,
 };

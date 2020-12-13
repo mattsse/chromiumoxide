@@ -1,6 +1,6 @@
 use crate::handler::target::TargetMessage;
-use chromiumoxid_cdp::cdp::browser_protocol::target::{SessionId, TargetId};
-use chromiumoxid_types::{Command, CommandResponse};
+use chromiumoxide_cdp::cdp::browser_protocol::target::{SessionId, TargetId};
+use chromiumoxide_types::{Command, CommandResponse};
 use futures::channel::mpsc::{channel, Receiver, Sender};
 use futures::channel::oneshot::channel as oneshot_channel;
 use futures::stream::Fuse;
@@ -10,14 +10,14 @@ use crate::cmd::{to_command_response, CommandMessage};
 use crate::error::{CdpError, Result};
 use crate::keys;
 use crate::layout::Point;
-use chromiumoxid_cdp::cdp::browser_protocol::dom::{
+use chromiumoxide_cdp::cdp::browser_protocol::dom::{
     NodeId, QuerySelectorAllParams, QuerySelectorParams,
 };
-use chromiumoxid_cdp::cdp::browser_protocol::input::{
+use chromiumoxide_cdp::cdp::browser_protocol::input::{
     DispatchKeyEventParams, DispatchKeyEventType, DispatchMouseEventParams, DispatchMouseEventType,
     MouseButton,
 };
-use chromiumoxid_cdp::cdp::js_protocol::runtime::{
+use chromiumoxide_cdp::cdp::js_protocol::runtime::{
     CallFunctionOnParams, CallFunctionOnReturns, RemoteObjectId,
 };
 use futures::{SinkExt, StreamExt};

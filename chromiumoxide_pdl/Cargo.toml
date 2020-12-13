@@ -1,12 +1,12 @@
 [package]
-name = "chromiumoxid_pdl"
+name = "chromiumoxide_pdl"
 version = "0.1.0"
 authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
 edition = "2018"
 license = "MIT OR APACHE-2.0"
 description = "Contains a PDL parser and rust generator"
-homepage = "https://github.com/mattsse/chromiumoxid"
-repository = "https://github.com/mattsse/chromiumoxid"
+homepage = "https://github.com/mattsse/chromiumoxide"
+repository = "https://github.com/mattsse/chromiumoxide"
 readme = "../README.md"
 include = ["src/**/*", "LICENSE-*"]
 
@@ -18,5 +18,5 @@ proc-macro2 = "1.0"
 heck = "0.3"
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-chromiumoxid_types = { path = "../chromiumoxid_types", version = "0.1.0" }
+chromiumoxide_types = { path = "../chromiumoxide_types", version = "0.1.0" }
 either = "1.6.1"

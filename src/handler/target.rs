@@ -7,7 +7,7 @@ use futures::channel::oneshot::Sender;
 use futures::stream::Stream;
 use futures::task::{Context, Poll};
 
-use chromiumoxid_types::{Command, Method, Request, Response};
+use chromiumoxide_types::{Command, Method, Request, Response};
 
 use crate::cmd::CommandChain;
 use crate::cmd::CommandMessage;
@@ -22,14 +22,14 @@ use crate::handler::page::PageHandle;
 use crate::handler::viewport::Viewport;
 use crate::handler::PageInner;
 use crate::page::Page;
-use chromiumoxid_cdp::cdp::browser_protocol::page::{FrameId, GetFrameTreeParams};
-use chromiumoxid_cdp::cdp::browser_protocol::{
+use chromiumoxide_cdp::cdp::browser_protocol::page::{FrameId, GetFrameTreeParams};
+use chromiumoxide_cdp::cdp::browser_protocol::{
     browser::BrowserContextId,
     log as cdplog, performance,
     target::{AttachToTargetParams, SessionId, SetAutoAttachParams, TargetId, TargetInfo},
 };
-use chromiumoxid_cdp::cdp::events::CdpEvent;
-use chromiumoxid_cdp::cdp::CdpEventMessage;
+use chromiumoxide_cdp::cdp::events::CdpEvent;
+use chromiumoxide_cdp::cdp::CdpEventMessage;
 
 macro_rules! advance_state {
     ($s:ident, $cx:ident, $now:ident, $cmds: ident, $next_state:expr ) => {{

@@ -1,4 +1,4 @@
-use chromiumoxid_cdp::cdp::browser_protocol::target::{SessionId, TargetId};
+use chromiumoxide_cdp::cdp::browser_protocol::target::{SessionId, TargetId};
 
 /// Represents a Session within the cpd.
 #[derive(Debug, Clone)]

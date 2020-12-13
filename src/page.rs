@@ -4,17 +4,17 @@ use std::sync::Arc;
 use futures::channel::oneshot::channel as oneshot_channel;
 use futures::SinkExt;
 
-use chromiumoxid_cdp::cdp::browser_protocol;
-use chromiumoxid_cdp::cdp::browser_protocol::dom::*;
-use chromiumoxid_cdp::cdp::browser_protocol::network::{
+use chromiumoxide_cdp::cdp::browser_protocol;
+use chromiumoxide_cdp::cdp::browser_protocol::dom::*;
+use chromiumoxide_cdp::cdp::browser_protocol::network::{
     Cookie, GetCookiesParams, SetUserAgentOverrideParams,
 };
-use chromiumoxid_cdp::cdp::browser_protocol::page::*;
-use chromiumoxid_cdp::cdp::browser_protocol::target::{ActivateTargetParams, SessionId, TargetId};
-use chromiumoxid_cdp::cdp::js_protocol;
-use chromiumoxid_cdp::cdp::js_protocol::debugger::GetScriptSourceParams;
-use chromiumoxid_cdp::cdp::js_protocol::runtime::{EvaluateParams, RemoteObject, ScriptId};
-use chromiumoxid_types::*;
+use chromiumoxide_cdp::cdp::browser_protocol::page::*;
+use chromiumoxide_cdp::cdp::browser_protocol::target::{ActivateTargetParams, SessionId, TargetId};
+use chromiumoxide_cdp::cdp::js_protocol;
+use chromiumoxide_cdp::cdp::js_protocol::debugger::GetScriptSourceParams;
+use chromiumoxide_cdp::cdp::js_protocol::runtime::{EvaluateParams, RemoteObject, ScriptId};
+use chromiumoxide_types::*;
 
 use crate::element::Element;
 use crate::error::{CdpError, Result};

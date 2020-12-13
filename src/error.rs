@@ -3,7 +3,7 @@ use std::io;
 use crate::handler::frame::NavigationError;
 use async_tungstenite::tungstenite;
 use base64::DecodeError;
-use chromiumoxid_cdp::cdp::browser_protocol::page::FrameId;
+use chromiumoxide_cdp::cdp::browser_protocol::page::FrameId;
 use futures::channel::mpsc::SendError;
 use futures::channel::oneshot::Canceled;
 use std::time::Instant;
@@ -20,7 +20,7 @@ pub enum CdpError {
     #[error("{0}")]
     Serde(#[from] serde_json::Error),
     #[error("{0}")]
-    Chrome(#[from] chromiumoxid_types::Error),
+    Chrome(#[from] chromiumoxide_types::Error),
     #[error("Received no response from the chromium instance.")]
     NoResponse,
     #[error("{0}")]
@@ -30,7 +30,7 @@ pub enum CdpError {
     #[error("FrameId {0:?} not found.")]
     FrameNotFound(FrameId),
     /// Error message related to a cdp response that is not a
-    /// `chromiumoxid_types::Error`
+    /// `chromiumoxide_types::Error`
     #[error("{0}")]
     ChromeMessage(String),
     #[error("{0}")]

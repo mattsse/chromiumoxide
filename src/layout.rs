@@ -1,7 +1,7 @@
 //! Code based on [rust-headless-chrome](https://github.com/atroche/rust-headless-chrome/blob/master/src/browser/tab/element/box_model.rs)
 
-use chromiumoxid_cdp::cdp::browser_protocol::dom::Quad;
-use chromiumoxid_cdp::cdp::browser_protocol::page::Viewport;
+use chromiumoxide_cdp::cdp::browser_protocol::dom::Quad;
+use chromiumoxide_cdp::cdp::browser_protocol::page::Viewport;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Point {

@@ -9,12 +9,12 @@ use futures::channel::oneshot::Sender as OneshotSender;
 use futures::stream::{Fuse, Stream, StreamExt};
 use futures::task::{Context, Poll};
 
-use chromiumoxid_cdp::cdp::browser_protocol::browser::*;
-use chromiumoxid_cdp::cdp::browser_protocol::target::*;
-use chromiumoxid_cdp::cdp::events::CdpEvent;
-use chromiumoxid_cdp::cdp::events::CdpEventMessage;
-use chromiumoxid_types::Request as CdpRequest;
-use chromiumoxid_types::{CallId, Message, Method, Response};
+use chromiumoxide_cdp::cdp::browser_protocol::browser::*;
+use chromiumoxide_cdp::cdp::browser_protocol::target::*;
+use chromiumoxide_cdp::cdp::events::CdpEvent;
+use chromiumoxide_cdp::cdp::events::CdpEventMessage;
+use chromiumoxide_types::Request as CdpRequest;
+use chromiumoxide_types::{CallId, Message, Method, Response};
 pub(crate) use page::PageInner;
 
 use crate::cmd::{to_command_response, CommandMessage};

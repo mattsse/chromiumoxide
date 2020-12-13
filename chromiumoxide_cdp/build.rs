@@ -1,4 +1,4 @@
-use chromiumoxid_pdl::build::Generator;
+use chromiumoxide_pdl::build::Generator;
 use std::env;
 use std::path::{Path, PathBuf};
 

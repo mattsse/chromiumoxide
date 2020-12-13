@@ -4,10 +4,10 @@ use std::task::{Context, Poll};
 
 use futures::{future, Future, FutureExt, Stream};
 
-use chromiumoxid_cdp::cdp::browser_protocol::dom::{
+use chromiumoxide_cdp::cdp::browser_protocol::dom::{
     BackendNodeId, DescribeNodeParams, GetContentQuadsParams, Node, NodeId, ResolveNodeParams,
 };
-use chromiumoxid_cdp::cdp::js_protocol::runtime::{
+use chromiumoxide_cdp::cdp::js_protocol::runtime::{
     CallFunctionOnReturns, RemoteObjectId, RemoteObjectType,
 };
 
@@ -117,8 +117,8 @@ impl Element {
     /// # Example get the element as JSON object
     ///
     /// ```no_run
-    /// # use chromiumoxid::element::Element;
-    /// # use chromiumoxid::error::Result;
+    /// # use chromiumoxide::element::Element;
+    /// # use chromiumoxide::error::Result;
     /// # async fn demo(element: Element) -> Result<()> {
     ///     let js_fn = "function() { return this; }";
     ///     let element_json = element.call_js_fn(js_fn, false).await?;
@@ -129,8 +129,8 @@ impl Element {
     /// # Execute an async javascript function
     ///
     /// ```no_run
-    /// # use chromiumoxid::element::Element;
-    /// # use chromiumoxid::error::Result;
+    /// # use chromiumoxide::element::Element;
+    /// # use chromiumoxide::error::Result;
     /// # async fn demo(element: Element) -> Result<()> {
     ///     let js_fn = "async function() { return this; }";
     ///     let element_json = element.call_js_fn(js_fn, true).await?;
@@ -204,8 +204,8 @@ impl Element {
     /// # Example type text into an input element
     ///
     /// ```no_run
-    /// # use chromiumoxid::page::Page;
-    /// # use chromiumoxid::error::Result;
+    /// # use chromiumoxide::page::Page;
+    /// # use chromiumoxide::error::Result;
     /// # async fn demo(page: Page) -> Result<()> {
     ///     let element = page.find_element("input#searchInput").await?;
     ///     element.click().await?.type_str("this goes into the input field").await?;
@@ -222,9 +222,9 @@ impl Element {
     /// # Example type text into an input element and hit enter
     ///
     /// ```no_run
-    /// # use chromiumoxid::page::Page;
-    /// # use chromiumoxid::error::Result;
-    /// # use chromiumoxid::keys;
+    /// # use chromiumoxide::page::Page;
+    /// # use chromiumoxide::error::Result;
+    /// # use chromiumoxide::keys;
     /// # async fn demo(page: Page) -> Result<()> {
     ///     let element = page.find_element("input#searchInput").await?;
     ///     element.click().await?.type_str("this goes into the input field").await?

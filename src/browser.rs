@@ -10,17 +10,17 @@ use futures::channel::mpsc::{channel, Sender};
 use futures::channel::oneshot::channel as oneshot_channel;
 use futures::SinkExt;
 
-use chromiumoxid_types::*;
+use chromiumoxide_types::*;
 
 use crate::cmd::{to_command_response, CommandMessage};
 use crate::conn::Connection;
 use crate::error::{CdpError, Result};
 use crate::handler::{Handler, HandlerMessage};
 use crate::page::Page;
-use chromiumoxid_cdp::cdp::browser_protocol::target::CreateTargetParams;
-use chromiumoxid_cdp::cdp::CdpEventMessage;
+use chromiumoxide_cdp::cdp::browser_protocol::target::CreateTargetParams;
+use chromiumoxide_cdp::cdp::CdpEventMessage;
 
-/// A [`Browser`] is created when chromiumoxid connects to a Chromium instance.
+/// A [`Browser`] is created when chromiumoxide connects to a Chromium instance.
 pub struct Browser {
     /// The `Sender` to send messages to the connection handler that drives the
     /// websocket

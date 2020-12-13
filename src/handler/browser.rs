@@ -1,4 +1,4 @@
-use chromiumoxid_cdp::cdp::browser_protocol::browser::BrowserContextId;
+use chromiumoxide_cdp::cdp::browser_protocol::browser::BrowserContextId;
 
 /// BrowserContexts provide a way to operate multiple independent browser
 /// sessions.

@@ -1,6 +1,6 @@
 use futures::StreamExt;
 
-use chromiumoxid::browser::{Browser, BrowserConfig};
+use chromiumoxide::browser::{Browser, BrowserConfig};
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
