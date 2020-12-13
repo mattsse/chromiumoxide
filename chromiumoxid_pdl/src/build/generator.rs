@@ -214,7 +214,7 @@ impl Generator {
         }
 
         // fix unresolved type sizes
-        let mut refs = vec![];
+        let mut refs = Vec::new();
         std::mem::swap(&mut refs, &mut self.ref_sizes);
         for (name, reff) in refs {
             let ref_size = *self
@@ -606,10 +606,8 @@ impl Generator {
                 let mut vars = vec![s.name.to_string()];
                 let lc = s.name.to_lowercase();
                 let cc = s.name.to_camel_case();
-                if cc != lc {
-                    if vars[0] != cc {
-                        vars.push(cc);
-                    }
+                if cc != lc && vars[0] != cc {
+                    vars.push(cc);
                 }
                 if vars[0] != lc {
                     vars.push(lc);
