@@ -24,7 +24,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (browser, mut handler) =
         Browser::launch(BrowserConfig::builder().with_head().build()?).await?;
     
-   // spawn the handle to its own task
+   // spawn the handle on its own task
     let handle = async_std::task::spawn(async move {
         loop {
             let _event = handler.next().await.unwrap();
@@ -34,8 +34,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
    // create a new browser page and navigate to the url
     let page = browser.new_page("https://en.wikipedia.org").await?;
     
-   // type into the search field and hit `Enter`,
-   // this triggers a navigation to the search result page
+   // find the search bar type into the search field and hit `Enter`,
+   // this triggers a new navigation to the search result page
    page.find_element("input#searchInput")
            .await?
            .click()
@@ -67,7 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-The current API is still rather limited, but the `Page::execute` allows submitting all `Command`s types (see [Generated Code](README.md#generated-code)). Most `Element` and `Page` functions are basically just simplified command constructions and combinations, like `Page::pdf`:
+The current API is still rather limited, but the `Page::execute` function allows sending all `chromiumoxide_types::Command` types (see [Generated Code](README.md#generated-code)). Most `Element` and `Page` functions are basically just simplified command constructions and combinations, like `Page::pdf`:
 
 ```rust
   pub async fn pdf(&self, opts: PrintToPdfParams) -> Result<Vec<u8>> {
@@ -84,9 +84,10 @@ The [`chromiumoxide_pdl`](chromiumoxide_pdl) crate contains a [PDL parser](chrom
 The generator can be configured and used independently, see [chromiumoxide_cdp/build.rs](chromiumoxide_cdp/build.rs).
 
 Every chrome pdl domain is put in its own rust module, the types for the page domain of the browser_protocol are in `chromiumoxide_cdp::cdp::browser_protocol::page`, the runtime domain of the js_protocol in  `chromiumoxide_cdp::cdp::js_protocol::runtime` and so on.
-All Events are bundled in single enum (`CdpEvent`) and for every command there is a `<Commandname>Params` type with builder support `<Commandname>Params::builder()` and its corresponding return type: `<Commandname>Returns`.
 
-[https://vanilla.aslushnikov.com/](https://vanilla.aslushnikov.com/) is a great resource to browser all available types.
+[vanilla.aslushnikov.com/](https://vanilla.aslushnikov.com/) is a great resource to browse all the types defined in the pdl files. This site displays `Command` types as defined in the pdl files as `Method`. `chromiumoxid` sticks to the `Command` nomenclature. So for everything that is defined as a command type in the pdl (=marked as `Method` on [vanilla.aslushnikov.com/](https://vanilla.aslushnikov.com/)) `chromiumoxide` contains a type for command and a designated type for the return type. For every command there is a `<name of command>Params` type with builder support (`<name of command>Params::builder()`) and its corresponding return type: `<name of command>Returns`. All commands share an implementation of the `chromiumoxide_types::Command` trait.
+All Events are bundled in single enum (`CdpEvent`)
+ 
 
 ## Known Issues
 
