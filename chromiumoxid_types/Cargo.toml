@@ -5,8 +5,10 @@ authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
 edition = "2018"
 description = "Contains the essential types necessary for using chromiumoxid"
 license = "MIT OR APACHE-2.0"
-readme = "README.md"
+homepage = "https://github.com/mattsse/chromiumoxid"
 repository = "https://github.com/mattsse/chromiumoxid"
+readme = "../README.md"
+include = ["src/**/*", "LICENSE-*"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }

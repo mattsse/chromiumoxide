@@ -3,8 +3,14 @@ name = "chromiumoxid_cdp"
 version = "0.1.0"
 authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
 edition = "2018"
+description = "Contains all the generated types for chromiumoxid"
+license = "MIT OR Apache-2.0"
+homepage = "https://github.com/mattsse/chromiumoxid"
+repository = "https://github.com/mattsse/chromiumoxid"
+readme = "../README.md"
+include = ["src/**/*", "*.pdl", "build.rs", "LICENSE-*"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
 [build-dependencies]
 chromiumoxid_pdl = { path = "../chromiumoxid_pdl", version = "0.1.0" }
 
