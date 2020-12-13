@@ -32,6 +32,8 @@
 //!         .press_key("Enter")
 //!         .await?;
 //!
+//!     let html = page.wait_for_navigation().await?.content().await?;
+//!
 //!     handle.await;
 //!     Ok(())
 //! }
