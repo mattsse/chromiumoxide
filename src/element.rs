@@ -329,6 +329,7 @@ pub type AttributeValueFuture<'a> = Option<(
 
 /// Stream over all element's attributes
 #[must_use = "streams do nothing unless polled"]
+#[allow(missing_debug_implementations)]
 pub struct AttributeStream<'a> {
     attributes: Vec<String>,
     fut: AttributeValueFuture<'a>,

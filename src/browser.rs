@@ -21,6 +21,7 @@ use chromiumoxide_cdp::cdp::browser_protocol::target::CreateTargetParams;
 use chromiumoxide_cdp::cdp::CdpEventMessage;
 
 /// A [`Browser`] is created when chromiumoxide connects to a Chromium instance.
+#[derive(Debug)]
 pub struct Browser {
     /// The `Sender` to send messages to the connection handler that drives the
     /// websocket
