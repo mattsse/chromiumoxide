@@ -80,6 +80,12 @@ The current API is still rather limited, but the `Page::execute` function allows
 
 If you need something else, the `execute` function allows for writing your own command wrappers. PRs are very welcome.
 
+### Add chromiumoxide to your project
+
+```toml
+chromiumoxide = { git = "https://github.com/mattsse/chromiumoxide" }
+```
+
 ## Generated Code
 
 The [`chromiumoxide_pdl`](chromiumoxide_pdl) crate contains a [PDL parser](chromiumoxide_pdl/src/pdl/parser.rs), which is a rust rewrite of a [python script in the chromium source tree]( https://chromium.googlesource.com/deps/inspector_protocol/+/refs/heads/master/pdl.py) and a [`Generator`](chromiumoxide_pdl/src/build/generator.rs) that turns the parsed PDL files into rust code. The [`chromiumoxide_cdp`](chromiumoxide_cdp) crate only purpose is to integrate the generator during is build process and include the generated output before compiling the crate itself. This separation is done merely because the generated output is ~60K lines of rust code (not including all the Proc macro extensions). So expect the compilation to take some time.
