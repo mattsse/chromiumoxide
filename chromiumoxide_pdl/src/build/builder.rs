@@ -71,7 +71,7 @@ impl Builder {
 
         // clippy allows up to 7 arguments: https://rust-lang.github.io/rust-clippy/master/#too_many_arguments
         // But let's limit this to 4, because a builder will also be implemented
-        if mandatory_param_name.len() > 0 && mandatory_param_name.len() <= 4 {
+        if !mandatory_param_name.is_empty() && mandatory_param_name.len() <= 4 {
             stream.extend(quote! {
                 impl #name {
                     pub fn new(#(#mandatory_param_name : #mandatory_param_ty),*) -> Self {
@@ -131,7 +131,7 @@ impl Builder {
             if field.ty.is_vec {
                 let ty = &field.ty.ty;
                 let s = field_name.to_string().to_snake_case();
-                let (iter_setter_name, single_setter_name) = if s.ends_with("s") {
+                let (iter_setter_name, single_setter_name) = if s.ends_with('s') {
                     (
                         field_name.clone(),
                         format_ident!("{}", generate_field_name(&s[..s.len() - 1])),
