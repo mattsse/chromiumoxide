@@ -77,7 +77,6 @@ All Events are bundled in single enum (`CdpEvent`) and for every command there i
 ## Known Issues
 
 * The rust files generated for the PDL files in [chromiumoxide_cdp](./chromiumoxide_cdp) don't compile when support for experimental types is manually turned off (`export CDP_NO_EXPERIMENTAL=true`). This is because the use of some experimental pdl types in the `*.pdl` files themselves are not marked as experimental.
-* Navigations triggered by interaction with the page are currently not waited for when requesting content from the page. Thus, a `page.content()` immediately after an interaction that caused the page to navigate (e.g., manually entering a search box) may come up empty. This could be solved by monitoring and optionally buffering such requests until the new mainframe of the page is fully loaded, like navigation requests are currently handled. 
 * `chromiumoxide` requires an installed chromium application and may not be able to find it on its own. The option to download chromium certainly would be a handy feature.
 
 ## Troubleshooting
