@@ -19,7 +19,6 @@ use chromiumoxide::browser::{Browser, BrowserConfig};
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    pretty_env_logger::init();
     
    // create a `Browser` that spawns a `chromium` process running with UI (`with_head()`, headless is default) 
    // and the handler that drives the websocket etc.

@@ -10,7 +10,6 @@
 //!
 //! #[async_std::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! pretty_env_logger::init();
 //!
 //!     let (browser, mut handler) =
 //!         Browser::launch(BrowserConfig::builder().with_head().build()?).await?;
