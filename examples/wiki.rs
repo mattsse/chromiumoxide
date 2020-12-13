@@ -6,8 +6,7 @@ use chromiumoxide::browser::{Browser, BrowserConfig};
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     pretty_env_logger::init();
 
-    let (browser, mut handler) =
-        Browser::launch(BrowserConfig::builder().with_head().build()?).await?;
+    let (browser, mut handler) = Browser::launch(BrowserConfig::builder().build()?).await?;
 
     let handle = async_std::task::spawn(async move {
         loop {
@@ -25,6 +24,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?
         .press_key("Enter")
         .await?;
+
+    let html = page.wait_for_navigation().await?.content().await?;
 
     handle.await;
     Ok(())

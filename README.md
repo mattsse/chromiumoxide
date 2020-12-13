@@ -45,7 +45,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?
         .press_key("Enter")
         .await?;
-
+   
+    let html = page.wait_for_navigation().await?.content().await?;
+   
     handle.await;
     Ok(())
 }
