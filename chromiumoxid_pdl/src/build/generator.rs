@@ -79,11 +79,11 @@ impl Default for Generator {
             with_experimental: true,
             with_deprecated: false,
             out_dir: None,
-            protocol_mods: vec![],
+            protocol_mods: Vec::new(),
             domains: Default::default(),
             target_mod: Default::default(),
             type_size: Default::default(),
-            ref_sizes: vec![],
+            ref_sizes: Vec::new(),
             enums: Default::default(),
         }
     }
