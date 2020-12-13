@@ -33,13 +33,19 @@ impl Page {
         Ok(self.inner.execute(cmd).await?)
     }
 
-    /// This resolves once the navigation finished and the page is loaded
+    /// This resolves once the navigation finished and the page is loaded.
+    ///
+    /// This is necessary after an interaction with the page that may trigger a
+    /// navigation (`click`, `press_key`) in order to wait until the new browser
+    /// page is loaded
     pub async fn wait_for_navigation(&self) -> Result<&Self> {
         self.inner.wait_for_navigation().await?;
         Ok(self)
     }
 
     /// Navigate directly to the given URL.
+    ///
+    /// This resolves directly after the requested URL is fully loaded.
     pub async fn goto(&self, params: impl Into<NavigateParams>) -> Result<&Self> {
         let res = self.execute(params.into()).await?;
         if let Some(err) = res.result.error_text {
@@ -90,6 +96,10 @@ impl Page {
         Ok(self)
     }
 
+    /// Returns the root DOM node (and optionally the subtree) of the page.
+    ///
+    /// # Note: This does not return the actual HTML document of the page. To
+    /// retrieve the HTML content of the page see `Page::content`.
     pub async fn get_document(&self) -> Result<Node> {
         let resp = self.execute(GetDocumentParams::default()).await?;
         Ok(resp.result.root)
