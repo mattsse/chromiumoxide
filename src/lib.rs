@@ -23,16 +23,33 @@
 //!
 //!     let page = browser.new_page("https://en.wikipedia.org").await?;
 //!
+//!     // type into the search field and hit `Enter`,
+//!     // this triggers a navigation to the search result page
 //!     page.find_element("input#searchInput")
-//!         .await?
-//!         .click()
-//!         .await?
-//!         .type_str("Rust (programming language)")
-//!         .await?
-//!         .press_key("Enter")
-//!         .await?;
+//!             .await?
+//!             .click()
+//!             .await?
+//!             .type_str("Rust programming language")
+//!             .await?
+//!             .press_key("Enter")
+//!             .await?;
 //!
-//!     let html = page.wait_for_navigation().await?.content().await?;
+//!     // wait until the search result page is loaded and get the first hit
+//!     let path = page
+//!             .wait_for_navigation()
+//!             .await?
+//!             .find_element("li.mw-search-result a")
+//!             .await?
+//!             .attribute("href")
+//!             .await?
+//!             .unwrap();
+//!
+//!     // navigate to the page and get its html content
+//!     let html = page
+//!             .goto(format!("https://en.wikipedia.org{}", path))
+//!             .await?
+//!             .content()
+//!             .await?;
 //!
 //!     handle.await;
 //!     Ok(())

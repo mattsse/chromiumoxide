@@ -20,12 +20,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?
         .click()
         .await?
-        .type_str("Rust (programming language)")
+        .type_str("Rust programming language")
         .await?
         .press_key("Enter")
         .await?;
 
-    let html = page.wait_for_navigation().await?.content().await?;
+    let path = page
+        .wait_for_navigation()
+        .await?
+        .find_element("li.mw-search-result a")
+        .await?
+        .attribute("href")
+        .await?
+        .unwrap();
+
+    let _html = page
+        .goto(format!("https://en.wikipedia.org{}", path))
+        .await?
+        .content()
+        .await?;
 
     handle.await;
     Ok(())
