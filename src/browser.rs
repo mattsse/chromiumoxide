@@ -10,6 +10,8 @@ use futures::channel::mpsc::{channel, Sender};
 use futures::channel::oneshot::channel as oneshot_channel;
 use futures::SinkExt;
 
+use chromiumoxide_cdp::cdp::browser_protocol::target::CreateTargetParams;
+use chromiumoxide_cdp::cdp::CdpEventMessage;
 use chromiumoxide_types::*;
 
 use crate::cmd::{to_command_response, CommandMessage};
@@ -17,8 +19,6 @@ use crate::conn::Connection;
 use crate::error::{CdpError, Result};
 use crate::handler::{Handler, HandlerMessage};
 use crate::page::Page;
-use chromiumoxide_cdp::cdp::browser_protocol::target::CreateTargetParams;
-use chromiumoxide_cdp::cdp::CdpEventMessage;
 
 /// A [`Browser`] is created when chromiumoxide connects to a Chromium instance.
 #[derive(Debug)]
@@ -67,9 +67,17 @@ impl Browser {
         let get_ws_url = ws_url_from_output(&mut child);
 
         let dur = Duration::from_secs(20);
-        let debug_ws_url = async_std::future::timeout(dur, get_ws_url)
+
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "async-std-runtime")] {
+                let debug_ws_url = async_std::future::timeout(dur, get_ws_url)
             .await
             .map_err(|_| CdpError::Timeout)?;
+            } else if #[cfg(feature = "tokio-runtime")] {
+                let debug_ws_url = tokio::time::timeout(dur, get_ws_url).await
+            .map_err(|_| CdpError::Timeout)?;
+            }
+        }
 
         let conn = Connection::<CdpEventMessage>::connect(&debug_ws_url).await?;
 
@@ -150,7 +158,8 @@ impl Drop for Browser {
 
 async fn ws_url_from_output(child_process: &mut Child) -> String {
     let stdout = child_process.stderr.take().expect("no stderror");
-    let handle = async_std::task::spawn_blocking(|| {
+
+    fn read_debug_url(stdout: std::process::ChildStderr) -> String {
         let mut buf = BufReader::new(stdout);
         let mut line = String::new();
         loop {
@@ -165,8 +174,14 @@ async fn ws_url_from_output(child_process: &mut Child) -> String {
                 line = String::new();
             }
         }
-    });
-    handle.await
+    }
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "async-std-runtime")] {
+            async_std::task::spawn_blocking(|| read_debug_url(stdout)).await
+        } else if #[cfg(feature = "tokio-runtime")] {
+            tokio::task::spawn_blocking(move || read_debug_url(stdout)).await.expect("Failed to read debug url from process output")
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

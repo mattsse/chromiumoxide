@@ -3,18 +3,24 @@ use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::pin::Pin;
 
-use crate::error::Result;
-use async_tungstenite::async_std::ConnectStream;
 use async_tungstenite::WebSocketStream;
 use futures::stream::Stream;
 use futures::task::{Context, Poll};
 use futures::Sink;
 
+use chromiumoxide_cdp::cdp::browser_protocol::target::SessionId;
 use chromiumoxide_types::{CallId, Event, Message, MethodCall};
 
 use crate::error::CdpError;
-use chromiumoxide_cdp::cdp::browser_protocol::target::SessionId;
+use crate::error::Result;
 
+cfg_if::cfg_if! {
+    if #[cfg(feature = "async-std-runtime")] {
+       use async_tungstenite::async_std::ConnectStream;
+    } else if #[cfg(feature = "tokio-runtime")] {
+        use async_tungstenite::tokio::ConnectStream;
+    }
+}
 /// Exchanges the messages with the websocket
 #[must_use = "streams do nothing unless polled"]
 #[derive(Debug)]
@@ -33,7 +39,14 @@ pub struct Connection<T: Event> {
 
 impl<T: Event + Unpin> Connection<T> {
     pub async fn connect(debug_ws_url: impl AsRef<str>) -> Result<Self> {
-        let (ws, _) = async_tungstenite::async_std::connect_async(debug_ws_url.as_ref()).await?;
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "async-std-runtime")] {
+               let (ws, _) = async_tungstenite::async_std::connect_async(debug_ws_url.as_ref()).await?;
+            } else if #[cfg(feature = "tokio-runtime")] {
+                 let (ws, _) = async_tungstenite::tokio::connect_async(debug_ws_url.as_ref()).await?;
+            }
+        }
+
         Ok(Self {
             pending_commands: Default::default(),
             ws,
