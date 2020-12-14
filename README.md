@@ -45,23 +45,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
            .await?
            .press_key("Enter")
            .await?;
-   
-   // wait until the search result page is loaded and get the first hit
-   let path = page
-           .wait_for_navigation()
-           .await?
-           .find_element("li.mw-search-result a")
-           .await?
-           .attribute("href")
-           .await?
-           .unwrap();
-    
-   // navigate to the page and get its html content
-   let html = page
-           .goto(format!("https://en.wikipedia.org{}", path))
-           .await?
-           .content()
-           .await?;
+
+   let html = page.wait_for_navigation().await?.content().await?;
    
     handle.await;
     Ok(())
