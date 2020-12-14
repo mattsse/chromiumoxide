@@ -1,6 +1,9 @@
 //! Code based on [rust-headless-chrome](https://github.com/atroche/rust-headless-chrome/blob/master/src/browser/tab/element/box_model.rs)
 
 use chromiumoxide_cdp::cdp::browser_protocol::dom::Quad;
+use chromiumoxide_cdp::cdp::browser_protocol::input::{
+    DispatchMouseEventParams, DispatchMouseEventType, MouseButton,
+};
 use chromiumoxide_cdp::cdp::browser_protocol::page::Viewport;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -50,6 +53,17 @@ impl std::ops::Div<f64> for Point {
             x: self.x / other,
             y: self.y / other,
         }
+    }
+}
+
+/// Converts a point into Left-Down-Single-Mouseclick
+impl Into<DispatchMouseEventParams> for Point {
+    fn into(self) -> DispatchMouseEventParams {
+        let mut params =
+            DispatchMouseEventParams::new(DispatchMouseEventType::MousePressed, self.x, self.y);
+        params.button = Some(MouseButton::Left);
+        params.click_count = Some(1);
+        params
     }
 }
 
@@ -142,7 +156,7 @@ impl ElementQuad {
     }
 
     /// The most bottom (largest) y-coordinate
-    fn most_bottom(&self) -> f64 {
+    pub fn most_bottom(&self) -> f64 {
         self.top_right
             .y
             .max(self.top_left.y)
@@ -268,4 +282,16 @@ impl BoxModel {
             scale: 1.0,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct BoundingBox {
+    /// the x coordinate of the element in pixels.
+    pub x: f64,
+    /// the y coordinate of the element in pixels.
+    pub y: f64,
+    /// the width of the element in pixels.
+    pub width: f64,
+    /// the height of the element in pixels.
+    pub height: f64,
 }

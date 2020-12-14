@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -5,15 +6,17 @@ use std::task::{Context, Poll};
 use futures::{future, Future, FutureExt, Stream};
 
 use chromiumoxide_cdp::cdp::browser_protocol::dom::{
-    BackendNodeId, DescribeNodeParams, GetContentQuadsParams, Node, NodeId, ResolveNodeParams,
+    BackendNodeId, DescribeNodeParams, GetBoxModelParams, GetContentQuadsParams, Node, NodeId,
+    ResolveNodeParams,
 };
 use chromiumoxide_cdp::cdp::js_protocol::runtime::{
-    CallFunctionOnReturns, RemoteObjectId, RemoteObjectType,
+    CallFunctionOnReturns, GetPropertiesParams, PropertyDescriptor, RemoteObjectId,
+    RemoteObjectType,
 };
 
 use crate::error::{CdpError, Result};
 use crate::handler::PageInner;
-use crate::layout::{ElementQuad, Point};
+use crate::layout::{BoundingBox, BoxModel, ElementQuad, Point};
 
 /// Represents a [DOM Element](https://developer.mozilla.org/en-US/docs/Web/API/Element).
 #[derive(Debug)]
@@ -90,6 +93,45 @@ impl Element {
         .await?)
     }
 
+    async fn box_model(&self) -> Result<BoxModel> {
+        let model = self
+            .tab
+            .execute(
+                GetBoxModelParams::builder()
+                    .backend_node_id(self.backend_node_id)
+                    .build(),
+            )
+            .await?
+            .result
+            .model;
+        Ok(BoxModel {
+            content: ElementQuad::from_quad(&model.content),
+            padding: ElementQuad::from_quad(&model.padding),
+            border: ElementQuad::from_quad(&model.border),
+            margin: ElementQuad::from_quad(&model.margin),
+            width: model.width as u32,
+            height: model.height as u32,
+        })
+    }
+
+    /// Returns the bounding box of the element (relative to the main frame)
+    pub async fn bounding_box(&self) -> Result<BoundingBox> {
+        let bounds = self.box_model().await?;
+        let quad = bounds.border;
+
+        let x = quad.most_left();
+        let y = quad.most_top();
+        let width = quad.most_right() - x;
+        let height = quad.most_bottom() - y;
+
+        Ok(BoundingBox {
+            x,
+            y,
+            width,
+            height,
+        })
+    }
+
     /// Returns the best `Point` of this node to execute a click on.
     pub async fn clickable_point(&self) -> Result<Point> {
         let content_quads = self
@@ -150,6 +192,29 @@ impl Element {
                 self.remote_object_id.clone(),
             )
             .await?)
+    }
+
+    /// Returns a JSON representation of this element.
+    pub async fn json_value(&self) -> Result<serde_json::Value> {
+        let element_json = self
+            .call_js_fn("function() { return this; }", false)
+            .await?;
+        Ok(element_json.result.value.ok_or(CdpError::NotFound)?)
+    }
+
+    /// Calls [focus](https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/focus) on the element.
+    pub async fn focus(&self) -> Result<&Self> {
+        self.call_js_fn("function() { this.focus(); }", true)
+            .await?;
+        Ok(self)
+    }
+
+    /// Scrolls the element into view and uses a mouse event to move the mouse
+    /// over the center of this element.
+    pub async fn hover(&self) -> Result<&Self> {
+        self.scroll_into_view().await?;
+        self.tab.move_mouse(self.clickable_point().await?).await?;
+        Ok(self)
     }
 
     /// Scrolls the element into view.
@@ -316,11 +381,30 @@ impl Element {
         }
     }
 
-    /// Returns the javascript `property` of this element
+    /// Returns the javascript `property` of this element where `property` is
+    /// the name of the requested property of this element.
+    ///
+    /// See also `Element::inner_html`.
     pub async fn property(&self, property: impl AsRef<str>) -> Result<Option<serde_json::Value>> {
         let js_fn = format!("function() {{ return this.{}; }}", property.as_ref());
         let resp = self.call_js_fn(js_fn, false).await?;
         Ok(resp.result.value)
+    }
+
+    /// Returns a map with all `PropertyDescriptor`s of this element keyed by
+    /// their names
+    pub async fn properties(&self) -> Result<HashMap<String, PropertyDescriptor>> {
+        let mut params = GetPropertiesParams::new(self.remote_object_id.clone());
+        params.own_properties = Some(true);
+
+        let properties = self.tab.execute(params).await?;
+
+        Ok(properties
+            .result
+            .result
+            .into_iter()
+            .map(|p| (p.name.clone(), p))
+            .collect())
     }
 }
 
