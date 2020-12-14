@@ -1,15 +1,10 @@
-use crate::handler::target::TargetMessage;
-use chromiumoxide_cdp::cdp::browser_protocol::target::{SessionId, TargetId};
-use chromiumoxide_types::{Command, CommandResponse};
+use std::sync::Arc;
+
 use futures::channel::mpsc::{channel, Receiver, Sender};
 use futures::channel::oneshot::channel as oneshot_channel;
 use futures::stream::Fuse;
-use std::sync::Arc;
+use futures::{SinkExt, StreamExt};
 
-use crate::cmd::{to_command_response, CommandMessage};
-use crate::error::{CdpError, Result};
-use crate::keys;
-use crate::layout::Point;
 use chromiumoxide_cdp::cdp::browser_protocol::dom::{
     NodeId, QuerySelectorAllParams, QuerySelectorParams,
 };
@@ -17,10 +12,17 @@ use chromiumoxide_cdp::cdp::browser_protocol::input::{
     DispatchKeyEventParams, DispatchKeyEventType, DispatchMouseEventParams, DispatchMouseEventType,
     MouseButton,
 };
+use chromiumoxide_cdp::cdp::browser_protocol::target::{SessionId, TargetId};
 use chromiumoxide_cdp::cdp::js_protocol::runtime::{
     CallFunctionOnParams, CallFunctionOnReturns, RemoteObjectId,
 };
-use futures::{SinkExt, StreamExt};
+use chromiumoxide_types::{Command, CommandResponse};
+
+use crate::cmd::{to_command_response, CommandMessage};
+use crate::error::{CdpError, Result};
+use crate::handler::target::TargetMessage;
+use crate::keys;
+use crate::layout::Point;
 
 #[derive(Debug)]
 pub struct PageHandle {
@@ -108,14 +110,13 @@ impl PageInner {
     }
 
     /// Moves the mouse to this point (dispatches a mouseMoved event)
-    pub async fn move_mouse_to_point(&self, point: Point) -> Result<&Self> {
-        let cmd = DispatchMouseEventParams::builder()
-            .r#type(DispatchMouseEventType::MouseMoved)
-            .x(point.x)
-            .y(point.y)
-            .build()
-            .unwrap();
-        self.execute(cmd).await?;
+    pub async fn move_mouse(&self, point: Point) -> Result<&Self> {
+        self.execute(DispatchMouseEventParams::new(
+            DispatchMouseEventType::MouseMoved,
+            point.x,
+            point.y,
+        ))
+        .await?;
         Ok(self)
     }
 
@@ -127,13 +128,15 @@ impl PageInner {
             .button(MouseButton::Left)
             .click_count(1);
 
-        self.execute(
-            cmd.clone()
-                .r#type(DispatchMouseEventType::MousePressed)
-                .build()
-                .unwrap(),
-        )
-        .await?;
+        self.move_mouse(point)
+            .await?
+            .execute(
+                cmd.clone()
+                    .r#type(DispatchMouseEventType::MousePressed)
+                    .build()
+                    .unwrap(),
+            )
+            .await?;
 
         self.execute(
             cmd.r#type(DispatchMouseEventType::MouseReleased)

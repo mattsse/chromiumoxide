@@ -139,13 +139,13 @@ impl Page {
         todo!()
     }
 
-    /// Moves the mouse to this point (dispatches a mouseMoved event)
-    pub async fn move_mouse_to_point(&self, point: Point) -> Result<&Self> {
-        self.inner.move_mouse_to_point(point).await?;
-        Ok(self)
-    }
-
-    /// Performs a mouse click event at the point's location.
+    /// Performs a single mouse click event at the point's location.
+    ///
+    /// This scrolls the point into view first, then executes a
+    /// `DispatchMouseEventParams` command of type `MouseLeft` with
+    /// `MousePressed` as single click and then releases the mouse with an
+    /// additional `DispatchMouseEventParams` of type `MouseLeft` with
+    /// `MouseReleased`
     ///
     /// Bear in mind that if `click()` triggers a navigation the new page is not
     /// immediately loaded when `click()` resolves. To wait until navigation is
@@ -164,8 +164,52 @@ impl Page {
     ///     # Ok(())
     /// # }
     /// ```
+    ///
+    /// # Example
+    ///
+    /// Perform custom click
+    ///
+    /// ```no_run
+    /// # use chromiumoxide::page::Page;
+    /// # use chromiumoxide::error::Result;
+    /// # use chromiumoxide::layout::Point;
+    /// # use chromiumoxide_cdp::cdp::browser_protocol::input::{DispatchMouseEventParams, MouseButton, DispatchMouseEventType};
+    /// # async fn demo(page: Page, point: Point) -> Result<()> {
+    ///      // double click
+    ///      let cmd = DispatchMouseEventParams::builder()
+    ///             .x(point.x)
+    ///             .y(point.y)
+    ///             .button(MouseButton::Left)
+    ///             .click_count(2);
+    ///
+    ///         page.move_mouse(point).await?.execute(
+    ///             cmd.clone()
+    ///                 .r#type(DispatchMouseEventType::MousePressed)
+    ///                 .build()
+    ///                 .unwrap(),
+    ///         )
+    ///         .await?;
+    ///
+    ///         page.execute(
+    ///             cmd.r#type(DispatchMouseEventType::MouseReleased)
+    ///                 .build()
+    ///                 .unwrap(),
+    ///         )
+    ///         .await?;
+    ///
+    ///     # Ok(())
+    /// # }
+    /// ```
     pub async fn click(&self, point: Point) -> Result<&Self> {
         self.inner.click(point).await?;
+        Ok(self)
+    }
+
+    /// Dispatches a `mousemove` event and moves the mouse to the position of
+    /// the `point` where `Point.x` is the horizontal position of the mouse and
+    /// `Point.y` the vertical position of the mouse.
+    pub async fn move_mouse(&self, point: Point) -> Result<&Self> {
+        self.inner.move_mouse(point).await?;
         Ok(self)
     }
 
@@ -191,6 +235,30 @@ impl Page {
         let pdf = self.pdf(opts).await?;
         async_std::fs::write(output.as_ref(), &pdf).await?;
         Ok(pdf)
+    }
+
+    /// Brings page to front (activates tab)
+    pub async fn bring_to_front(&self) -> Result<&Self> {
+        self.execute(BringToFrontParams::default()).await?;
+        Ok(self)
+    }
+
+    /// Reloads given page
+    ///
+    /// To reload ignoring cache run:
+    /// ```no_run
+    /// # use chromiumoxide::page::Page;
+    /// # use chromiumoxide::error::Result;
+    /// # use chromiumoxide_cdp::cdp::browser_protocol::page::ReloadParams;
+    /// # async fn demo(page: Page) -> Result<()> {
+    ///     page.execute(ReloadParams::builder().ignore_cache(true).build()).await?;
+    ///     page.wait_for_navigation().await?;
+    ///     # Ok(())
+    /// # }
+    /// ```
+    pub async fn reload(&self) -> Result<&Self> {
+        self.execute(ReloadParams::default()).await?;
+        Ok(self.wait_for_navigation().await?)
     }
 
     /// Enables log domain. Enabled by default.
@@ -278,6 +346,21 @@ impl Page {
     /// Evaluates expression on global object.
     pub async fn evaluate(&self, evaluate: impl Into<EvaluateParams>) -> Result<RemoteObject> {
         Ok(self.execute(evaluate.into()).await?.result.result)
+    }
+
+    pub async fn set_content(&self, html: impl AsRef<str>) -> Result<&Self> {
+        let js = format!(
+            "(html) => {{
+      document.open();
+      document.write(html);
+      document.close();
+    }}, {})",
+            html.as_ref()
+        );
+        self.evaluate(js).await?;
+        // relying that document.open() will reset frame lifecycle with "init"
+        // lifecycle event. @see https://crrev.com/608658
+        Ok(self.wait_for_navigation().await?)
     }
 
     /// Returns the HTML content of the page
