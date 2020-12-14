@@ -74,7 +74,9 @@ chromiumoxide = { git = "https://github.com/mattsse/chromiumoxide" }
 
 To use [`tokio`](https://github.com/tokio-rs/tokio) instead, enable the `tokio-runtime` feature flag:
 
+```toml
 chromiumoxide = { git = "https://github.com/mattsse/chromiumoxide", features = ["tokio-runtime"] }
+```
 
 ## Generated Code
 
