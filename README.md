@@ -66,9 +66,15 @@ If you need something else, the `Page::execute` function allows for writing your
 
 ### Add chromiumoxide to your project
 
+By default `chromiumoxide` uses [`async-std`](https://github.com/async-rs/async-std) for its runtime.
+
 ```toml
 chromiumoxide = { git = "https://github.com/mattsse/chromiumoxide" }
 ```
+
+To use [`tokio`](https://github.com/tokio-rs/tokio) instead, enable the `tokio-runtime` feature flag:
+
+chromiumoxide = { git = "https://github.com/mattsse/chromiumoxide", features = ["tokio-runtime"] }
 
 ## Generated Code
 
