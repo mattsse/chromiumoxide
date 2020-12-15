@@ -30,7 +30,7 @@ fnv = "1.0"
 futures-timer = "3.0"
 pretty_env_logger = "0.4"
 cfg-if = "1.0"
-tokio = { version = "0.3", features = ["rt", "rt-multi-thread", "time", "macros"], optional = true }
+tokio = { version = "0.3", features = ["rt", "rt-multi-thread", "time", "fs", "macros"], optional = true }
 
 [dev-dependencies]
 quote = "1.0"
@@ -42,10 +42,10 @@ default = ["async-std-runtime"]
 async-std-runtime = ["async-std", "async-tungstenite/async-std-runtime"]
 tokio-runtime = ["tokio", "async-tungstenite/tokio-runtime"]
 
-
 [[example]]
 name = "wiki-tokio"
 required-features = ["tokio-runtime"]
+
 
 [workspace]
 members = [
