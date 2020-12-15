@@ -592,7 +592,6 @@ impl Generator {
                 #(#vars),*
             }
         };
-        // TODO add renames
 
         // from str to string impl
         let vars: Vec<_> = variants
