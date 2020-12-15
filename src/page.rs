@@ -2,15 +2,20 @@ use std::path::Path;
 use std::sync::Arc;
 
 use futures::channel::oneshot::channel as oneshot_channel;
-use futures::SinkExt;
+use futures::{stream, SinkExt, StreamExt};
 
 use chromiumoxide_cdp::cdp::browser_protocol;
 use chromiumoxide_cdp::cdp::browser_protocol::dom::*;
+use chromiumoxide_cdp::cdp::browser_protocol::emulation::{
+    MediaFeature, SetEmulatedMediaParams, SetTimezoneOverrideParams,
+};
 use chromiumoxide_cdp::cdp::browser_protocol::network::{
-    Cookie, GetCookiesParams, SetUserAgentOverrideParams,
+    Cookie, CookieParam, DeleteCookiesParams, GetCookiesParams, SetCookiesParams,
+    SetUserAgentOverrideParams,
 };
 use chromiumoxide_cdp::cdp::browser_protocol::page::*;
-use chromiumoxide_cdp::cdp::browser_protocol::target::{ActivateTargetParams, SessionId, TargetId};
+use chromiumoxide_cdp::cdp::browser_protocol::performance::{GetMetricsParams, Metric};
+use chromiumoxide_cdp::cdp::browser_protocol::target::{SessionId, TargetId};
 use chromiumoxide_cdp::cdp::js_protocol;
 use chromiumoxide_cdp::cdp::js_protocol::debugger::GetScriptSourceParams;
 use chromiumoxide_cdp::cdp::js_protocol::runtime::{EvaluateParams, RemoteObject, ScriptId};
@@ -21,6 +26,7 @@ use crate::error::{CdpError, Result};
 use crate::handler::target::TargetMessage;
 use crate::handler::PageInner;
 use crate::layout::Point;
+use crate::utils;
 
 #[derive(Debug)]
 pub struct Page {
@@ -213,13 +219,49 @@ impl Page {
         Ok(self)
     }
 
+    /// Take a screenshot of the current page
+    pub async fn screenshot(&self, params: impl Into<CaptureScreenshotParams>) -> Result<Vec<u8>> {
+        Ok(self.inner.screenshot(params).await?)
+    }
+
+    /// Save a screenshot of the page
+    ///
+    /// # Example save a png file of a website
+    ///
+    /// ```no_run
+    /// # use chromiumoxide::page::Page;
+    /// # use chromiumoxide::error::Result;
+    /// # use chromiumoxide_cdp::cdp::browser_protocol::page::{CaptureScreenshotParams, CaptureScreenshotFormat};
+    /// # async fn demo(page: Page) -> Result<()> {
+    ///         page.goto("http://example.com")
+    ///             .await?
+    ///             .save_screenshot(
+    ///             CaptureScreenshotParams::builder()
+    ///                 .format(CaptureScreenshotFormat::Png)
+    ///                 .build(),
+    ///             "example.png",
+    ///             )
+    ///             .await?;
+    ///     # Ok(())
+    /// # }
+    /// ```
+    pub async fn save_screenshot(
+        &self,
+        params: impl Into<CaptureScreenshotParams>,
+        output: impl AsRef<Path>,
+    ) -> Result<Vec<u8>> {
+        let img = self.screenshot(params).await?;
+        utils::write(output.as_ref(), &img).await?;
+        Ok(img)
+    }
+
     /// Print the current page as pdf.
     ///
     /// See [`PrintToPdfParams`]
     ///
     /// # Note Generating a pdf is currently only supported in Chrome headless.
-    pub async fn pdf(&self, opts: PrintToPdfParams) -> Result<Vec<u8>> {
-        let res = self.execute(opts).await?;
+    pub async fn pdf(&self, params: PrintToPdfParams) -> Result<Vec<u8>> {
+        let res = self.execute(params).await?;
         Ok(base64::decode(&res.data)?)
     }
 
@@ -233,13 +275,29 @@ impl Page {
         output: impl AsRef<Path>,
     ) -> Result<Vec<u8>> {
         let pdf = self.pdf(opts).await?;
-        async_std::fs::write(output.as_ref(), &pdf).await?;
+        utils::write(output.as_ref(), &pdf).await?;
         Ok(pdf)
     }
 
     /// Brings page to front (activates tab)
     pub async fn bring_to_front(&self) -> Result<&Self> {
         self.execute(BringToFrontParams::default()).await?;
+        Ok(self)
+    }
+
+    /// Emulates the given media type or media feature for CSS media queries
+    pub async fn emulate_media_features(&self, features: Vec<MediaFeature>) -> Result<&Self> {
+        self.execute(SetEmulatedMediaParams::builder().features(features).build())
+            .await?;
+        Ok(self)
+    }
+
+    /// Overrides default host system timezone
+    pub async fn emulate_timezone(
+        &self,
+        timezoune_id: impl Into<SetTimezoneOverrideParams>,
+    ) -> Result<&Self> {
+        self.execute(timezoune_id.into()).await?;
         Ok(self)
     }
 
@@ -314,8 +372,7 @@ impl Page {
 
     /// Activates (focuses) the target.
     pub async fn activate(&self) -> Result<&Self> {
-        self.execute(ActivateTargetParams::new(self.inner.target_id().clone()))
-            .await?;
+        self.inner.activate().await?;
         Ok(self)
     }
 
@@ -326,6 +383,125 @@ impl Page {
             .await?
             .result
             .cookies)
+    }
+
+    /// Set a single cookie
+    ///
+    /// This fails if the cookie's url or if not provided, the page's url is
+    /// `about:blank` or a `data:` url.
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use chromiumoxide::page::Page;
+    /// # use chromiumoxide::error::Result;
+    /// # use chromiumoxide_cdp::cdp::browser_protocol::network::CookieParam;
+    /// # async fn demo(page: Page) -> Result<()> {
+    ///     page.set_cookie(CookieParam::new("Cookie-name", "Cookie-value")).await?;
+    ///     # Ok(())
+    /// # }
+    /// ```
+    pub async fn set_cookie(&self, cookie: impl Into<CookieParam>) -> Result<&Self> {
+        let mut cookie = cookie.into();
+        if let Some(url) = cookie.url.as_ref() {
+            validate_cookie_url(url)?;
+        } else {
+            let url = self
+                .url()
+                .await?
+                .ok_or_else(|| CdpError::msg("Page url not found"))?;
+            validate_cookie_url(&url)?;
+            if url.starts_with("http") {
+                cookie.url = Some(url);
+            }
+        }
+        self.execute(DeleteCookiesParams::from_cookie(&cookie))
+            .await?;
+        self.execute(SetCookiesParams::new(vec![cookie])).await?;
+        Ok(self)
+    }
+
+    /// Set all the cookies
+    pub async fn set_cookies(&self, mut cookies: Vec<CookieParam>) -> Result<&Self> {
+        let url = self
+            .url()
+            .await?
+            .ok_or_else(|| CdpError::msg("Page url not found"))?;
+        let is_http = url.starts_with("http");
+        if !is_http {
+            validate_cookie_url(&url)?;
+        }
+
+        for cookie in &mut cookies {
+            if let Some(url) = cookie.url.as_ref() {
+                validate_cookie_url(url)?;
+            } else {
+                if is_http {
+                    cookie.url = Some(url.clone());
+                }
+            }
+        }
+        self.delete_cookies_unchecked(cookies.iter().map(DeleteCookiesParams::from_cookie))
+            .await?;
+
+        self.execute(SetCookiesParams::new(cookies)).await?;
+        Ok(self)
+    }
+
+    /// Delete a single cookie
+    pub async fn delete_cookie(&self, cookie: impl Into<DeleteCookiesParams>) -> Result<&Self> {
+        let mut cookie = cookie.into();
+        if cookie.url.is_none() {
+            let url = self
+                .url()
+                .await?
+                .ok_or_else(|| CdpError::msg("Page url not found"))?;
+            if url.starts_with("http") {
+                cookie.url = Some(url);
+            }
+        }
+        self.execute(cookie).await?;
+        Ok(self)
+    }
+
+    /// Delete all the cookies
+    pub async fn delete_cookies(&self, mut cookies: Vec<DeleteCookiesParams>) -> Result<&Self> {
+        let mut url: Option<(String, bool)> = None;
+        for cookie in &mut cookies {
+            if cookie.url.is_none() {
+                if let Some((url, is_http)) = url.as_ref() {
+                    if *is_http {
+                        cookie.url = Some(url.clone())
+                    }
+                } else {
+                    let page_url = self
+                        .url()
+                        .await?
+                        .ok_or_else(|| CdpError::msg("Page url not found"))?;
+                    let is_http = page_url.starts_with("http");
+                    if is_http {
+                        cookie.url = Some(page_url.clone())
+                    }
+                    url = Some((page_url, is_http));
+                }
+            }
+        }
+        self.delete_cookies_unchecked(cookies.into_iter()).await?;
+        Ok(self)
+    }
+
+    /// Convenience method that prevents another channel roundtrip to get the
+    /// url and validate it
+    async fn delete_cookies_unchecked(
+        &self,
+        cookies: impl Iterator<Item = DeleteCookiesParams>,
+    ) -> Result<&Self> {
+        // NOTE: the buffer size is arbitrary
+        let mut cmds = stream::iter(cookies.into_iter().map(|cookie| self.execute(cookie)))
+            .buffer_unordered(5);
+        while let Some(resp) = cmds.next().await {
+            resp?;
+        }
+        Ok(self)
     }
 
     /// Returns the title of the document.
@@ -343,9 +519,32 @@ impl Page {
         }
     }
 
+    /// Retrieve current values of run-time metrics.
+    pub async fn metrics(&self) -> Result<Vec<Metric>> {
+        Ok(self
+            .execute(GetMetricsParams::default())
+            .await?
+            .result
+            .metrics)
+    }
+
+    /// Returns metrics relating to the layout of the page
+    pub async fn layout_metrics(&self) -> Result<GetLayoutMetricsReturns> {
+        Ok(self.inner.layout_metrics().await?)
+    }
+
     /// Evaluates expression on global object.
     pub async fn evaluate(&self, evaluate: impl Into<EvaluateParams>) -> Result<RemoteObject> {
         Ok(self.execute(evaluate.into()).await?.result.result)
+    }
+
+    /// Evaluates given script in every frame upon creation (before loading
+    /// frame's scripts)
+    pub async fn evaluate_on_new_document(
+        &self,
+        script: impl Into<AddScriptToEvaluateOnNewDocumentParams>,
+    ) -> Result<ScriptIdentifier> {
+        Ok(self.execute(script.into()).await?.result.identifier)
     }
 
     pub async fn set_content(&self, html: impl AsRef<str>) -> Result<&Self> {
@@ -399,5 +598,15 @@ impl Page {
 impl From<Arc<PageInner>> for Page {
     fn from(inner: Arc<PageInner>) -> Self {
         Self { inner }
+    }
+}
+
+fn validate_cookie_url(url: &str) -> Result<()> {
+    if url.starts_with("data:") {
+        Err(CdpError::msg("Data URL page can not have cookie"))
+    } else if url != "about:blank" {
+        Err(CdpError::msg("Blank page can not have cookie"))
+    } else {
+        Ok(())
     }
 }

@@ -17,6 +17,11 @@ use chromiumoxide_cdp::cdp::js_protocol::runtime::{
 use crate::error::{CdpError, Result};
 use crate::handler::PageInner;
 use crate::layout::{BoundingBox, BoxModel, ElementQuad, Point};
+use crate::utils;
+use chromiumoxide_cdp::cdp::browser_protocol::page::{
+    CaptureScreenshotFormat, CaptureScreenshotParams, Viewport,
+};
+use std::path::Path;
 
 /// Represents a [DOM Element](https://developer.mozilla.org/en-US/docs/Web/API/Element).
 #[derive(Debug)]
@@ -374,7 +379,7 @@ impl Element {
         let property = property.as_ref();
         let value = self.property(property).await?.ok_or(CdpError::NotFound)?;
         let txt: String = serde_json::from_value(value)?;
-        if txt.is_empty() {
+        if !txt.is_empty() {
             Ok(Some(txt))
         } else {
             Ok(None)
@@ -405,6 +410,44 @@ impl Element {
             .into_iter()
             .map(|p| (p.name.clone(), p))
             .collect())
+    }
+
+    /// Scrolls the element into and takes a screenshot of it
+    pub async fn screenshot(&self, format: CaptureScreenshotFormat) -> Result<Vec<u8>> {
+        let mut bounding_box = self.scroll_into_view().await?.bounding_box().await?;
+        let viewport = self.tab.layout_metrics().await?.layout_viewport;
+
+        bounding_box.x += viewport.page_x as f64;
+        bounding_box.y += viewport.page_y as f64;
+
+        let clip = Viewport {
+            x: viewport.page_x as f64 + bounding_box.x,
+            y: viewport.page_y as f64 + bounding_box.y,
+            width: bounding_box.width,
+            height: bounding_box.height,
+            scale: 1.,
+        };
+
+        Ok(self
+            .tab
+            .screenshot(
+                CaptureScreenshotParams::builder()
+                    .format(format)
+                    .clip(clip)
+                    .build(),
+            )
+            .await?)
+    }
+
+    /// Save a screenshot of the element and write it to `output`
+    pub async fn save_screenshot(
+        &self,
+        format: CaptureScreenshotFormat,
+        output: impl AsRef<Path>,
+    ) -> Result<Vec<u8>> {
+        let img = self.screenshot(format).await?;
+        utils::write(output.as_ref(), &img).await?;
+        Ok(img)
     }
 }
 

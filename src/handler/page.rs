@@ -12,7 +12,7 @@ use chromiumoxide_cdp::cdp::browser_protocol::input::{
     DispatchKeyEventParams, DispatchKeyEventType, DispatchMouseEventParams, DispatchMouseEventType,
     MouseButton,
 };
-use chromiumoxide_cdp::cdp::browser_protocol::target::{SessionId, TargetId};
+use chromiumoxide_cdp::cdp::browser_protocol::target::{ActivateTargetParams, SessionId, TargetId};
 use chromiumoxide_cdp::cdp::js_protocol::runtime::{
     CallFunctionOnParams, CallFunctionOnReturns, RemoteObjectId,
 };
@@ -23,6 +23,9 @@ use crate::error::{CdpError, Result};
 use crate::handler::target::TargetMessage;
 use crate::keys;
 use crate::layout::Point;
+use chromiumoxide_cdp::cdp::browser_protocol::page::{
+    CaptureScreenshotParams, GetLayoutMetricsParams, GetLayoutMetricsReturns,
+};
 
 #[derive(Debug)]
 pub struct PageHandle {
@@ -94,6 +97,13 @@ impl PageInner {
             .execute(QuerySelectorParams::new(node, selector))
             .await?
             .node_id)
+    }
+
+    /// Activates (focuses) the target.
+    pub async fn activate(&self) -> Result<&Self> {
+        self.execute(ActivateTargetParams::new(self.target_id().clone()))
+            .await?;
+        Ok(self)
     }
 
     /// Return all `Element`s inside the node that match the given selector
@@ -216,6 +226,21 @@ impl PageInner {
             )
             .await?;
         Ok(resp.result)
+    }
+
+    /// Returns metrics relating to the layout of the page
+    pub async fn layout_metrics(&self) -> Result<GetLayoutMetricsReturns> {
+        Ok(self
+            .execute(GetLayoutMetricsParams::default())
+            .await?
+            .result)
+    }
+
+    pub async fn screenshot(&self, params: impl Into<CaptureScreenshotParams>) -> Result<Vec<u8>> {
+        self.activate().await?;
+        let params = params.into();
+        let res = self.execute(params).await?.result;
+        Ok(base64::decode(&res.data)?)
     }
 }
 
