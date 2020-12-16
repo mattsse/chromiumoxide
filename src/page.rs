@@ -434,10 +434,8 @@ impl Page {
         for cookie in &mut cookies {
             if let Some(url) = cookie.url.as_ref() {
                 validate_cookie_url(url)?;
-            } else {
-                if is_http {
-                    cookie.url = Some(url.clone());
-                }
+            } else if is_http {
+                cookie.url = Some(url.clone());
             }
         }
         self.delete_cookies_unchecked(cookies.iter().map(DeleteCookiesParams::from_cookie))
