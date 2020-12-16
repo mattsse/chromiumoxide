@@ -79,6 +79,11 @@ pub use crate::element::Element;
 pub use crate::handler::Handler;
 pub use crate::page::Page;
 
-/// reexport all the generated cdp types
+/// reexport the generated cdp types
 pub use chromiumoxide_cdp::cdp;
+use chromiumoxide_types::Method;
 pub use chromiumoxide_types::{self as types, Binary, Command};
+use serde::de::DeserializeOwned;
+
+/// A trait to implement custom events
+pub trait CustomEvent: Method + DeserializeOwned {}
