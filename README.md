@@ -68,18 +68,21 @@ If you need something else, the `Page::execute` function allows for writing your
 
 `chromiumoxide` comes with support for the [`async-std`](https://github.com/async-rs/async-std) and [`tokio`](https://github.com/tokio-rs/tokio) runtime. 
 
-By default `chromiumoxide` is configured with `async-std`. 
+By default `chromiumoxide` is configured with `async-std`.
+
 Use `chromiumoxide` with the `async-std` runtime:
 
 ```toml
 chromiumoxide = { git = "https://github.com/mattsse/chromiumoxide" }
 ```
 
-To use the `tokio` runtime instead `features = ["tokio-runtime"]` and disable default features:
+To use the `tokio` runtime instead add `features = ["tokio-runtime"]` and set `default-features = false` to disable the default runtime (`async-std`):
 
 ```toml
 chromiumoxide = { git = "https://github.com/mattsse/chromiumoxide", features = ["tokio-runtime"], default-features = false }
 ```
+
+This configuration is made possible primarily by the websocket crate of choice: [`async-tungstenite`](https://github.com/sdroege/async-tungstenite).
 
 ## Generated Code
 
@@ -116,5 +119,5 @@ Licensed under either of these:
 ## References
 
 * [chromedp](https://github.com/chromedp/chromedp)
-* [rust-headless-chrome](https://github.com/Edu4rdSHL/rust-headless-chrome) which the launch config, `KeyDefinition` and typing support is taken from.
+* [rust-headless-chrome](https://github.com/Edu4rdSHL/rust-headless-chrome) which the launch config, `KeyDefinition` and typing support among others is taken from.
 * [puppeteer](https://github.com/puppeteer/puppeteer)
