@@ -231,6 +231,71 @@ impl Generator {
         let stream = quote! {
             pub mod #mod_ident {
                 pub use events::*;
+
+                /// A custom event that is not covered by the protocol definitions
+                #[derive(Debug, Clone, Eq, PartialEq)]
+                pub struct CustomJsonEvent {
+                    /// The method identifier
+                    pub method: ::std::borrow::Cow<'static, str>,
+                    /// The event message payload
+                    pub params: serde_json::Value,
+                }
+
+                impl chromiumoxide_types::Method for CustomJsonEvent {
+                    fn identifier(&self) -> ::std::borrow::Cow<'static, str> {
+                        self.method.clone()
+                    }
+                }
+
+                impl sealed::SealedEvent for CustomJsonEvent {
+                    fn as_any(&self) -> &dyn ::std::any::Any {
+                        self
+                    }
+                }
+
+                /// Trait that all events defined in the protocol definitions implement
+                pub trait Event: sealed::SealedEvent {}
+
+                impl<T: sealed::SealedEvent> Event for T {}
+
+                pub(crate) mod sealed {
+
+                    pub trait SealedEvent: ArcEvent + chromiumoxide_types::Method {
+                        /// generate `&::std::any::Any`'s vtable from `&Trait`'s.
+                        fn as_any(&self) -> &dyn ::std::any::Any;
+                    }
+
+                    pub trait ArcEvent: ::std::any::Any + Send + Sync {
+                        fn into_any_arc(self: ::std::sync::Arc<Self>) -> ::std::sync::Arc<dyn ::std::any::Any + Send + Sync>;
+                    }
+
+                    impl<T: ::std::any::Any + Send + Sync> ArcEvent for T {
+                        fn into_any_arc(self: ::std::sync::Arc<Self>) -> ::std::sync::Arc<dyn ::std::any::Any + Send + Sync> {
+                            self
+                        }
+                    }
+
+                    impl dyn SealedEvent {
+                        /// Returns true if the trait object wraps an object of type `T`.
+                        #[inline]
+                        pub fn is<T: SealedEvent>(&self) -> bool {
+                            self.as_any().is::<T>()
+                        }
+
+                        #[inline]
+                        pub fn downcast_arc<T: SealedEvent>(self: ::std::sync::Arc<Self>) -> Result<::std::sync::Arc<T>, ::std::sync::Arc<Self>>
+                            where
+                                T: ::std::any::Any + Send + Sync,
+                        {
+                            if self.is::<T>() {
+                                Ok(ArcEvent::into_any_arc(self).downcast::<T>().unwrap())
+                            } else {
+                                Err(self)
+                            }
+                        }
+                    }
+                }
+
                 pub mod events {
                     #imports
                     #events

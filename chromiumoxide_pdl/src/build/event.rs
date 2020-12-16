@@ -38,6 +38,8 @@ impl<'a> EventBuilder<'a> {
         let mut variants_stream = TokenStream::default();
         let mut var_idents = Vec::new();
         let mut deserialize_from_method = TokenStream::default();
+        let mut conversion_impls = TokenStream::default();
+        let mut event_trait_impls = TokenStream::default();
 
         for event in &self.events {
             let var_ident = event.var_ident();
@@ -64,6 +66,52 @@ impl<'a> EventBuilder<'a> {
             variants_stream.extend(quote! {
                 #deprecated
                 #var_ident(#ty_ident),
+            });
+
+            let (variant_match, into_event) = if event.needs_box {
+                (
+                    quote! {
+                        CdpEvent::#var_ident(val) => Ok(*val),
+                    },
+                    quote! {
+                        CdpEvent::#var_ident(Box::new(self))
+                    },
+                )
+            } else {
+                (
+                    quote! {
+                        CdpEvent::#var_ident(val) => Ok(val),
+                    },
+                    quote! {
+                        CdpEvent::#var_ident(self)
+                    },
+                )
+            };
+
+            conversion_impls.extend(quote! {
+                impl std::convert::TryFrom<CdpEvent> for  #ty_qualifier {
+                    type Error = CdpEvent;
+
+                    fn try_from(event: CdpEvent) -> Result<Self, Self::Error> {
+                        match event {
+                            #variant_match
+                            _ => Err(event)
+                        }
+                    }
+                }
+                impl Into<CdpEvent> for #ty_qualifier {
+                    fn into(self) -> CdpEvent {
+                        #into_event
+                    }
+                }
+            });
+
+            event_trait_impls.extend(quote! {
+                    impl super::sealed::SealedEvent for #ty_qualifier {
+                        fn as_any(&self) -> &dyn ::std::any::Any {
+                            self
+                        }
+                    }
             });
 
             let deserialize_from = if event.needs_box {
@@ -99,7 +147,7 @@ impl<'a> EventBuilder<'a> {
                     }
                 }
             }
-            impl chromiumoxide_types::Event for CdpEventMessage {
+            impl chromiumoxide_types::EventMessage for CdpEventMessage {
                 fn session_id(&self) -> Option<&str> {
                     self.session_id.as_deref()
                 }
@@ -112,6 +160,12 @@ impl<'a> EventBuilder<'a> {
             }
 
             impl CdpEvent {
+
+                pub fn other(other: serde_json::Value) -> Self {
+                    CdpEvent::Other(other)
+                }
+
+                /// Serializes the event as Json
                 pub fn into_json(self) -> serde_json::Result<serde_json::Value> {
                     match self {
                         #(CdpEvent::#var_idents(inner) => serde_json::to_value(inner),)*
@@ -242,6 +296,8 @@ impl<'a> EventBuilder<'a> {
         quote! {
             #event_impl
             #deserialize_impl
+            #conversion_impls
+            #event_trait_impls
         }
     }
 }

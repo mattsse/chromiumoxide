@@ -94,14 +94,14 @@ impl Method for CdpJsonEventMessage {
     }
 }
 
-impl Event for CdpJsonEventMessage {
+impl EventMessage for CdpJsonEventMessage {
     fn session_id(&self) -> Option<&str> {
         self.params.get("sessionId").and_then(|x| x.as_str())
     }
 }
 
 /// A trait that mark
-pub trait Event: Method + DeserializeOwned {
+pub trait EventMessage: Method + DeserializeOwned {
     /// The identifier of the session this event was meant for.
     fn session_id(&self) -> Option<&str>;
 }
