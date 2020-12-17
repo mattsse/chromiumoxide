@@ -112,6 +112,13 @@ impl<'a> EventBuilder<'a> {
                             self
                         }
                     }
+                     impl super::IntoEventKind for #ty_qualifier {
+
+                       fn event_kind() -> super::EventKind where Self: Sized + 'static  {
+                           super::EventKind::BuiltIn
+                       }
+                     }
+
             });
 
             let deserialize_from = if event.needs_box {

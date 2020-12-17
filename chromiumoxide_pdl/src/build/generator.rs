@@ -233,43 +233,64 @@ impl Generator {
                 pub use events::*;
 
                 /// A custom event that is not covered by the protocol definitions
-                #[derive(Debug, Clone, Eq, PartialEq)]
-                pub struct CustomJsonEvent {
-                    /// The method identifier
-                    pub method: ::std::borrow::Cow<'static, str>,
-                    /// The event message payload
-                    pub params: serde_json::Value,
-                }
+                pub trait CustomEvent: ::std::any::Any + serde::de::DeserializeOwned + chromiumoxide_types::Method + Send + Sync {
 
-                impl chromiumoxide_types::Method for CustomJsonEvent {
-                    fn identifier(&self) -> ::std::borrow::Cow<'static, str> {
-                        self.method.clone()
+                    /// Used to convert a json event into in instance
+                    fn from_json(event: serde_json::Value) -> serde_json::Result<Self> where Self: Sized + 'static {
+                            serde_json::from_value(event)
                     }
                 }
 
-                impl sealed::SealedEvent for CustomJsonEvent {
+
+                impl<T:CustomEvent> sealed::SealedEvent for T {
                     fn as_any(&self) -> &dyn ::std::any::Any {
                         self
                     }
                 }
 
-                /// Trait that all events defined in the protocol definitions implement
                 pub trait Event: sealed::SealedEvent {}
 
                 impl<T: sealed::SealedEvent> Event for T {}
+                impl<T: CustomEvent + Event> sealed::SealedCustomEventConverter for T {}
+
+                pub type EventConversion = Box<dyn Fn(serde_json::Value) -> serde_json::Result<::std::sync::Arc<dyn Event>>>;
+
+                /// An enum that does nothing for built in types but contains
+                pub enum EventKind {
+                    BuiltIn,
+                    Custom(EventConversion)
+                }
+
+                /// Trait that all events defined in the protocol definitions implement
+                pub trait IntoEventKind : Event {
+                    fn event_kind() -> EventKind where Self : Sized + 'static;
+                }
+
+                impl<T: sealed::SealedCustomEventConverter > IntoEventKind for T {
+                    fn event_kind() -> EventKind where Self : Sized + 'static{
+                        EventKind::Custom(Box::new(Self::event_arc))
+                    }
+                }
 
                 pub(crate) mod sealed {
 
-                    pub trait SealedEvent: ArcEvent + chromiumoxide_types::Method {
+                    pub trait SealedCustomEventConverter : super::CustomEvent + super::Event {
+
+                         fn event_arc(event: serde_json::Value) -> serde_json::Result<::std::sync::Arc<dyn super::Event>> where Self: Sized + 'static {
+                                Ok(::std::sync::Arc::new(Self::from_json(event)?))
+                         }
+                    }
+
+                    pub trait SealedEvent: ArcAny + chromiumoxide_types::Method {
                         /// generate `&::std::any::Any`'s vtable from `&Trait`'s.
                         fn as_any(&self) -> &dyn ::std::any::Any;
                     }
 
-                    pub trait ArcEvent: ::std::any::Any + Send + Sync {
+                    pub trait ArcAny: ::std::any::Any + Send + Sync {
                         fn into_any_arc(self: ::std::sync::Arc<Self>) -> ::std::sync::Arc<dyn ::std::any::Any + Send + Sync>;
                     }
 
-                    impl<T: ::std::any::Any + Send + Sync> ArcEvent for T {
+                    impl<T: ::std::any::Any + Send + Sync> ArcAny for T {
                         fn into_any_arc(self: ::std::sync::Arc<Self>) -> ::std::sync::Arc<dyn ::std::any::Any + Send + Sync> {
                             self
                         }
@@ -288,7 +309,7 @@ impl Generator {
                                 T: ::std::any::Any + Send + Sync,
                         {
                             if self.is::<T>() {
-                                Ok(ArcEvent::into_any_arc(self).downcast::<T>().unwrap())
+                                Ok(ArcAny::into_any_arc(self).downcast::<T>().unwrap())
                             } else {
                                 Err(self)
                             }
