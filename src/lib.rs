@@ -81,4 +81,4 @@ pub use crate::page::Page;
 
 /// reexport the generated cdp types
 pub use chromiumoxide_cdp::cdp;
-pub use chromiumoxide_types::{self as types, Method, Binary, Command};
+pub use chromiumoxide_types::{self as types, Binary, Command, Method};
