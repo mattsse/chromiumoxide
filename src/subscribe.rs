@@ -90,26 +90,23 @@ impl<T: IntoEventKind + Unpin> Stream for EventStream<T> {
     }
 }
 
-pub struct CustomEventStream<T: CustomEvent> {
-    events: UnboundedReceiver<Arc<dyn Event>>,
-    _marker: PhantomData<T>,
-}
+#[async_std::test]
+async fn test_event_stream() -> std::io::Result<()> {
+    use chromiumoxide_cdp::cdp::browser_protocol::animation::EventAnimationCanceled;
+    use std::ops::Deref;
 
-impl<T: CustomEvent + Unpin> Stream for CustomEventStream<T> {
-    type Item = serde_json::Result<T>;
+    let (mut tx, rx) = futures::channel::mpsc::unbounded();
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let pin = self.get_mut();
-        match Stream::poll_next(Pin::new(&mut pin.events), cx) {
-            Poll::Ready(Some(event)) => {
-                if let Ok(e) = event.into_any_arc().downcast::<CustomJsonEvent>() {
-                    Poll::Ready(Some(serde_json::from_value(e.params.clone())))
-                } else {
-                    Poll::Pending
-                }
-            }
-            Poll::Ready(None) => Poll::Ready(None),
-            Poll::Pending => Poll::Pending,
-        }
-    }
+    let mut stream = EventStream::<EventAnimationCanceled>::new(rx);
+
+    let event = EventAnimationCanceled {
+        id: "id".to_string(),
+    };
+    let msg: Arc<dyn Event> = Arc::new(event.clone());
+
+    tx.send(msg).await.unwrap();
+    let next = stream.next().await.unwrap();
+    assert_eq!(next.deref().clone(), event);
+
+    Ok(())
 }
