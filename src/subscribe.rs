@@ -8,7 +8,9 @@ use std::task::{Context, Poll};
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures::{Sink, SinkExt, Stream, StreamExt};
 
-use chromiumoxide_cdp::cdp::{Event, IntoEventKind};
+use chromiumoxide_cdp::cdp::{Event, IntoEventKind, CustomEvent};
+use chromiumoxide_types::Method;
+use std::ops::Deref;
 
 // use futures::channel::oneshot::{Receiver, Sender};
 // use futures::stream::{FusedStream, StreamExt};
@@ -91,9 +93,8 @@ impl<T: IntoEventKind + Unpin> Stream for EventStream<T> {
 }
 
 #[async_std::test]
-async fn test_event_stream() -> std::io::Result<()> {
+async fn event_stream() {
     use chromiumoxide_cdp::cdp::browser_protocol::animation::EventAnimationCanceled;
-    use std::ops::Deref;
 
     let (mut tx, rx) = futures::channel::mpsc::unbounded();
 
@@ -106,7 +107,33 @@ async fn test_event_stream() -> std::io::Result<()> {
 
     tx.send(msg).await.unwrap();
     let next = stream.next().await.unwrap();
-    assert_eq!(next.deref().clone(), event);
+    assert_eq!(&*next, &event);
+}
 
-    Ok(())
+#[async_std::test]
+async fn custom_event_stream() {
+    use serde::Deserialize;
+
+    #[derive(Debug, Clone, Eq, PartialEq, Deserialize)]
+    struct MyCustomEvent {
+        name: String
+    }
+
+    impl Method for MyCustomEvent {
+        fn identifier(&self) -> Cow<'static, str> {
+           "Custom.Event".into()
+        }
+    }
+
+    impl CustomEvent for MyCustomEvent {}
+
+    let (mut tx, rx) = futures::channel::mpsc::unbounded();
+
+    let mut stream = EventStream::<MyCustomEvent>::new(rx);
+
+    let event = MyCustomEvent {name: "my event".to_string()};
+    let msg: Arc<dyn Event> = Arc::new(event.clone());
+    tx.send(msg).await.unwrap();
+    let next = stream.next().await.unwrap();
+    assert_eq!(&*next, &event);
 }
