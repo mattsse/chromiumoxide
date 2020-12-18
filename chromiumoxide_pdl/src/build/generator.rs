@@ -232,15 +232,21 @@ impl Generator {
             pub mod #mod_ident {
                 pub use events::*;
 
-                /// A custom event that is not covered by the protocol definitions
+                /// This trait allows for implementing custom events that are not covered by the
+                /// chrome protocol definitions.
+                ///
+                /// Every `CustomEvent` also requires an implementation of
+                /// `chromiumoxide_types::Method` and it must be `DeserializeOwned`
+                /// (`#[derive(serde::Deserialize)]`). This is necessary to identify match this
+                /// type against the provided `method` identifier of a `CdpEventMessage`
+                /// and to properly deserialize it from a `serde_json::Value`
                 pub trait CustomEvent: ::std::any::Any + serde::de::DeserializeOwned + chromiumoxide_types::Method + Send + Sync {
 
-                    /// Used to convert a json event into in instance
+                    /// Used to convert the json event into in instance of this type
                     fn from_json(event: serde_json::Value) -> serde_json::Result<Self> where Self: Sized + 'static {
                             serde_json::from_value(event)
                     }
                 }
-
 
                 impl<T:CustomEvent> sealed::SealedEvent for T {
                     fn as_any(&self) -> &dyn ::std::any::Any {
@@ -248,21 +254,39 @@ impl Generator {
                     }
                 }
 
+                /// This is trait that all Events share
+                ///
+                /// This trait is sealed to prevent implementation. The only way to implement a new `Event` is by implementing `CustomEvent`
                 pub trait Event: sealed::SealedEvent {}
 
                 impl<T: sealed::SealedEvent> Event for T {}
                 impl<T: CustomEvent + Event> sealed::SealedCustomEventConverter for T {}
 
+                /// Function type to convert a json event into an instance of it self but as dyn Event
                 pub type EventConversion = Box<dyn Fn(serde_json::Value) -> serde_json::Result<::std::sync::Arc<dyn Event>>>;
 
-                /// An enum that does nothing for built in types but contains
+                /// An enum that does nothing for built in types but contains the conversion method for custom events
                 pub enum EventKind {
                     BuiltIn,
                     Custom(EventConversion)
                 }
 
-                /// Trait that all events defined in the protocol definitions implement
+                impl ::std::fmt::Debug for EventKind {
+                    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                        match self {
+                            EventKind::BuiltIn => {
+                                 f.debug_tuple("BuiltIn").finish()
+                            }
+                            EventKind::Custom(_) => {
+                                f.debug_tuple("Custom").finish()
+                            }
+                        }
+                    }
+                }
+
+                /// A trait on top of the `Event` trait
                 pub trait IntoEventKind : Event {
+                    /// What kind of event this type is
                     fn event_kind() -> EventKind where Self : Sized + 'static;
                 }
 
