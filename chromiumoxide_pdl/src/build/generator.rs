@@ -271,6 +271,15 @@ impl Generator {
                     Custom(EventConversion)
                 }
 
+                impl EventKind {
+
+                    /// Whether this is a custom event
+                    pub fn is_custom(&self) -> bool {
+                         matches!(self,EventKind::Custom(_))
+                    }
+
+                }
+
                 impl ::std::fmt::Debug for EventKind {
                     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
                         match self {
