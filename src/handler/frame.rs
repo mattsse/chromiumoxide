@@ -248,7 +248,7 @@ impl FrameManager {
             frame_tree.frame.id.clone(),
             frame_tree.frame.parent_id.clone().map(Into::into),
         );
-        self.on_frame_navigated(frame_tree.frame);
+        self.on_frame_navigated(&frame_tree.frame);
         if let Some(children) = frame_tree.child_frames {
             for child_tree in children {
                 self.on_frame_tree(child_tree);
@@ -271,7 +271,7 @@ impl FrameManager {
         self.remove_frames_recursively(&event.frame_id);
     }
 
-    pub fn on_frame_navigated(&mut self, frame: CdpFrame) {
+    pub fn on_frame_navigated(&mut self, frame: &CdpFrame) {
         if frame.parent_id.is_some() {
             if let Some((id, mut f)) = self.frames.remove_entry(&frame.id) {
                 for child in &f.child_frames {
