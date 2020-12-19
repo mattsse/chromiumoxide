@@ -1,10 +1,10 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use futures::channel::mpsc::unbounded;
 use futures::channel::oneshot::channel as oneshot_channel;
 use futures::{stream, SinkExt, StreamExt};
 
-use chromiumoxide_cdp::cdp::browser_protocol;
 use chromiumoxide_cdp::cdp::browser_protocol::dom::*;
 use chromiumoxide_cdp::cdp::browser_protocol::emulation::{
     MediaFeature, SetEmulatedMediaParams, SetTimezoneOverrideParams,
@@ -19,6 +19,7 @@ use chromiumoxide_cdp::cdp::browser_protocol::target::{SessionId, TargetId};
 use chromiumoxide_cdp::cdp::js_protocol;
 use chromiumoxide_cdp::cdp::js_protocol::debugger::GetScriptSourceParams;
 use chromiumoxide_cdp::cdp::js_protocol::runtime::{EvaluateParams, RemoteObject, ScriptId};
+use chromiumoxide_cdp::cdp::{browser_protocol, IntoEventKind};
 use chromiumoxide_types::*;
 
 use crate::element::Element;
@@ -26,6 +27,7 @@ use crate::error::{CdpError, Result};
 use crate::handler::target::TargetMessage;
 use crate::handler::PageInner;
 use crate::layout::Point;
+use crate::listeners::{EventListenerRequest, EventStream};
 use crate::utils;
 
 #[derive(Debug)]
@@ -37,6 +39,20 @@ impl Page {
     /// Execute a command and return the `Command::Response`
     pub async fn execute<T: Command>(&self, cmd: T) -> Result<CommandResponse<T::Response>> {
         Ok(self.inner.execute(cmd).await?)
+    }
+
+    pub async fn event_listener<T: IntoEventKind>(&self) -> Result<EventStream<T>> {
+        todo!()
+        // let (tx, rx) = unbounded();
+        // self.inner
+        //     .sender()
+        //     .clone()
+        //     .send(TargetMessage::AddEventListener(EventListenerRequest {
+        //         method: T::identifier(),
+        //         kind: T::event_kind(),
+        //         listener: tx,
+        //     }))
+        //     .await?;
     }
 
     /// This resolves once the navigation finished and the page is loaded.

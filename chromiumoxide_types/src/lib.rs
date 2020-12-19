@@ -5,6 +5,8 @@ use std::ops::Deref;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
+pub type MethodId = Cow<'static, str>;
+
 /// A Request sent by the client, identified by the `id`
 #[derive(Serialize, Debug, PartialEq)]
 pub struct MethodCall {
@@ -13,7 +15,7 @@ pub struct MethodCall {
     /// [`MethodCall`] id's must be unique for every session
     pub id: CallId,
     /// The method identifier
-    pub method: Cow<'static, str>,
+    pub method: MethodId,
     /// The CDP session id of any
     #[serde(rename = "sessionId", skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
@@ -59,7 +61,7 @@ where
 {
     pub id: CallId,
     pub result: T,
-    pub method: Cow<'static, str>,
+    pub method: MethodId,
 }
 
 /// Represents the successfully deserialization of an incoming response.
@@ -81,7 +83,7 @@ impl<T: fmt::Debug> Deref for CommandResponse<T> {
 #[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct CdpJsonEventMessage {
     /// Name of the method
-    pub method: Cow<'static, str>,
+    pub method: MethodId,
     /// The session this event is meant for.
     pub session_id: Option<String>,
     /// Json payload of the event
@@ -89,7 +91,7 @@ pub struct CdpJsonEventMessage {
 }
 
 impl Method for CdpJsonEventMessage {
-    fn identifier(&self) -> Cow<'static, str> {
+    fn identifier(&self) -> MethodId {
         self.method.clone()
     }
 }
@@ -110,20 +112,20 @@ pub trait EventMessage: Method + DeserializeOwned {
 /// Self::identifier()` in their json body.
 pub trait Method {
     /// The whole string identifier for this method like: `DOM.removeNode`
-    fn identifier(&self) -> Cow<'static, str>;
+    fn identifier(&self) -> MethodId;
 
     /// The name of the domain this method belongs to: `DOM`
-    fn domain_name(&self) -> Cow<'static, str> {
+    fn domain_name(&self) -> MethodId {
         self.split().0
     }
 
     /// The standalone identifier of the method inside the domain: `removeNode`
-    fn method_name(&self) -> Cow<'static, str> {
+    fn method_name(&self) -> MethodId {
         self.split().1
     }
 
     /// Tuple of (`domain_name`, `method_name`) : (`DOM`, `removeNode`)
-    fn split(&self) -> (Cow<'static, str>, Cow<'static, str>) {
+    fn split(&self) -> (MethodId, MethodId) {
         match self.identifier() {
             Cow::Borrowed(id) => {
                 let mut iter = id.split('.');
@@ -144,7 +146,7 @@ pub trait Method {
 #[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct Request {
     /// The identifier for the type of this request.
-    pub method: Cow<'static, str>,
+    pub method: MethodId,
     /// The session this request targets
     #[serde(rename = "sessionId", skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
@@ -153,7 +155,7 @@ pub struct Request {
 }
 
 impl Request {
-    pub fn new(method: Cow<'static, str>, params: serde_json::Value) -> Self {
+    pub fn new(method: MethodId, params: serde_json::Value) -> Self {
         Self {
             method,
             params,
@@ -162,7 +164,7 @@ impl Request {
     }
 
     pub fn with_session(
-        method: Cow<'static, str>,
+        method: MethodId,
         params: serde_json::Value,
         session_id: impl Into<String>,
     ) -> Self {
@@ -179,8 +181,6 @@ impl Request {
 pub struct Response {
     /// Numeric identifier for the exact request
     pub id: CallId,
-    // /// The identifier for the type of request issued
-    // pub method: Cow<'static, str>,
     /// The response payload
     pub result: Option<serde_json::Value>,
     /// The Reason why the [`MethodCall`] failed.

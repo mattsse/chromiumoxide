@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::pin::Pin;
 use std::time::Instant;
@@ -13,8 +12,8 @@ use chromiumoxide_cdp::cdp::browser_protocol::browser::*;
 use chromiumoxide_cdp::cdp::browser_protocol::target::*;
 use chromiumoxide_cdp::cdp::events::CdpEvent;
 use chromiumoxide_cdp::cdp::events::CdpEventMessage;
-use chromiumoxide_types::Request as CdpRequest;
 use chromiumoxide_types::{CallId, Message, Method, Response};
+use chromiumoxide_types::{MethodId, Request as CdpRequest};
 pub(crate) use page::PageInner;
 
 use crate::cmd::{to_command_response, CommandMessage};
@@ -49,7 +48,7 @@ mod viewport;
 pub struct Handler {
     /// Commands that are being processed await a response from the chromium
     /// instance
-    pending_commands: FnvHashMap<CallId, (PendingRequest, Cow<'static, str>, Instant)>,
+    pending_commands: FnvHashMap<CallId, (PendingRequest, MethodId, Instant)>,
     /// Connection to the browser instance
     from_browser: Fuse<Receiver<HandlerMessage>>,
     // default_ctx: BrowserContext,

@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::pin::Pin;
@@ -9,7 +8,7 @@ use futures::task::{Context, Poll};
 use futures::Sink;
 
 use chromiumoxide_cdp::cdp::browser_protocol::target::SessionId;
-use chromiumoxide_types::{CallId, EventMessage, Message, MethodCall};
+use chromiumoxide_types::{CallId, EventMessage, Message, MethodCall, MethodId};
 
 use crate::error::CdpError;
 use crate::error::Result;
@@ -69,7 +68,7 @@ impl<T: EventMessage> Connection<T> {
     /// command
     pub fn submit_command(
         &mut self,
-        method: Cow<'static, str>,
+        method: MethodId,
         session_id: Option<SessionId>,
         params: serde_json::Value,
     ) -> serde_json::Result<CallId> {

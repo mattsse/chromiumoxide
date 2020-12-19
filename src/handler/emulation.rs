@@ -1,11 +1,11 @@
-use chromiumoxide_types::Method;
-
-use crate::cmd::CommandChain;
-use crate::handler::viewport::Viewport;
 use chromiumoxide_cdp::cdp::browser_protocol::emulation::{
     ScreenOrientation, ScreenOrientationType, SetDeviceMetricsOverrideParams,
     SetTouchEmulationEnabledParams,
 };
+use chromiumoxide_types::Method;
+
+use crate::cmd::CommandChain;
+use crate::handler::viewport::Viewport;
 
 #[derive(Debug, Default)]
 pub struct EmulationManager {

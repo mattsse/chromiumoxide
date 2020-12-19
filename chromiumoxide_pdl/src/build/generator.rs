@@ -466,7 +466,7 @@ impl Generator {
                 stream.extend(quote! {
                     impl chromiumoxide_types::Method for #name {
 
-                        fn identifier(&self) -> ::std::borrow::Cow<'static, str> {
+                        fn identifier(&self) -> chromiumoxide_types::MethodId {
                             Self::IDENTIFIER.into()
                         }
                     }

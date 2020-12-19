@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
 use std::marker::PhantomData;
@@ -10,12 +9,13 @@ use futures::channel::mpsc::{SendError, UnboundedReceiver, UnboundedSender};
 use futures::{Sink, Stream};
 
 use chromiumoxide_cdp::cdp::{Event, EventKind, IntoEventKind};
+use chromiumoxide_types::MethodId;
 
 /// All the currently active listeners
 #[derive(Debug, Default)]
 pub struct EventListeners {
     /// Tracks the listeners for each event identified by the key
-    listeners: HashMap<Cow<'static, str>, Vec<EventListener>>,
+    listeners: HashMap<MethodId, Vec<EventListener>>,
 }
 
 impl EventListeners {
@@ -97,7 +97,7 @@ impl EventListeners {
 
 pub struct EventListenerRequest {
     listener: UnboundedSender<Arc<dyn Event>>,
-    method: Cow<'static, str>,
+    method: MethodId,
     kind: EventKind,
 }
 
@@ -231,7 +231,7 @@ mod tests {
         }
 
         impl Method for MyCustomEvent {
-            fn identifier(&self) -> Cow<'static, str> {
+            fn identifier(&self) -> MethodId {
                 "Custom.Event".into()
             }
         }

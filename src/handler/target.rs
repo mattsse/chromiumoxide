@@ -7,6 +7,14 @@ use futures::channel::oneshot::Sender;
 use futures::stream::Stream;
 use futures::task::{Context, Poll};
 
+use chromiumoxide_cdp::cdp::browser_protocol::page::{FrameId, GetFrameTreeParams};
+use chromiumoxide_cdp::cdp::browser_protocol::{
+    browser::BrowserContextId,
+    log as cdplog, performance,
+    target::{AttachToTargetParams, SessionId, SetAutoAttachParams, TargetId, TargetInfo},
+};
+use chromiumoxide_cdp::cdp::events::CdpEvent;
+use chromiumoxide_cdp::cdp::CdpEventMessage;
 use chromiumoxide_types::{Command, Method, Request, Response};
 
 use crate::cmd::CommandChain;
@@ -23,14 +31,6 @@ use crate::handler::viewport::Viewport;
 use crate::handler::PageInner;
 use crate::listeners::{EventListenerRequest, EventListeners};
 use crate::page::Page;
-use chromiumoxide_cdp::cdp::browser_protocol::page::{FrameId, GetFrameTreeParams};
-use chromiumoxide_cdp::cdp::browser_protocol::{
-    browser::BrowserContextId,
-    log as cdplog, performance,
-    target::{AttachToTargetParams, SessionId, SetAutoAttachParams, TargetId, TargetInfo},
-};
-use chromiumoxide_cdp::cdp::events::CdpEvent;
-use chromiumoxide_cdp::cdp::CdpEventMessage;
 
 macro_rules! advance_state {
     ($s:ident, $cx:ident, $now:ident, $cmds: ident, $next_state:expr ) => {{

@@ -159,14 +159,14 @@ impl<'a> EventBuilder<'a> {
             #[derive(Debug, PartialEq, Clone)]
             pub struct CdpEventMessage {
                 /// Name of the method
-                pub method: ::std::borrow::Cow<'static, str>,
+                pub method: chromiumoxide_types::MethodId,
                 /// The chromium session Id
                 pub session_id: Option<String>,
                 /// Json params
                 pub params: CdpEvent,
             }
             impl chromiumoxide_types::Method for CdpEventMessage {
-                fn identifier(&self) -> ::std::borrow::Cow<'static, str> {
+                fn identifier(&self) -> chromiumoxide_types::MethodId {
                    match &self.params {
                         #(CdpEvent::#var_idents(inner) => inner.identifier(),)*
                         _=> self.method.clone()

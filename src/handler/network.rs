@@ -1,6 +1,3 @@
-use chromiumoxide_types::Method;
-
-use crate::cmd::CommandChain;
 use chromiumoxide_cdp::cdp::browser_protocol::fetch::{EventAuthRequired, EventRequestPaused};
 use chromiumoxide_cdp::cdp::browser_protocol::network::{
     EventLoadingFailed, EventLoadingFinished, EventRequestServedFromCache, EventRequestWillBeSent,
@@ -9,6 +6,9 @@ use chromiumoxide_cdp::cdp::browser_protocol::network::{
 use chromiumoxide_cdp::cdp::browser_protocol::{
     network::EnableParams, security::SetIgnoreCertificateErrorsParams,
 };
+use chromiumoxide_types::Method;
+
+use crate::cmd::CommandChain;
 
 #[derive(Debug)]
 pub struct NetworkManager {

@@ -61,6 +61,16 @@
 
 #![warn(missing_debug_implementations, rust_2018_idioms)]
 
+/// reexport the generated cdp types
+pub use chromiumoxide_cdp::cdp;
+pub use chromiumoxide_types::{self as types, Binary, Command, Method};
+
+pub use crate::browser::{Browser, BrowserConfig};
+pub use crate::conn::Connection;
+pub use crate::element::Element;
+pub use crate::handler::Handler;
+pub use crate::page::Page;
+
 pub mod browser;
 pub(crate) mod cmd;
 pub mod conn;
@@ -69,16 +79,6 @@ pub mod error;
 pub mod handler;
 pub mod keys;
 pub mod layout;
-pub mod page;
 pub mod listeners;
+pub mod page;
 pub(crate) mod utils;
-
-pub use crate::browser::{Browser, BrowserConfig};
-pub use crate::conn::Connection;
-pub use crate::element::Element;
-pub use crate::handler::Handler;
-pub use crate::page::Page;
-
-/// reexport the generated cdp types
-pub use chromiumoxide_cdp::cdp;
-pub use chromiumoxide_types::{self as types, Binary, Command, Method};
