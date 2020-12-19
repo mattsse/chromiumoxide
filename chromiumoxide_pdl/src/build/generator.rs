@@ -263,7 +263,7 @@ impl Generator {
                 impl<T: CustomEvent + Event> sealed::SealedCustomEventConverter for T {}
 
                 /// Function type to convert a json event into an instance of it self but as dyn Event
-                pub type EventConversion = Box<dyn Fn(serde_json::Value) -> serde_json::Result<::std::sync::Arc<dyn Event>>>;
+                 pub type EventConversion = Box<dyn Fn(serde_json::Value) -> serde_json::Result<::std::sync::Arc<dyn Event>> + Send + 'static>;
 
                 /// An enum that does nothing for built in types but contains the conversion method for custom events
                 pub enum EventKind {

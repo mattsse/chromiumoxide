@@ -40,6 +40,8 @@ impl<'a> EventBuilder<'a> {
         let mut deserialize_from_method = TokenStream::default();
         let mut conversion_impls = TokenStream::default();
         let mut event_trait_impls = TokenStream::default();
+        let mut consume_event_macro_exprs = TokenStream::default();
+        let mut event_as_boxed_results = TokenStream::default();
 
         for event in &self.events {
             let var_ident = event.var_ident();
@@ -68,25 +70,42 @@ impl<'a> EventBuilder<'a> {
                 #var_ident(#ty_ident),
             });
 
-            let (variant_match, into_event) = if event.needs_box {
-                (
-                    quote! {
-                        CdpEvent::#var_ident(val) => Ok(*val),
-                    },
-                    quote! {
-                        CdpEvent::#var_ident(Box::new(self))
-                    },
-                )
-            } else {
-                (
-                    quote! {
-                        CdpEvent::#var_ident(val) => Ok(val),
-                    },
-                    quote! {
-                        CdpEvent::#var_ident(self)
-                    },
-                )
-            };
+            let (variant_match, into_event, consume_event_macro_expr, event_as_boxed_result) =
+                if event.needs_box {
+                    (
+                        quote! {
+                            CdpEvent::#var_ident(val) => Ok(*val),
+                        },
+                        quote! {
+                            CdpEvent::#var_ident(Box::new(self))
+                        },
+                        quote! {
+                            CdpEvent::#var_ident(event) => {$builtin(*event);}
+                        },
+                        quote! {
+                            CdpEvent::#var_ident(event) => Ok(Box::new(*event)),
+                        },
+                    )
+                } else {
+                    (
+                        quote! {
+                            CdpEvent::#var_ident(val) => Ok(val),
+                        },
+                        quote! {
+                            CdpEvent::#var_ident(self)
+                        },
+                        quote! {
+                            CdpEvent::#var_ident(event) => {$builtin(event);}
+                        },
+                        quote! {
+                            CdpEvent::#var_ident(event) => Ok(Box::new(event)),
+                        },
+                    )
+                };
+
+            event_as_boxed_results.extend(event_as_boxed_result);
+
+            consume_event_macro_exprs.extend(consume_event_macro_expr);
 
             conversion_impls.extend(quote! {
                 impl std::convert::TryFrom<CdpEvent> for  #ty_qualifier {
@@ -179,6 +198,14 @@ impl<'a> EventBuilder<'a> {
                          CdpEvent::Other(val) => Ok(val)
                     }
                 }
+
+                pub fn into_event(self) -> ::std::result::Result<Box<dyn super::Event>, serde_json::Value> {
+                    match self {
+                        #event_as_boxed_results
+                        CdpEvent::Other(other) => Err(other)
+                    }
+                }
+
            }
            // #event_json serde.generate_event_json_support
         };
@@ -305,6 +332,19 @@ impl<'a> EventBuilder<'a> {
             #deserialize_impl
             #conversion_impls
             #event_trait_impls
+
+            #[macro_export]
+            #[doc(hidden)]
+            macro_rules! consume_event {
+                (match $ev:ident  { $builtin:expr, $custom: expr  }) => {
+                    {
+                        match $ev {
+                           #consume_event_macro_exprs
+                           CdpEvent::Other(json) => {$custom(json);}
+                        }
+                    }
+                };
+            }
         }
     }
 }
