@@ -63,7 +63,7 @@
 
 /// reexport the generated cdp types
 pub use chromiumoxide_cdp::cdp;
-pub use chromiumoxide_types::{self as types, Binary, Command, Method};
+pub use chromiumoxide_types::{self as types, Binary, Command, Method, MethodType};
 
 pub use crate::browser::{Browser, BrowserConfig};
 pub use crate::conn::Connection;

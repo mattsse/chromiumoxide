@@ -41,6 +41,70 @@ impl Page {
         Ok(self.inner.execute(cmd).await?)
     }
 
+    /// Adds an event listener to the `Target` and returns the receiver part as
+    /// `EventStream`
+    ///
+    /// An `EventStream` receives every `Event` the `Target` receives.
+    /// All event listener get notified with the same event, so registering
+    /// multiple listeners for the same event is possible.
+    ///
+    /// Custom events rely on being deserializable from the received json params
+    /// in the `EventMessage`. Custom Events are caught by the `CdpEvent::Other`
+    /// variant. If there are mulitple custom event listener is registered
+    /// for the same event, identified by the `MethodType::method_id` function,
+    /// the `Target` tries to deserialize the json using the type of the event
+    /// listener. Upon success the `Target` then notifies all listeners with the
+    /// deserialized event. This means, while it is possible to register
+    /// different types for the same custom event, only the type of first
+    /// registered event listener will be used. The subsequent listeners, that
+    /// registered for the same event but with another type won't be able to
+    /// receive anything and therefor will come up empty until all their
+    /// preceding event listeners are dropped and they become the first (or
+    /// longest) registered event listener for an event.
+    ///
+    /// # Example Listen for canceled animations
+    /// ```no_run
+    /// # use chromiumoxide::page::Page;
+    /// # use chromiumoxide::error::Result;
+    /// # use chromiumoxide_cdp::cdp::browser_protocol::animation::EventAnimationCanceled;
+    /// # use futures::StreamExt;
+    /// # async fn demo(page: Page) -> Result<()> {
+    ///     let mut events = page.event_listener::<EventAnimationCanceled>().await?;
+    ///     while let Some(event) = events.next().await {
+    ///         //..
+    ///     }
+    ///     # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Example Liste for a custom event
+    ///
+    /// ```no_run
+    /// # use chromiumoxide::page::Page;
+    /// # use chromiumoxide::error::Result;
+    /// # use futures::StreamExt;
+    /// # use serde::Deserialize;
+    /// # use chromiumoxide::types::{MethodId, MethodType};
+    /// # use chromiumoxide::cdp::CustomEvent;
+    /// # async fn demo(page: Page) -> Result<()> {
+    ///     #[derive(Debug, Clone, Eq, PartialEq, Deserialize)]
+    ///     struct MyCustomEvent {
+    ///         name: String,
+    ///     }
+    ///    impl MethodType for MyCustomEvent {
+    ///        fn method_id() -> MethodId {
+    ///            "Custom.Event".into()
+    ///        }
+    ///    }
+    ///    impl CustomEvent for MyCustomEvent {}
+    ///    let mut events = page.event_listener::<MyCustomEvent>().await?;
+    ///    while let Some(event) = events.next().await {
+    ///        //..
+    ///    }
+    ///
+    ///     # Ok(())
+    /// # }
+    /// ```
     pub async fn event_listener<T: IntoEventKind>(&self) -> Result<EventStream<T>> {
         let (tx, rx) = unbounded();
         self.inner
