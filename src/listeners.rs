@@ -199,15 +199,16 @@ impl<T: IntoEventKind + Unpin> Stream for EventStream<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use futures::{SinkExt, StreamExt};
+
+    use chromiumoxide_cdp::cdp::browser_protocol::animation::EventAnimationCanceled;
     use chromiumoxide_cdp::cdp::CustomEvent;
     use chromiumoxide_types::Method;
-    use futures::{SinkExt, StreamExt};
+
+    use super::*;
 
     #[async_std::test]
     async fn event_stream() {
-        use chromiumoxide_cdp::cdp::browser_protocol::animation::EventAnimationCanceled;
-
         let (mut tx, rx) = futures::channel::mpsc::unbounded();
         let mut stream = EventStream::<EventAnimationCanceled>::new(rx);
 
@@ -244,6 +245,39 @@ mod tests {
         };
         let msg: Arc<dyn Event> = Arc::new(event.clone());
         tx.send(msg).await.unwrap();
+        let next = stream.next().await.unwrap();
+        assert_eq!(&*next, &event);
+    }
+
+    #[async_std::test]
+    async fn event_listeners() {
+        let (tx, rx) = futures::channel::mpsc::unbounded();
+        let mut listeners = EventListeners::default();
+
+        let event = EventAnimationCanceled {
+            id: "id".to_string(),
+        };
+
+        listeners.add_listener(EventListenerRequest {
+            method: event.identifier(),
+            kind: EventAnimationCanceled::event_kind(),
+            listener: tx,
+        });
+
+        listeners.start_send(event.clone());
+
+        let mut stream = EventStream::<EventAnimationCanceled>::new(rx);
+
+        async_std::task::spawn(async move {
+            loop {
+                async_std::future::poll_fn(|cx| {
+                    listeners.poll(cx);
+                    Poll::Pending
+                })
+                .await
+            }
+        });
+
         let next = stream.next().await.unwrap();
         assert_eq!(&*next, &event);
     }
