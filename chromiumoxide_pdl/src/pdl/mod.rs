@@ -71,11 +71,7 @@ pub struct TypeDef<'a> {
 
 impl<'a> TypeDef<'a> {
     pub fn is_enum(&self) -> bool {
-        if let Some(item) = self.item.as_ref() {
-            matches!(item, Item::Enum(_))
-        } else {
-            false
-        }
+        matches!(self.item.as_ref(), Some(Item::Enum(_)))
     }
 }
 

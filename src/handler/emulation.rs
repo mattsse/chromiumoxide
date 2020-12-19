@@ -23,7 +23,7 @@ impl EmulationManager {
         };
 
         let set_device = SetDeviceMetricsOverrideParams::builder()
-            .mobile(viewport.is_mobile)
+            .mobile(viewport.emulating_mobile)
             .width(viewport.width)
             .height(viewport.height)
             .device_scale_factor(viewport.device_scale_factor.unwrap_or(1.))
@@ -44,8 +44,8 @@ impl EmulationManager {
             ),
         ]);
 
-        self.needs_reload =
-            self.emulating_mobile != viewport.is_mobile || self.has_touch != viewport.has_touch;
+        self.needs_reload = self.emulating_mobile != viewport.emulating_mobile
+            || self.has_touch != viewport.has_touch;
         chain
     }
 }
