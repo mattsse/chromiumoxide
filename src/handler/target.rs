@@ -333,6 +333,10 @@ impl Target {
                         TargetMessage::MainFrame(tx) => {
                             let _ = tx.send(self.frame_manager.main_frame().map(|f| f.id.clone()));
                         }
+                        TargetMessage::AllFrames(tx) => {
+                            let _ = tx
+                                .send(self.frame_manager.frames().map(|f| f.id).cloned().collect());
+                        }
                         TargetMessage::Url(tx) => {
                             let _ = tx
                                 .send(self.frame_manager.main_frame().and_then(|f| f.url.clone()));
@@ -453,8 +457,10 @@ impl TargetInit {
 pub(crate) enum TargetMessage {
     /// Execute a command within the session of this target
     Command(CommandMessage),
-    /// Return the main frame of this target
+    /// Return the main frame of this target's page
     MainFrame(Sender<Option<FrameId>>),
+    /// Return all the frames of this target's page
+    AllFrames(Sender<Vec<FrameId>>),
     /// Return the url of this target's page
     Url(Sender<Option<String>>),
     /// A Message that resolves when the frame finished loading a new url

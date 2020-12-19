@@ -18,7 +18,9 @@ use chromiumoxide_cdp::cdp::browser_protocol::performance::{GetMetricsParams, Me
 use chromiumoxide_cdp::cdp::browser_protocol::target::{SessionId, TargetId};
 use chromiumoxide_cdp::cdp::js_protocol;
 use chromiumoxide_cdp::cdp::js_protocol::debugger::GetScriptSourceParams;
-use chromiumoxide_cdp::cdp::js_protocol::runtime::{EvaluateParams, RemoteObject, ScriptId};
+use chromiumoxide_cdp::cdp::js_protocol::runtime::{
+    AddBindingParams, EvaluateParams, RemoteObject, ScriptId,
+};
 use chromiumoxide_cdp::cdp::{browser_protocol, IntoEventKind};
 use chromiumoxide_types::*;
 
@@ -118,6 +120,26 @@ impl Page {
         Ok(EventStream::new(rx))
     }
 
+    pub async fn expose_function(
+        &self,
+        name: impl Into<String>,
+        function: impl AsRef<str>,
+    ) -> Result<()> {
+        let name = name.into();
+        let expression = utils::evaluation_string(function, &["exposedFun", name.as_str()]);
+
+        self.execute(AddBindingParams::new(name)).await?;
+        self.execute(AddScriptToEvaluateOnNewDocumentParams::new(
+            expression.clone(),
+        ))
+        .await?;
+
+        // TODO add execution context tracking for frames
+        //let frames = self.frames().await?;
+
+        Ok(())
+    }
+
     /// This resolves once the navigation finished and the page is loaded.
     ///
     /// This is necessary after an interaction with the page that may trigger a
@@ -168,6 +190,17 @@ impl Page {
             .sender()
             .clone()
             .send(TargetMessage::MainFrame(tx))
+            .await?;
+        Ok(rx.await?)
+    }
+
+    /// Return the frames of the page
+    pub async fn frames(&self) -> Result<Vec<FrameId>> {
+        let (tx, rx) = oneshot_channel();
+        self.inner
+            .sender()
+            .clone()
+            .send(TargetMessage::AllFrames(tx))
             .await?;
         Ok(rx.await?)
     }
