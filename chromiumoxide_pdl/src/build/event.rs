@@ -38,6 +38,10 @@ impl<'a> EventBuilder<'a> {
         let mut variants_stream = TokenStream::default();
         let mut var_idents = Vec::new();
         let mut deserialize_from_method = TokenStream::default();
+        let mut conversion_impls = TokenStream::default();
+        let mut event_trait_impls = TokenStream::default();
+        let mut consume_event_macro_exprs = TokenStream::default();
+        let mut event_as_boxed_results = TokenStream::default();
 
         for event in &self.events {
             let var_ident = event.var_ident();
@@ -66,6 +70,76 @@ impl<'a> EventBuilder<'a> {
                 #var_ident(#ty_ident),
             });
 
+            let (variant_match, into_event, consume_event_macro_expr, event_as_boxed_result) =
+                if event.needs_box {
+                    (
+                        quote! {
+                            CdpEvent::#var_ident(val) => Ok(*val),
+                        },
+                        quote! {
+                            CdpEvent::#var_ident(Box::new(self))
+                        },
+                        quote! {
+                            CdpEvent::#var_ident(event) => {$builtin(*event);}
+                        },
+                        quote! {
+                            CdpEvent::#var_ident(event) => Ok(Box::new(*event)),
+                        },
+                    )
+                } else {
+                    (
+                        quote! {
+                            CdpEvent::#var_ident(val) => Ok(val),
+                        },
+                        quote! {
+                            CdpEvent::#var_ident(self)
+                        },
+                        quote! {
+                            CdpEvent::#var_ident(event) => {$builtin(event);}
+                        },
+                        quote! {
+                            CdpEvent::#var_ident(event) => Ok(Box::new(event)),
+                        },
+                    )
+                };
+
+            event_as_boxed_results.extend(event_as_boxed_result);
+
+            consume_event_macro_exprs.extend(consume_event_macro_expr);
+
+            conversion_impls.extend(quote! {
+                impl std::convert::TryFrom<CdpEvent> for  #ty_qualifier {
+                    type Error = CdpEvent;
+
+                    fn try_from(event: CdpEvent) -> Result<Self, Self::Error> {
+                        match event {
+                            #variant_match
+                            _ => Err(event)
+                        }
+                    }
+                }
+                impl Into<CdpEvent> for #ty_qualifier {
+                    fn into(self) -> CdpEvent {
+                        #into_event
+                    }
+                }
+            });
+
+            event_trait_impls.extend(quote! {
+                    impl super::sealed::SealedEvent for #ty_qualifier {
+                        fn as_any(&self) -> &dyn ::std::any::Any {
+                            self
+                        }
+                    }
+                     impl super::IntoEventKind for #ty_qualifier {
+
+                       fn event_kind() -> super::EventKind where Self: Sized + 'static  {
+                           super::EventKind::BuiltIn
+                       }
+                     }
+
+            });
+
             let deserialize_from = if event.needs_box {
                 quote! {
                         #ty_qualifier::IDENTIFIER =>CdpEvent::#var_ident(Box::new(map.next_value::<#ty_qualifier>()?)),
@@ -85,21 +159,21 @@ impl<'a> EventBuilder<'a> {
             #[derive(Debug, PartialEq, Clone)]
             pub struct CdpEventMessage {
                 /// Name of the method
-                pub method: ::std::borrow::Cow<'static, str>,
+                pub method: chromiumoxide_types::MethodId,
                 /// The chromium session Id
                 pub session_id: Option<String>,
                 /// Json params
                 pub params: CdpEvent,
             }
             impl chromiumoxide_types::Method for CdpEventMessage {
-                fn identifier(&self) -> ::std::borrow::Cow<'static, str> {
+                fn identifier(&self) -> chromiumoxide_types::MethodId {
                    match &self.params {
                         #(CdpEvent::#var_idents(inner) => inner.identifier(),)*
                         _=> self.method.clone()
                     }
                 }
             }
-            impl chromiumoxide_types::Event for CdpEventMessage {
+            impl chromiumoxide_types::EventMessage for CdpEventMessage {
                 fn session_id(&self) -> Option<&str> {
                     self.session_id.as_deref()
                 }
@@ -112,12 +186,26 @@ impl<'a> EventBuilder<'a> {
             }
 
             impl CdpEvent {
+
+                pub fn other(other: serde_json::Value) -> Self {
+                    CdpEvent::Other(other)
+                }
+
+                /// Serializes the event as Json
                 pub fn into_json(self) -> serde_json::Result<serde_json::Value> {
                     match self {
                         #(CdpEvent::#var_idents(inner) => serde_json::to_value(inner),)*
                          CdpEvent::Other(val) => Ok(val)
                     }
                 }
+
+                pub fn into_event(self) -> ::std::result::Result<Box<dyn super::Event>, serde_json::Value> {
+                    match self {
+                        #event_as_boxed_results
+                        CdpEvent::Other(other) => Err(other)
+                    }
+                }
+
            }
            // #event_json serde.generate_event_json_support
         };
@@ -242,6 +330,21 @@ impl<'a> EventBuilder<'a> {
         quote! {
             #event_impl
             #deserialize_impl
+            #conversion_impls
+            #event_trait_impls
+
+            #[macro_export]
+            #[doc(hidden)]
+            macro_rules! consume_event {
+                (match $ev:ident  { $builtin:expr, $custom: expr  }) => {
+                    {
+                        match $ev {
+                           #consume_event_macro_exprs
+                           CdpEvent::Other(json) => {$custom(json);}
+                        }
+                    }
+                };
+            }
         }
     }
 }

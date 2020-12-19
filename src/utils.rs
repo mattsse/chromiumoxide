@@ -13,3 +13,14 @@ pub(crate) async fn write<P: AsRef<Path> + Unpin, C: AsRef<[u8]>>(
         }
     }
 }
+
+/// Creates a javascript function string as `(<function>)("<param 1>", "<param
+/// 2>")`
+pub fn evaluation_string(function: impl AsRef<str>, params: &[impl AsRef<str>]) -> String {
+    let params = params
+        .iter()
+        .map(|s| format!("\"{}\"", s.as_ref()))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("({})({})", function.as_ref(), params)
+}

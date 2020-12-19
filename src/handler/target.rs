@@ -7,6 +7,14 @@ use futures::channel::oneshot::Sender;
 use futures::stream::Stream;
 use futures::task::{Context, Poll};
 
+use chromiumoxide_cdp::cdp::browser_protocol::page::{FrameId, GetFrameTreeParams};
+use chromiumoxide_cdp::cdp::browser_protocol::{
+    browser::BrowserContextId,
+    log as cdplog, performance,
+    target::{AttachToTargetParams, SessionId, SetAutoAttachParams, TargetId, TargetInfo},
+};
+use chromiumoxide_cdp::cdp::events::CdpEvent;
+use chromiumoxide_cdp::cdp::CdpEventMessage;
 use chromiumoxide_types::{Command, Method, Request, Response};
 
 use crate::cmd::CommandChain;
@@ -21,15 +29,8 @@ use crate::handler::network::NetworkManager;
 use crate::handler::page::PageHandle;
 use crate::handler::viewport::Viewport;
 use crate::handler::PageInner;
+use crate::listeners::{EventListenerRequest, EventListeners};
 use crate::page::Page;
-use chromiumoxide_cdp::cdp::browser_protocol::page::{FrameId, GetFrameTreeParams};
-use chromiumoxide_cdp::cdp::browser_protocol::{
-    browser::BrowserContextId,
-    log as cdplog, performance,
-    target::{AttachToTargetParams, SessionId, SetAutoAttachParams, TargetId, TargetInfo},
-};
-use chromiumoxide_cdp::cdp::events::CdpEvent;
-use chromiumoxide_cdp::cdp::CdpEventMessage;
 
 macro_rules! advance_state {
     ($s:ident, $cx:ident, $now:ident, $cmds: ident, $next_state:expr ) => {{
@@ -72,6 +73,8 @@ pub struct Target {
     init_state: TargetInit,
     /// Currently queued events to report to the `Handler`
     queued_events: VecDeque<TargetEvent>,
+    /// All registered event subscriptions
+    event_listeners: EventListeners,
     /// Senders that need to be notified once the main frame has loaded
     wait_until_frame_loaded: Vec<Sender<Result<String>>>,
     /// The sender who requested the page.
@@ -96,6 +99,7 @@ impl Target {
             init_state: TargetInit::AttachToTarget,
             wait_until_frame_loaded: Default::default(),
             queued_events: Default::default(),
+            event_listeners: Default::default(),
             initiator: None,
             initialize: false,
         }
@@ -183,28 +187,29 @@ impl Target {
     }
 
     pub fn on_event(&mut self, event: CdpEventMessage) {
-        match event.params {
+        let CdpEventMessage { params, method, .. } = event;
+        match &params {
             // `FrameManager` events
             CdpEvent::PageFrameAttached(ev) => self
                 .frame_manager
-                .on_frame_attached(ev.frame_id.clone(), Some(ev.parent_frame_id)),
+                .on_frame_attached(ev.frame_id.clone(), Some(ev.parent_frame_id.clone())),
             CdpEvent::PageFrameDetached(ev) => self.frame_manager.on_frame_detached(&ev),
-            CdpEvent::PageFrameNavigated(ev) => self.frame_manager.on_frame_navigated(ev.frame),
+            CdpEvent::PageFrameNavigated(ev) => self.frame_manager.on_frame_navigated(&ev.frame),
             CdpEvent::PageNavigatedWithinDocument(ev) => {
-                self.frame_manager.on_frame_navigated_within_document(&ev)
+                self.frame_manager.on_frame_navigated_within_document(ev)
             }
             CdpEvent::RuntimeExecutionContextCreated(ev) => {
-                self.frame_manager.on_frame_execution_context_created(&ev)
+                self.frame_manager.on_frame_execution_context_created(ev)
             }
             CdpEvent::RuntimeExecutionContextDestroyed(ev) => {
-                self.frame_manager.on_frame_execution_context_destroyed(&ev)
+                self.frame_manager.on_frame_execution_context_destroyed(ev)
             }
             CdpEvent::RuntimeExecutionContextsCleared(ev) => {
-                self.frame_manager.on_execution_context_cleared(&ev)
+                self.frame_manager.on_execution_context_cleared(ev)
             }
-            CdpEvent::PageLifecycleEvent(ev) => self.frame_manager.on_page_lifecycle_event(&ev),
+            CdpEvent::PageLifecycleEvent(ev) => self.frame_manager.on_page_lifecycle_event(ev),
             CdpEvent::PageFrameStartedLoading(ev) => {
-                self.frame_manager.on_frame_started_loading(&ev);
+                self.frame_manager.on_frame_started_loading(ev);
             }
 
             // `NetworkManager` events
@@ -214,19 +219,23 @@ impl Target {
                 self.network_manager.on_request_will_be_sent(&*ev)
             }
             CdpEvent::NetworkRequestServedFromCache(ev) => {
-                self.network_manager.on_request_served_from_cache(&ev)
+                self.network_manager.on_request_served_from_cache(ev)
             }
             CdpEvent::NetworkResponseReceived(ev) => {
                 self.network_manager.on_response_received(&*ev)
             }
             CdpEvent::NetworkLoadingFinished(ev) => {
-                self.network_manager.on_network_loading_finished(&ev)
+                self.network_manager.on_network_loading_finished(ev)
             }
             CdpEvent::NetworkLoadingFailed(ev) => {
-                self.network_manager.on_network_loading_failed(&ev)
+                self.network_manager.on_network_loading_failed(ev)
             }
             _ => {}
         }
+        chromiumoxide_cdp::consume_event!(match params {
+           |ev| self.event_listeners.start_send(ev),
+           |json| { let _ = self.event_listeners.try_send_custom(&method, json);}
+        });
     }
 
     /// Advance that target's state
@@ -324,6 +333,10 @@ impl Target {
                         TargetMessage::MainFrame(tx) => {
                             let _ = tx.send(self.frame_manager.main_frame().map(|f| f.id.clone()));
                         }
+                        TargetMessage::AllFrames(tx) => {
+                            let _ = tx
+                                .send(self.frame_manager.frames().map(|f| f.id.clone()).collect());
+                        }
                         TargetMessage::Url(tx) => {
                             let _ = tx
                                 .send(self.frame_manager.main_frame().and_then(|f| f.url.clone()));
@@ -338,6 +351,10 @@ impl Target {
                             } else {
                                 self.wait_until_frame_loaded.push(tx);
                             }
+                        }
+                        TargetMessage::AddEventListener(req) => {
+                            // register a new listener
+                            self.event_listeners.add_listener(req);
                         }
                     }
                 }
@@ -440,10 +457,15 @@ impl TargetInit {
 pub(crate) enum TargetMessage {
     /// Execute a command within the session of this target
     Command(CommandMessage),
-    /// Return the main frame of this target
+    /// Return the main frame of this target's page
     MainFrame(Sender<Option<FrameId>>),
+    /// Return all the frames of this target's page
+    AllFrames(Sender<Vec<FrameId>>),
     /// Return the url of this target's page
     Url(Sender<Option<String>>),
     /// A Message that resolves when the frame finished loading a new url
     WaitForNavigation(Sender<Result<String>>),
+    /// A request to submit a new listener that gets notified with every
+    /// received event
+    AddEventListener(EventListenerRequest),
 }

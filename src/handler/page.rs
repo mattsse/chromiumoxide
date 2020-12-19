@@ -12,6 +12,9 @@ use chromiumoxide_cdp::cdp::browser_protocol::input::{
     DispatchKeyEventParams, DispatchKeyEventType, DispatchMouseEventParams, DispatchMouseEventType,
     MouseButton,
 };
+use chromiumoxide_cdp::cdp::browser_protocol::page::{
+    CaptureScreenshotParams, GetLayoutMetricsParams, GetLayoutMetricsReturns,
+};
 use chromiumoxide_cdp::cdp::browser_protocol::target::{ActivateTargetParams, SessionId, TargetId};
 use chromiumoxide_cdp::cdp::js_protocol::runtime::{
     CallFunctionOnParams, CallFunctionOnReturns, RemoteObjectId,
@@ -23,9 +26,6 @@ use crate::error::{CdpError, Result};
 use crate::handler::target::TargetMessage;
 use crate::keys;
 use crate::layout::Point;
-use chromiumoxide_cdp::cdp::browser_protocol::page::{
-    CaptureScreenshotParams, GetLayoutMetricsParams, GetLayoutMetricsReturns,
-};
 
 #[derive(Debug)]
 pub struct PageHandle {

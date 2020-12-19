@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -9,6 +10,9 @@ use chromiumoxide_cdp::cdp::browser_protocol::dom::{
     BackendNodeId, DescribeNodeParams, GetBoxModelParams, GetContentQuadsParams, Node, NodeId,
     ResolveNodeParams,
 };
+use chromiumoxide_cdp::cdp::browser_protocol::page::{
+    CaptureScreenshotFormat, CaptureScreenshotParams, Viewport,
+};
 use chromiumoxide_cdp::cdp::js_protocol::runtime::{
     CallFunctionOnReturns, GetPropertiesParams, PropertyDescriptor, RemoteObjectId,
     RemoteObjectType,
@@ -18,10 +22,6 @@ use crate::error::{CdpError, Result};
 use crate::handler::PageInner;
 use crate::layout::{BoundingBox, BoxModel, ElementQuad, Point};
 use crate::utils;
-use chromiumoxide_cdp::cdp::browser_protocol::page::{
-    CaptureScreenshotFormat, CaptureScreenshotParams, Viewport,
-};
-use std::path::Path;
 
 /// Represents a [DOM Element](https://developer.mozilla.org/en-US/docs/Web/API/Element).
 #[derive(Debug)]

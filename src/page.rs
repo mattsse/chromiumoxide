@@ -1,10 +1,10 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use futures::channel::mpsc::unbounded;
 use futures::channel::oneshot::channel as oneshot_channel;
 use futures::{stream, SinkExt, StreamExt};
 
-use chromiumoxide_cdp::cdp::browser_protocol;
 use chromiumoxide_cdp::cdp::browser_protocol::dom::*;
 use chromiumoxide_cdp::cdp::browser_protocol::emulation::{
     MediaFeature, SetEmulatedMediaParams, SetTimezoneOverrideParams,
@@ -18,7 +18,10 @@ use chromiumoxide_cdp::cdp::browser_protocol::performance::{GetMetricsParams, Me
 use chromiumoxide_cdp::cdp::browser_protocol::target::{SessionId, TargetId};
 use chromiumoxide_cdp::cdp::js_protocol;
 use chromiumoxide_cdp::cdp::js_protocol::debugger::GetScriptSourceParams;
-use chromiumoxide_cdp::cdp::js_protocol::runtime::{EvaluateParams, RemoteObject, ScriptId};
+use chromiumoxide_cdp::cdp::js_protocol::runtime::{
+    AddBindingParams, EvaluateParams, RemoteObject, ScriptId,
+};
+use chromiumoxide_cdp::cdp::{browser_protocol, IntoEventKind};
 use chromiumoxide_types::*;
 
 use crate::element::Element;
@@ -26,6 +29,7 @@ use crate::error::{CdpError, Result};
 use crate::handler::target::TargetMessage;
 use crate::handler::PageInner;
 use crate::layout::Point;
+use crate::listeners::{EventListenerRequest, EventStream};
 use crate::utils;
 
 #[derive(Debug)]
@@ -37,6 +41,103 @@ impl Page {
     /// Execute a command and return the `Command::Response`
     pub async fn execute<T: Command>(&self, cmd: T) -> Result<CommandResponse<T::Response>> {
         Ok(self.inner.execute(cmd).await?)
+    }
+
+    /// Adds an event listener to the `Target` and returns the receiver part as
+    /// `EventStream`
+    ///
+    /// An `EventStream` receives every `Event` the `Target` receives.
+    /// All event listener get notified with the same event, so registering
+    /// multiple listeners for the same event is possible.
+    ///
+    /// Custom events rely on being deserializable from the received json params
+    /// in the `EventMessage`. Custom Events are caught by the `CdpEvent::Other`
+    /// variant. If there are mulitple custom event listener is registered
+    /// for the same event, identified by the `MethodType::method_id` function,
+    /// the `Target` tries to deserialize the json using the type of the event
+    /// listener. Upon success the `Target` then notifies all listeners with the
+    /// deserialized event. This means, while it is possible to register
+    /// different types for the same custom event, only the type of first
+    /// registered event listener will be used. The subsequent listeners, that
+    /// registered for the same event but with another type won't be able to
+    /// receive anything and therefor will come up empty until all their
+    /// preceding event listeners are dropped and they become the first (or
+    /// longest) registered event listener for an event.
+    ///
+    /// # Example Listen for canceled animations
+    /// ```no_run
+    /// # use chromiumoxide::page::Page;
+    /// # use chromiumoxide::error::Result;
+    /// # use chromiumoxide_cdp::cdp::browser_protocol::animation::EventAnimationCanceled;
+    /// # use futures::StreamExt;
+    /// # async fn demo(page: Page) -> Result<()> {
+    ///     let mut events = page.event_listener::<EventAnimationCanceled>().await?;
+    ///     while let Some(event) = events.next().await {
+    ///         //..
+    ///     }
+    ///     # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Example Liste for a custom event
+    ///
+    /// ```no_run
+    /// # use chromiumoxide::page::Page;
+    /// # use chromiumoxide::error::Result;
+    /// # use futures::StreamExt;
+    /// # use serde::Deserialize;
+    /// # use chromiumoxide::types::{MethodId, MethodType};
+    /// # use chromiumoxide::cdp::CustomEvent;
+    /// # async fn demo(page: Page) -> Result<()> {
+    ///     #[derive(Debug, Clone, Eq, PartialEq, Deserialize)]
+    ///     struct MyCustomEvent {
+    ///         name: String,
+    ///     }
+    ///    impl MethodType for MyCustomEvent {
+    ///        fn method_id() -> MethodId {
+    ///            "Custom.Event".into()
+    ///        }
+    ///    }
+    ///    impl CustomEvent for MyCustomEvent {}
+    ///    let mut events = page.event_listener::<MyCustomEvent>().await?;
+    ///    while let Some(event) = events.next().await {
+    ///        //..
+    ///    }
+    ///
+    ///     # Ok(())
+    /// # }
+    /// ```
+    pub async fn event_listener<T: IntoEventKind>(&self) -> Result<EventStream<T>> {
+        let (tx, rx) = unbounded();
+        self.inner
+            .sender()
+            .clone()
+            .send(TargetMessage::AddEventListener(
+                EventListenerRequest::new::<T>(tx),
+            ))
+            .await?;
+
+        Ok(EventStream::new(rx))
+    }
+
+    pub async fn expose_function(
+        &self,
+        name: impl Into<String>,
+        function: impl AsRef<str>,
+    ) -> Result<()> {
+        let name = name.into();
+        let expression = utils::evaluation_string(function, &["exposedFun", name.as_str()]);
+
+        self.execute(AddBindingParams::new(name)).await?;
+        self.execute(AddScriptToEvaluateOnNewDocumentParams::new(
+            expression.clone(),
+        ))
+        .await?;
+
+        // TODO add execution context tracking for frames
+        //let frames = self.frames().await?;
+
+        Ok(())
     }
 
     /// This resolves once the navigation finished and the page is loaded.
@@ -89,6 +190,17 @@ impl Page {
             .sender()
             .clone()
             .send(TargetMessage::MainFrame(tx))
+            .await?;
+        Ok(rx.await?)
+    }
+
+    /// Return the frames of the page
+    pub async fn frames(&self) -> Result<Vec<FrameId>> {
+        let (tx, rx) = oneshot_channel();
+        self.inner
+            .sender()
+            .clone()
+            .send(TargetMessage::AllFrames(tx))
             .await?;
         Ok(rx.await?)
     }
@@ -434,10 +546,8 @@ impl Page {
         for cookie in &mut cookies {
             if let Some(url) = cookie.url.as_ref() {
                 validate_cookie_url(url)?;
-            } else {
-                if is_http {
-                    cookie.url = Some(url.clone());
-                }
+            } else if is_http {
+                cookie.url = Some(url.clone());
             }
         }
         self.delete_cookies_unchecked(cookies.iter().map(DeleteCookiesParams::from_cookie))

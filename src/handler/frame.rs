@@ -1,13 +1,9 @@
-use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
-use chromiumoxide_types::{Method, Request};
+use serde_json::map::Entry;
 
-use crate::cmd::CommandChain;
-use crate::error::DeadlineExceeded;
-use crate::handler::REQUEST_TIMEOUT;
 use chromiumoxide_cdp::cdp::browser_protocol::network::LoaderId;
 use chromiumoxide_cdp::cdp::browser_protocol::page::{
     EventFrameDetached, EventFrameStartedLoading, EventFrameStoppedLoading, EventLifecycleEvent,
@@ -19,7 +15,11 @@ use chromiumoxide_cdp::cdp::{
     browser_protocol::page::{self, FrameId},
     js_protocol::runtime,
 };
-use serde_json::map::Entry;
+use chromiumoxide_types::{Method, MethodId, Request};
+
+use crate::cmd::CommandChain;
+use crate::error::DeadlineExceeded;
+use crate::handler::REQUEST_TIMEOUT;
 
 /// TODO FrameId could optimized by rolling usize based id setup, or find better
 /// design for tracking child/parent
@@ -31,7 +31,7 @@ pub struct Frame {
     pub url: Option<String>,
     pub child_frames: HashSet<FrameId>,
     pub name: Option<String>,
-    pub lifecycle_events: HashSet<Cow<'static, str>>,
+    pub lifecycle_events: HashSet<MethodId>,
 }
 
 impl Frame {
@@ -60,7 +60,7 @@ impl Frame {
         }
     }
 
-    pub fn lifecycle_events(&self) -> &HashSet<Cow<'static, str>> {
+    pub fn lifecycle_events(&self) -> &HashSet<MethodId> {
         &self.lifecycle_events
     }
 
@@ -248,7 +248,7 @@ impl FrameManager {
             frame_tree.frame.id.clone(),
             frame_tree.frame.parent_id.clone().map(Into::into),
         );
-        self.on_frame_navigated(frame_tree.frame);
+        self.on_frame_navigated(&frame_tree.frame);
         if let Some(children) = frame_tree.child_frames {
             for child_tree in children {
                 self.on_frame_tree(child_tree);
@@ -271,7 +271,7 @@ impl FrameManager {
         self.remove_frames_recursively(&event.frame_id);
     }
 
-    pub fn on_frame_navigated(&mut self, frame: CdpFrame) {
+    pub fn on_frame_navigated(&mut self, frame: &CdpFrame) {
         if frame.parent_id.is_some() {
             if let Some((id, mut f)) = self.frames.remove_entry(&frame.id) {
                 for child in &f.child_frames {
@@ -426,7 +426,7 @@ impl NavigationOk {
 #[derive(Debug)]
 pub struct NavigationWatcher {
     id: NavigationId,
-    expected_lifecycle: HashSet<Cow<'static, str>>,
+    expected_lifecycle: HashSet<MethodId>,
     frame_id: FrameId,
     loader_id: Option<LoaderId>,
     /// Once we receive the response to the issued `Page.navigate` request we

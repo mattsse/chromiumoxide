@@ -1,11 +1,11 @@
-use chromiumoxide_types::Method;
-
-use crate::cmd::CommandChain;
-use crate::handler::viewport::Viewport;
 use chromiumoxide_cdp::cdp::browser_protocol::emulation::{
     ScreenOrientation, ScreenOrientationType, SetDeviceMetricsOverrideParams,
     SetTouchEmulationEnabledParams,
 };
+use chromiumoxide_types::Method;
+
+use crate::cmd::CommandChain;
+use crate::handler::viewport::Viewport;
 
 #[derive(Debug, Default)]
 pub struct EmulationManager {
@@ -23,7 +23,7 @@ impl EmulationManager {
         };
 
         let set_device = SetDeviceMetricsOverrideParams::builder()
-            .mobile(viewport.is_mobile)
+            .mobile(viewport.emulating_mobile)
             .width(viewport.width)
             .height(viewport.height)
             .device_scale_factor(viewport.device_scale_factor.unwrap_or(1.))
@@ -44,8 +44,8 @@ impl EmulationManager {
             ),
         ]);
 
-        self.needs_reload =
-            self.emulating_mobile != viewport.is_mobile || self.has_touch != viewport.has_touch;
+        self.needs_reload = self.emulating_mobile != viewport.emulating_mobile
+            || self.has_touch != viewport.has_touch;
         chain
     }
 }

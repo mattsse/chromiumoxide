@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::pin::Pin;
@@ -9,7 +8,7 @@ use futures::task::{Context, Poll};
 use futures::Sink;
 
 use chromiumoxide_cdp::cdp::browser_protocol::target::SessionId;
-use chromiumoxide_types::{CallId, Event, Message, MethodCall};
+use chromiumoxide_types::{CallId, EventMessage, Message, MethodCall, MethodId};
 
 use crate::error::CdpError;
 use crate::error::Result;
@@ -24,7 +23,7 @@ cfg_if::cfg_if! {
 /// Exchanges the messages with the websocket
 #[must_use = "streams do nothing unless polled"]
 #[derive(Debug)]
-pub struct Connection<T: Event> {
+pub struct Connection<T: EventMessage> {
     /// Queue of commands to send.
     pending_commands: VecDeque<MethodCall>,
     /// The websocket of the chromium instance
@@ -37,7 +36,7 @@ pub struct Connection<T: Event> {
     _marker: PhantomData<T>,
 }
 
-impl<T: Event + Unpin> Connection<T> {
+impl<T: EventMessage + Unpin> Connection<T> {
     pub async fn connect(debug_ws_url: impl AsRef<str>) -> Result<Self> {
         cfg_if::cfg_if! {
             if #[cfg(feature = "async-std-runtime")] {
@@ -58,7 +57,7 @@ impl<T: Event + Unpin> Connection<T> {
     }
 }
 
-impl<T: Event> Connection<T> {
+impl<T: EventMessage> Connection<T> {
     fn next_call_id(&mut self) -> CallId {
         let id = CallId::new(self.next_id);
         self.next_id = self.next_id.wrapping_add(1);
@@ -69,7 +68,7 @@ impl<T: Event> Connection<T> {
     /// command
     pub fn submit_command(
         &mut self,
-        method: Cow<'static, str>,
+        method: MethodId,
         session_id: Option<SessionId>,
         params: serde_json::Value,
     ) -> serde_json::Result<CallId> {
@@ -103,7 +102,7 @@ impl<T: Event> Connection<T> {
     }
 }
 
-impl<T: Event + Unpin> Stream for Connection<T> {
+impl<T: EventMessage + Unpin> Stream for Connection<T> {
     type Item = Result<Message<T>>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {

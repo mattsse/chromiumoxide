@@ -1,13 +1,15 @@
 use std::io;
+use std::time::Instant;
 
-use crate::handler::frame::NavigationError;
 use async_tungstenite::tungstenite;
 use base64::DecodeError;
-use chromiumoxide_cdp::cdp::browser_protocol::page::FrameId;
 use futures::channel::mpsc::SendError;
 use futures::channel::oneshot::Canceled;
-use std::time::Instant;
 use thiserror::Error;
+
+use chromiumoxide_cdp::cdp::browser_protocol::page::FrameId;
+
+use crate::handler::frame::NavigationError;
 
 pub type Result<T, E = CdpError> = std::result::Result<T, E>;
 

@@ -231,6 +231,125 @@ impl Generator {
         let stream = quote! {
             pub mod #mod_ident {
                 pub use events::*;
+
+                /// This trait allows for implementing custom events that are not covered by the
+                /// chrome protocol definitions.
+                ///
+                /// Every `CustomEvent` also requires an implementation of
+                /// `chromiumoxide_types::MethodType` and it must be `DeserializeOwned`
+                /// (`#[derive(serde::Deserialize)]`). This is necessary to identify match this
+                /// type against the provided `method` identifier of a `CdpEventMessage`
+                /// and to properly deserialize it from a `serde_json::Value`
+                pub trait CustomEvent: ::std::any::Any + serde::de::DeserializeOwned + chromiumoxide_types::MethodType + Send + Sync {
+
+                    /// Used to convert the json event into in instance of this type
+                    fn from_json(event: serde_json::Value) -> serde_json::Result<Self> where Self: Sized + 'static {
+                            serde_json::from_value(event)
+                    }
+                }
+
+                impl<T:CustomEvent> sealed::SealedEvent for T {
+                    fn as_any(&self) -> &dyn ::std::any::Any {
+                        self
+                    }
+                }
+
+                /// This is trait that all Events share
+                ///
+                /// This trait is sealed to prevent implementation. The only way to implement a new `Event` is by implementing `CustomEvent`
+                pub trait Event: sealed::SealedEvent {}
+
+                impl<T: sealed::SealedEvent> Event for T {}
+                impl<T: CustomEvent + Event> sealed::SealedCustomEventConverter for T {}
+
+                /// Function type to convert a json event into an instance of it self but as dyn Event
+                 pub type EventConversion = Box<dyn Fn(serde_json::Value) -> serde_json::Result<::std::sync::Arc<dyn Event>> + Send + 'static>;
+
+                /// An enum that does nothing for built in types but contains the conversion method for custom events
+                pub enum EventKind {
+                    BuiltIn,
+                    Custom(EventConversion)
+                }
+
+                impl EventKind {
+
+                    /// Whether this is a custom event
+                    pub fn is_custom(&self) -> bool {
+                         matches!(self,EventKind::Custom(_))
+                    }
+
+                }
+
+                impl ::std::fmt::Debug for EventKind {
+                    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                        match self {
+                            EventKind::BuiltIn => {
+                                 f.debug_tuple("BuiltIn").finish()
+                            }
+                            EventKind::Custom(_) => {
+                                f.debug_tuple("Custom").finish()
+                            }
+                        }
+                    }
+                }
+
+                /// A trait on top of the `Event` trait
+                pub trait IntoEventKind : Event {
+                    /// What kind of event this type is
+                    fn event_kind() -> EventKind where Self : Sized + 'static;
+                }
+
+                impl<T: sealed::SealedCustomEventConverter > IntoEventKind for T {
+                    fn event_kind() -> EventKind where Self : Sized + 'static{
+                        EventKind::Custom(Box::new(Self::event_arc))
+                    }
+                }
+
+                pub(crate) mod sealed {
+
+                    pub trait SealedCustomEventConverter : super::CustomEvent + super::Event {
+
+                         fn event_arc(event: serde_json::Value) -> serde_json::Result<::std::sync::Arc<dyn super::Event>> where Self: Sized + 'static {
+                                Ok(::std::sync::Arc::new(Self::from_json(event)?))
+                         }
+                    }
+
+                    pub trait SealedEvent: ArcAny + chromiumoxide_types::MethodType {
+                        /// generate `&::std::any::Any`'s vtable from `&Trait`'s.
+                        fn as_any(&self) -> &dyn ::std::any::Any;
+                    }
+
+                    pub trait ArcAny: ::std::any::Any + Send + Sync {
+                        fn into_any_arc(self: ::std::sync::Arc<Self>) -> ::std::sync::Arc<dyn ::std::any::Any + Send + Sync>;
+                    }
+
+                    impl<T: ::std::any::Any + Send + Sync> ArcAny for T {
+                        fn into_any_arc(self: ::std::sync::Arc<Self>) -> ::std::sync::Arc<dyn ::std::any::Any + Send + Sync> {
+                            self
+                        }
+                    }
+
+                    impl dyn SealedEvent {
+                        /// Returns true if the trait object wraps an object of type `T`.
+                        #[inline]
+                        pub fn is<T: SealedEvent>(&self) -> bool {
+                            self.as_any().is::<T>()
+                        }
+
+                        #[inline]
+                        pub fn downcast_arc<T: SealedEvent>(self: ::std::sync::Arc<Self>) -> Result<::std::sync::Arc<T>, ::std::sync::Arc<Self>>
+                            where
+                                T: ::std::any::Any + Send + Sync,
+                        {
+                            if self.is::<T>() {
+                                Ok(ArcAny::into_any_arc(self).downcast::<T>().unwrap())
+                            } else {
+                                Err(self)
+                            }
+                        }
+                    }
+                }
+
                 pub mod events {
                     #imports
                     #events
@@ -347,7 +466,14 @@ impl Generator {
                 stream.extend(quote! {
                     impl chromiumoxide_types::Method for #name {
 
-                        fn identifier(&self) -> ::std::borrow::Cow<'static, str> {
+                        fn identifier(&self) -> chromiumoxide_types::MethodId {
+                            Self::IDENTIFIER.into()
+                        }
+                    }
+
+                    impl chromiumoxide_types::MethodType for #name {
+
+                        fn method_id() -> chromiumoxide_types::MethodId where Self: Sized {
                             Self::IDENTIFIER.into()
                         }
                     }

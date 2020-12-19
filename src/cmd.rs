@@ -1,22 +1,22 @@
-use futures::channel::oneshot::Sender as OneshotSender;
-use futures::task::Poll;
-use serde::Serialize;
-use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::iter::FromIterator;
 use std::time::{Duration, Instant};
 
-use chromiumoxide_types::{Command, CommandResponse, Method, Request, Response};
+use futures::channel::oneshot::Sender as OneshotSender;
+use futures::task::Poll;
+use serde::Serialize;
+
+use chromiumoxide_cdp::cdp::browser_protocol::page::NavigateParams;
+use chromiumoxide_cdp::cdp::browser_protocol::target::SessionId;
+use chromiumoxide_types::{Command, CommandResponse, Method, MethodId, Request, Response};
 
 use crate::error::{CdpError, DeadlineExceeded, Result};
 use crate::handler::REQUEST_TIMEOUT;
-use chromiumoxide_cdp::cdp::browser_protocol::page::NavigateParams;
-use chromiumoxide_cdp::cdp::browser_protocol::target::SessionId;
 
 /// Deserialize a response
 pub(crate) fn to_command_response<T: Command>(
     resp: Response,
-    method: Cow<'static, str>,
+    method: MethodId,
 ) -> Result<CommandResponse<T::Response>> {
     if let Some(res) = resp.result {
         let result = serde_json::from_value(res)?;
@@ -36,7 +36,7 @@ pub(crate) fn to_command_response<T: Command>(
 /// executed in the the background task.
 #[derive(Debug, Serialize)]
 pub(crate) struct CommandMessage<T = Result<Response>> {
-    pub method: Cow<'static, str>,
+    pub method: MethodId,
     #[serde(rename = "sessionId", skip_serializing_if = "Option::is_none")]
     pub session_id: Option<SessionId>,
     pub params: serde_json::Value,
@@ -85,7 +85,7 @@ impl<T> CommandMessage<T> {
 }
 
 impl Method for CommandMessage {
-    fn identifier(&self) -> Cow<'static, str> {
+    fn identifier(&self) -> MethodId {
         self.method.clone()
     }
 }
@@ -93,15 +93,14 @@ impl Method for CommandMessage {
 #[derive(Debug)]
 pub struct CommandChain {
     /// The commands to process: (method identifier, params)
-    cmds: VecDeque<(Cow<'static, str>, serde_json::Value)>,
+    cmds: VecDeque<(MethodId, serde_json::Value)>,
     /// The last issued command we currently waiting for its completion
-    waiting: Option<(Cow<'static, str>, Instant)>,
+    waiting: Option<(MethodId, Instant)>,
     /// The window a response after issuing a request must arrive
     timeout: Duration,
 }
 
-pub type NextCommand =
-    Poll<Option<Result<(Cow<'static, str>, serde_json::Value), DeadlineExceeded>>>;
+pub type NextCommand = Poll<Option<Result<(MethodId, serde_json::Value), DeadlineExceeded>>>;
 
 impl CommandChain {
     /// Creates a new `CommandChain` from an `Iterator`.
@@ -109,7 +108,7 @@ impl CommandChain {
     /// The order of the commands corresponds to the iterator's
     pub fn new<I>(cmds: I) -> Self
     where
-        I: IntoIterator<Item = (Cow<'static, str>, serde_json::Value)>,
+        I: IntoIterator<Item = (MethodId, serde_json::Value)>,
     {
         Self {
             cmds: VecDeque::from_iter(cmds),
@@ -119,7 +118,7 @@ impl CommandChain {
     }
 
     /// queue in another request
-    pub fn push_back(&mut self, method: Cow<'static, str>, params: serde_json::Value) {
+    pub fn push_back(&mut self, method: MethodId, params: serde_json::Value) {
         self.cmds.push_back((method, params))
     }
 

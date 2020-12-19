@@ -2,9 +2,10 @@ use std::pin::Pin;
 use std::task::Context;
 use std::time::Duration;
 
-use crate::handler::REQUEST_TIMEOUT;
 use futures::Future;
 use futures_timer::Delay;
+
+use crate::handler::REQUEST_TIMEOUT;
 
 /// A background job run periodically.
 #[derive(Debug)]
