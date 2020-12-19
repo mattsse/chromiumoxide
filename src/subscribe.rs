@@ -194,50 +194,54 @@ impl<T: IntoEventKind + Unpin> Stream for EventStream<T> {
     }
 }
 
-#[async_std::test]
-async fn event_stream() {
-    use chromiumoxide_cdp::cdp::browser_protocol::animation::EventAnimationCanceled;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chromiumoxide_cdp::cdp::CustomEvent;
+    use chromiumoxide_types::Method;
+    use futures::{SinkExt, StreamExt};
 
-    let (mut tx, rx) = futures::channel::mpsc::unbounded();
+    #[async_std::test]
+    async fn event_stream() {
+        use chromiumoxide_cdp::cdp::browser_protocol::animation::EventAnimationCanceled;
 
-    let mut stream = EventStream::<EventAnimationCanceled>::new(rx);
+        let (mut tx, rx) = futures::channel::mpsc::unbounded();
+        let mut stream = EventStream::<EventAnimationCanceled>::new(rx);
 
-    let event = EventAnimationCanceled {
-        id: "id".to_string(),
-    };
-    let msg: Arc<dyn Event> = Arc::new(event.clone());
-
-    tx.send(msg).await.unwrap();
-    let next = stream.next().await.unwrap();
-    assert_eq!(&*next, &event);
-}
-
-#[async_std::test]
-async fn custom_event_stream() {
-    use serde::Deserialize;
-
-    #[derive(Debug, Clone, Eq, PartialEq, Deserialize)]
-    struct MyCustomEvent {
-        name: String,
+        let event = EventAnimationCanceled {
+            id: "id".to_string(),
+        };
+        let msg: Arc<dyn Event> = Arc::new(event.clone());
+        tx.send(msg).await.unwrap();
+        let next = stream.next().await.unwrap();
+        assert_eq!(&*next, &event);
     }
 
-    impl Method for MyCustomEvent {
-        fn identifier(&self) -> Cow<'static, str> {
-            "Custom.Event".into()
+    #[async_std::test]
+    async fn custom_event_stream() {
+        use serde::Deserialize;
+
+        #[derive(Debug, Clone, Eq, PartialEq, Deserialize)]
+        struct MyCustomEvent {
+            name: String,
         }
+
+        impl Method for MyCustomEvent {
+            fn identifier(&self) -> Cow<'static, str> {
+                "Custom.Event".into()
+            }
+        }
+        impl CustomEvent for MyCustomEvent {}
+
+        let (mut tx, rx) = futures::channel::mpsc::unbounded();
+        let mut stream = EventStream::<MyCustomEvent>::new(rx);
+
+        let event = MyCustomEvent {
+            name: "my event".to_string(),
+        };
+        let msg: Arc<dyn Event> = Arc::new(event.clone());
+        tx.send(msg).await.unwrap();
+        let next = stream.next().await.unwrap();
+        assert_eq!(&*next, &event);
     }
-
-    impl CustomEvent for MyCustomEvent {}
-
-    let (mut tx, rx) = futures::channel::mpsc::unbounded();
-
-    let mut stream = EventStream::<MyCustomEvent>::new(rx);
-
-    let event = MyCustomEvent {
-        name: "my event".to_string(),
-    };
-    let msg: Arc<dyn Event> = Arc::new(event.clone());
-    tx.send(msg).await.unwrap();
-    let next = stream.next().await.unwrap();
-    assert_eq!(&*next, &event);
 }
