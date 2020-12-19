@@ -142,6 +142,14 @@ pub trait Method {
     }
 }
 
+/// A trait that identifies a method on type level
+pub trait MethodType {
+    /// The identifier for this event's `method` field
+    fn method_id() -> MethodId
+    where
+        Self: Sized;
+}
+
 /// A Wrapper for json serialized requests
 #[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct Request {

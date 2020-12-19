@@ -236,11 +236,11 @@ impl Generator {
                 /// chrome protocol definitions.
                 ///
                 /// Every `CustomEvent` also requires an implementation of
-                /// `chromiumoxide_types::Method` and it must be `DeserializeOwned`
+                /// `chromiumoxide_types::MethodType` and it must be `DeserializeOwned`
                 /// (`#[derive(serde::Deserialize)]`). This is necessary to identify match this
                 /// type against the provided `method` identifier of a `CdpEventMessage`
                 /// and to properly deserialize it from a `serde_json::Value`
-                pub trait CustomEvent: ::std::any::Any + serde::de::DeserializeOwned + chromiumoxide_types::Method + Send + Sync {
+                pub trait CustomEvent: ::std::any::Any + serde::de::DeserializeOwned + chromiumoxide_types::MethodType + Send + Sync {
 
                     /// Used to convert the json event into in instance of this type
                     fn from_json(event: serde_json::Value) -> serde_json::Result<Self> where Self: Sized + 'static {
@@ -314,7 +314,7 @@ impl Generator {
                          }
                     }
 
-                    pub trait SealedEvent: ArcAny + chromiumoxide_types::Method {
+                    pub trait SealedEvent: ArcAny + chromiumoxide_types::MethodType {
                         /// generate `&::std::any::Any`'s vtable from `&Trait`'s.
                         fn as_any(&self) -> &dyn ::std::any::Any;
                     }
@@ -467,6 +467,13 @@ impl Generator {
                     impl chromiumoxide_types::Method for #name {
 
                         fn identifier(&self) -> chromiumoxide_types::MethodId {
+                            Self::IDENTIFIER.into()
+                        }
+                    }
+
+                    impl chromiumoxide_types::MethodType for #name {
+
+                        fn method_id() -> chromiumoxide_types::MethodId where Self: Sized {
                             Self::IDENTIFIER.into()
                         }
                     }

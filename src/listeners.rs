@@ -36,7 +36,7 @@ impl EventListeners {
 
     /// Queue in a event that should be send to all listeners
     pub fn start_send<T: Event>(&mut self, event: T) {
-        if let Some(subscriptions) = self.listeners.get_mut(&event.identifier()) {
+        if let Some(subscriptions) = self.listeners.get_mut(&T::method_id()) {
             let event: Arc<dyn Event> = Arc::new(event);
             subscriptions
                 .iter_mut()
@@ -203,7 +203,7 @@ mod tests {
 
     use chromiumoxide_cdp::cdp::browser_protocol::animation::EventAnimationCanceled;
     use chromiumoxide_cdp::cdp::CustomEvent;
-    use chromiumoxide_types::Method;
+    use chromiumoxide_types::MethodType;
 
     use super::*;
 
@@ -230,8 +230,8 @@ mod tests {
             name: String,
         }
 
-        impl Method for MyCustomEvent {
-            fn identifier(&self) -> MethodId {
+        impl MethodType for MyCustomEvent {
+            fn method_id() -> MethodId {
                 "Custom.Event".into()
             }
         }
@@ -259,7 +259,7 @@ mod tests {
         };
 
         listeners.add_listener(EventListenerRequest {
-            method: event.identifier(),
+            method: EventAnimationCanceled::method_id(),
             kind: EventAnimationCanceled::event_kind(),
             listener: tx,
         });
