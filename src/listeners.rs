@@ -11,31 +11,32 @@ use futures::{Sink, Stream};
 
 use chromiumoxide_cdp::cdp::{Event, EventKind, IntoEventKind};
 
-/// All the currently active subscriptions
-#[derive(Debug)]
-pub struct Subscriptions {
-    /// Tracks the subscribers for each event identified by the key
-    subs: HashMap<Cow<'static, str>, Vec<EventSubscription>>,
+/// All the currently active listeners
+#[derive(Debug, Default)]
+pub struct EventListeners {
+    /// Tracks the listeners for each event identified by the key
+    listeners: HashMap<Cow<'static, str>, Vec<EventListener>>,
 }
 
-impl Subscriptions {
+impl EventListeners {
     /// Register a subscription for a method
-    pub fn add_listener(&mut self, req: SubscriptionRequest) {
-        let SubscriptionRequest {
+    pub fn add_listener(&mut self, req: EventListenerRequest) {
+        let EventListenerRequest {
             listener,
             method,
             kind,
         } = req;
-        let subs = self.subs.entry(method).or_insert_with(Vec::new);
-        subs.push(EventSubscription {
+        let subs = self.listeners.entry(method).or_insert_with(Vec::new);
+        subs.push(EventListener {
             listener,
             kind,
             queued_events: Default::default(),
         });
     }
 
-    pub fn start_send<T: Event>(&mut self, method: &str, event: T) {
-        if let Some(subscriptions) = self.subs.get_mut(method) {
+    /// Queue in a event that should be send to all listeners
+    pub fn start_send<T: Event>(&mut self, event: T) {
+        if let Some(subscriptions) = self.listeners.get_mut(&event.identifier()) {
             let event: Arc<dyn Event> = Arc::new(event);
             subscriptions
                 .iter_mut()
@@ -43,12 +44,14 @@ impl Subscriptions {
         }
     }
 
+    /// Try to queue in a new custom event if a listener is registered and the
+    /// converting the json value to the registered event type succeeds
     pub fn try_send_custom(
         &mut self,
         method: &str,
         val: serde_json::Value,
     ) -> serde_json::Result<()> {
-        if let Some(subscriptions) = self.subs.get_mut(method) {
+        if let Some(subscriptions) = self.listeners.get_mut(method) {
             let mut event = None;
             if let Some(json_to_arc_event) = subscriptions
                 .iter()
@@ -76,7 +79,7 @@ impl Subscriptions {
     /// Drains all queued events and does the housekeeping when the receiver
     /// part of a subscription is dropped
     pub fn poll(&mut self, cx: &mut Context<'_>) {
-        for subscriptions in self.subs.values_mut() {
+        for subscriptions in self.listeners.values_mut() {
             for n in (0..subscriptions.len()).rev() {
                 let mut sub = subscriptions.swap_remove(n);
                 match sub.poll(cx) {
@@ -92,15 +95,15 @@ impl Subscriptions {
     }
 }
 
-pub struct SubscriptionRequest {
+pub struct EventListenerRequest {
     listener: UnboundedSender<Arc<dyn Event>>,
     method: Cow<'static, str>,
     kind: EventKind,
 }
 
-impl fmt::Debug for SubscriptionRequest {
+impl fmt::Debug for EventListenerRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("EventSubscription")
+        f.debug_struct("EventListenerRequest")
             .field("method", &self.method)
             .field("kind", &self.kind)
             .finish()
@@ -108,7 +111,7 @@ impl fmt::Debug for SubscriptionRequest {
 }
 
 /// Represents a single event listener
-pub struct EventSubscription {
+pub struct EventListener {
     /// the sender half of the event channel
     listener: UnboundedSender<Arc<dyn Event>>,
     /// currently queued events
@@ -117,7 +120,7 @@ pub struct EventSubscription {
     kind: EventKind,
 }
 
-impl EventSubscription {
+impl EventListener {
     /// queue in a new event
     pub fn start_send(&mut self, event: Arc<dyn Event>) {
         self.queued_events.push_back(event)
@@ -148,9 +151,9 @@ impl EventSubscription {
     }
 }
 
-impl fmt::Debug for EventSubscription {
+impl fmt::Debug for EventListener {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("EventSubscription").finish()
+        f.debug_struct("EventListener").finish()
     }
 }
 

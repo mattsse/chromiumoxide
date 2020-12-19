@@ -70,7 +70,7 @@ pub mod handler;
 pub mod keys;
 pub mod layout;
 pub mod page;
-pub mod subscribe;
+pub mod listeners;
 pub(crate) mod utils;
 
 pub use crate::browser::{Browser, BrowserConfig};
