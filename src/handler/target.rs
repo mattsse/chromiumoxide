@@ -335,7 +335,7 @@ impl Target {
                         }
                         TargetMessage::AllFrames(tx) => {
                             let _ = tx
-                                .send(self.frame_manager.frames().map(|f| f.id).cloned().collect());
+                                .send(self.frame_manager.frames().map(|f| f.id.clone()).collect());
                         }
                         TargetMessage::Url(tx) => {
                             let _ = tx
