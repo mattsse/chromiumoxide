@@ -101,6 +101,16 @@ pub struct EventListenerRequest {
     kind: EventKind,
 }
 
+impl EventListenerRequest {
+    pub fn new<T: IntoEventKind>(listener: UnboundedSender<Arc<dyn Event>>) -> Self {
+        Self {
+            listener,
+            method: T::method_id(),
+            kind: T::event_kind(),
+        }
+    }
+}
+
 impl fmt::Debug for EventListenerRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("EventListenerRequest")

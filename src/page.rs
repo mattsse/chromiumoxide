@@ -42,17 +42,16 @@ impl Page {
     }
 
     pub async fn event_listener<T: IntoEventKind>(&self) -> Result<EventStream<T>> {
-        todo!()
-        // let (tx, rx) = unbounded();
-        // self.inner
-        //     .sender()
-        //     .clone()
-        //     .send(TargetMessage::AddEventListener(EventListenerRequest {
-        //         method: T::identifier(),
-        //         kind: T::event_kind(),
-        //         listener: tx,
-        //     }))
-        //     .await?;
+        let (tx, rx) = unbounded();
+        self.inner
+            .sender()
+            .clone()
+            .send(TargetMessage::AddEventListener(
+                EventListenerRequest::new::<T>(tx),
+            ))
+            .await?;
+
+        Ok(EventStream::new(rx))
     }
 
     /// This resolves once the navigation finished and the page is loaded.
