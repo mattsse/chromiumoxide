@@ -20,6 +20,7 @@ use chromiumoxide_types::{Command, Method, Request, Response};
 use crate::cmd::CommandChain;
 use crate::cmd::CommandMessage;
 use crate::error::{CdpError, DeadlineExceeded, Result};
+use crate::handler::browser::BrowserContext;
 use crate::handler::emulation::EmulationManager;
 use crate::handler::frame::FrameNavigationRequest;
 use crate::handler::frame::{
@@ -57,10 +58,14 @@ macro_rules! advance_state {
 pub struct Target {
     /// Info about this target as returned from the chromium instance
     info: TargetInfo,
+    /// The type of this target
+    r#type: TargetType,
     /// Configs for this target
     config: TargetConfig,
     /// Whether this target was marked as closed
     is_closed: bool,
+    /// The context this target is running in
+    browser_context: BrowserContext,
     /// The frame manager that maintains the state of all frames and handles
     /// navigations of frames
     frame_manager: FrameManager,
@@ -87,10 +92,12 @@ pub struct Target {
 impl Target {
     /// Create a new target instance with `TargetInfo` after a
     /// `CreateTargetParams` request.
-    pub fn new(info: TargetInfo, config: TargetConfig) -> Self {
+    pub fn new(info: TargetInfo, config: TargetConfig, browser_context: BrowserContext) -> Self {
         let network_manager = NetworkManager::new(config.ignore_https_errors);
+        let ty = TargetType::new(&info.r#type);
         Self {
             info,
+            r#type: ty,
             config,
             is_closed: false,
             frame_manager: Default::default(),
@@ -104,6 +111,7 @@ impl Target {
             event_listeners: Default::default(),
             initiator: None,
             initialize: false,
+            browser_context,
         }
     }
 
@@ -115,6 +123,10 @@ impl Target {
         self.session_id.as_ref()
     }
 
+    pub fn browser_context(&self) -> &BrowserContext {
+        &self.browser_context
+    }
+
     pub fn session_id_mut(&mut self) -> &mut Option<SessionId> {
         &mut self.session_id
     }
@@ -122,6 +134,11 @@ impl Target {
     /// The identifier for this target
     pub fn target_id(&self) -> &TargetId {
         &self.info.target_id
+    }
+
+    /// The type of this target
+    pub fn r#type(&self) -> &TargetType {
+        &self.r#type
     }
 
     /// Whether this target is already initialized
@@ -142,6 +159,7 @@ impl Target {
         }
     }
 
+    /// Tries to create the `PageInner` if this target is already initialized
     pub(crate) fn get_or_create_page(&mut self) -> Option<&Arc<PageInner>> {
         self.create_page();
         self.page.as_ref().map(|p| p.inner())
@@ -438,6 +456,61 @@ impl Default for TargetConfig {
             ignore_https_errors: true,
             viewport: Default::default(),
         }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum TargetType {
+    Page,
+    BackgroundPage,
+    ServiceWorker,
+    SharedWorker,
+    Other,
+    Browser,
+    Webview,
+    Unknown(String),
+}
+
+impl TargetType {
+    pub fn new(ty: &str) -> Self {
+        match ty {
+            "page" => TargetType::Page,
+            "background_page" => TargetType::BackgroundPage,
+            "service_worker" => TargetType::ServiceWorker,
+            "shared_worker" => TargetType::SharedWorker,
+            "other" => TargetType::Other,
+            "browser" => TargetType::Browser,
+            "webview" => TargetType::Webview,
+            s => TargetType::Unknown(s.to_string()),
+        }
+    }
+
+    pub fn is_page(&self) -> bool {
+        matches!(self, TargetType::Page)
+    }
+
+    pub fn is_background_page(&self) -> bool {
+        matches!(self, TargetType::BackgroundPage)
+    }
+
+    pub fn is_service_worker(&self) -> bool {
+        matches!(self, TargetType::ServiceWorker)
+    }
+
+    pub fn is_shared_worker(&self) -> bool {
+        matches!(self, TargetType::SharedWorker)
+    }
+
+    pub fn is_other(&self) -> bool {
+        matches!(self, TargetType::Other)
+    }
+
+    pub fn is_browser(&self) -> bool {
+        matches!(self, TargetType::Browser)
+    }
+
+    pub fn is_webview(&self) -> bool {
+        matches!(self, TargetType::Webview)
     }
 }
 

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::pin::Pin;
 use std::time::{Duration, Instant};
 
@@ -32,7 +32,7 @@ use crate::page::Page;
 /// Standard timeout in MS
 pub const REQUEST_TIMEOUT: u64 = 30_000;
 
-mod browser;
+pub mod browser;
 mod domworld;
 pub mod emulation;
 pub mod execution;
@@ -55,8 +55,8 @@ pub struct Handler {
     pending_commands: FnvHashMap<CallId, (PendingRequest, MethodId, Instant)>,
     /// Connection to the browser instance
     from_browser: Fuse<Receiver<HandlerMessage>>,
-    // default_ctx: BrowserContext,
-    contexts: HashMap<BrowserContextId, BrowserContext>,
+    default_browser_context: BrowserContext,
+    browser_contexts: HashSet<BrowserContext>,
     /// Used to loop over all targets in a consistent manner
     target_ids: Vec<TargetId>,
     /// The created and attached targets
@@ -92,10 +92,17 @@ impl Handler {
             serde_json::to_value(discover).unwrap(),
         );
 
+        let browser_contexts = config
+            .context_ids
+            .iter()
+            .map(|id| BrowserContext::from(id.clone()))
+            .collect();
+
         Self {
             pending_commands: Default::default(),
             from_browser: rx.fuse(),
-            contexts: Default::default(),
+            default_browser_context: Default::default(),
+            browser_contexts,
             target_ids: Default::default(),
             targets: Default::default(),
             navigations: Default::default(),
@@ -115,6 +122,16 @@ impl Handler {
     /// Iterator over all currently attached targets
     pub fn targets(&self) -> impl Iterator<Item = &Target> + '_ {
         self.targets.values()
+    }
+
+    /// The default Browser context
+    pub fn default_browser_context(&self) -> &BrowserContext {
+        &self.default_browser_context
+    }
+
+    /// Iterator over all currently available browser contexts
+    pub fn browser_contexts(&self) -> impl Iterator<Item = &BrowserContext> + '_ {
+        self.browser_contexts.iter()
     }
 
     /// received a response to a navigation request like `Page.navigate`
@@ -326,12 +343,20 @@ impl Handler {
     ///
     /// Creates a new `Target` instance and keeps track of it
     fn on_target_created(&mut self, event: EventTargetCreated) {
+        let browser_ctx = event
+            .target_info
+            .browser_context_id
+            .clone()
+            .map(BrowserContext::from)
+            .filter(|id| self.browser_contexts.contains(id))
+            .unwrap_or_else(|| self.default_browser_context.clone());
         let target = Target::new(
             event.target_info,
             TargetConfig::new(
                 self.config.ignore_https_errors,
                 self.config.viewport.clone(),
             ),
+            browser_ctx,
         );
         self.target_ids.push(target.target_id().clone());
         self.targets.insert(target.target_id().clone(), target);
@@ -431,13 +456,17 @@ impl Stream for Handler {
                         let pages: Vec<_> = pin
                             .targets
                             .values_mut()
+                            .filter(|p| p.r#type().is_page())
                             .filter_map(|target| target.get_or_create_page())
                             .map(|page| Page::from(page.clone()))
                             .collect();
                         let _ = tx.send(pages);
                     }
-                    HandlerMessage::Subscribe => {
-                        // TODO implement subscriptions
+                    HandlerMessage::InsertContext(ctx) => {
+                        pin.browser_contexts.insert(ctx);
+                    }
+                    HandlerMessage::DisposeContext(ctx) => {
+                        pin.browser_contexts.remove(&ctx);
                     }
                 }
             }
@@ -585,8 +614,8 @@ enum PendingRequest {
 #[derive(Debug)]
 pub(crate) enum HandlerMessage {
     CreatePage(CreateTargetParams, OneshotSender<Result<Page>>),
+    InsertContext(BrowserContext),
+    DisposeContext(BrowserContext),
     GetPages(OneshotSender<Vec<Page>>),
     Command(CommandMessage),
-    #[allow(unused)] // allow until implemented
-    Subscribe,
 }
