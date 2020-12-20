@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::pin::Pin;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use fnv::FnvHashMap;
 use futures::channel::mpsc::Receiver;
@@ -18,22 +18,24 @@ pub(crate) use page::PageInner;
 
 use crate::cmd::{to_command_response, CommandMessage};
 use crate::conn::Connection;
-use crate::error::Result;
+use crate::error::{CdpError, Result};
 use crate::handler::browser::BrowserContext;
 use crate::handler::frame::FrameNavigationRequest;
 use crate::handler::frame::{NavigationError, NavigationId, NavigationOk};
 use crate::handler::job::PeriodicJob;
 use crate::handler::session::Session;
-use crate::handler::target::{Target, TargetConfig};
 use crate::handler::target::TargetEvent;
-use crate::page::Page;
+use crate::handler::target::{Target, TargetConfig};
 use crate::handler::viewport::Viewport;
+use crate::page::Page;
 
 /// Standard timeout in MS
 pub const REQUEST_TIMEOUT: u64 = 30_000;
 
 mod browser;
+mod domworld;
 pub mod emulation;
+pub mod execution;
 pub mod frame;
 mod job;
 pub mod network;
@@ -41,16 +43,15 @@ mod page;
 mod session;
 pub mod target;
 pub mod viewport;
-mod domworld;
-pub mod execution;
 
 /// The handler that monitors the state of the chromium browser and drives all
 /// the requests and events.
 #[must_use = "streams do nothing unless polled"]
 #[derive(Debug)]
 pub struct Handler {
-    /// Commands that are being processed await a response from the chromium
-    /// instance
+    /// Commands that are being processed and awaiting a response from the
+    /// chromium instance together with the timestamp when the request
+    /// started.
     pending_commands: FnvHashMap<CallId, (PendingRequest, MethodId, Instant)>,
     /// Connection to the browser instance
     from_browser: Fuse<Receiver<HandlerMessage>>,
@@ -73,13 +74,17 @@ pub struct Handler {
     /// The internal identifier for a specific navigation
     next_navigation_id: usize,
     /// How this handler will configure targets etc,
-    config: HandlerConfig
+    config: HandlerConfig,
 }
 
 impl Handler {
     /// Create a new `Handler` that drives the connection and listens for
     /// messages on the receiver `rx`.
-    pub(crate) fn new(mut conn: Connection<CdpEventMessage>, rx: Receiver<HandlerMessage>, config: HandlerConfig) -> Self {
+    pub(crate) fn new(
+        mut conn: Connection<CdpEventMessage>,
+        rx: Receiver<HandlerMessage>,
+        config: HandlerConfig,
+    ) -> Self {
         let discover = SetDiscoverTargetsParams::new(true);
         let _ = conn.submit_command(
             discover.identifier(),
@@ -98,7 +103,7 @@ impl Handler {
             conn,
             evict_command_timeout: Default::default(),
             next_navigation_id: 0,
-            config
+            config,
         }
     }
 
@@ -321,7 +326,13 @@ impl Handler {
     ///
     /// Creates a new `Target` instance and keeps track of it
     fn on_target_created(&mut self, event: EventTargetCreated) {
-        let target = Target::new(event.target_info, TargetConfig::new(self.config.ignore_https_errors, self.config.viewport.clone()) );
+        let target = Target::new(
+            event.target_info,
+            TargetConfig::new(
+                self.config.ignore_https_errors,
+                self.config.viewport.clone(),
+            ),
+        );
         self.target_ids.push(target.target_id().clone());
         self.targets.insert(target.target_id().clone(), target);
     }
@@ -357,6 +368,41 @@ impl Handler {
             // TODO shutdown?
             if let Some(session) = target.session_id() {
                 self.sessions.remove(session);
+            }
+        }
+    }
+
+    /// House keeping of commands
+    ///
+    /// Remove all commands where `now` > `timestamp of command starting point +
+    /// request timeout` and notify the senders that their request timed out.
+    fn evict_timed_out_commands(&mut self, now: Instant) {
+        let timed_out = self
+            .pending_commands
+            .iter()
+            .filter(|(_, (_, _, timestamp))| now > (*timestamp + self.config.request_timeout))
+            .map(|(k, _)| *k)
+            .collect::<Vec<_>>();
+        for call in timed_out {
+            if let Some((req, _, _)) = self.pending_commands.remove(&call) {
+                match req {
+                    PendingRequest::CreateTarget(tx) => {
+                        let _ = tx.send(Err(CdpError::Timeout));
+                    }
+                    PendingRequest::Navigate(nav) => {
+                        if let Some(nav) = self.navigations.remove(&nav) {
+                            match nav {
+                                NavigationRequest::Navigate(nav) => {
+                                    let _ = nav.tx.send(Err(CdpError::Timeout));
+                                }
+                            }
+                        }
+                    }
+                    PendingRequest::ExternalCommand(tx) => {
+                        let _ = tx.send(Err(CdpError::Timeout));
+                    }
+                    PendingRequest::InternalCommand(_) => {}
+                }
             }
         }
     }
@@ -442,7 +488,8 @@ impl Stream for Handler {
             }
 
             if pin.evict_command_timeout.is_ready(cx) {
-                // TODO evict all commands that timed out
+                // evict all commands that timed out
+                pin.evict_timed_out_commands(now);
             }
 
             if done {
@@ -455,9 +502,10 @@ impl Stream for Handler {
 
 #[derive(Debug, Clone)]
 pub struct HandlerConfig {
-    pub ignore_https_errors :bool,
+    pub ignore_https_errors: bool,
     pub viewport: Viewport,
-    pub context_ids: Vec<BrowserContextId>
+    pub context_ids: Vec<BrowserContextId>,
+    pub request_timeout: Duration,
 }
 
 impl Default for HandlerConfig {
@@ -465,11 +513,11 @@ impl Default for HandlerConfig {
         Self {
             ignore_https_errors: true,
             viewport: Default::default(),
-            context_ids: Vec::new()
+            context_ids: Vec::new(),
+            request_timeout: Duration::from_millis(REQUEST_TIMEOUT),
         }
     }
 }
-
 
 /// Wraps the sender half of the channel who requested a navigation
 #[derive(Debug)]

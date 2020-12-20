@@ -17,9 +17,9 @@ use chromiumoxide_types::*;
 use crate::cmd::{to_command_response, CommandMessage};
 use crate::conn::Connection;
 use crate::error::{CdpError, Result};
-use crate::handler::{Handler, HandlerMessage, HandlerConfig};
-use crate::page::Page;
 use crate::handler::viewport::Viewport;
+use crate::handler::{Handler, HandlerConfig, HandlerMessage, REQUEST_TIMEOUT};
+use crate::page::Page;
 
 /// A [`Browser`] is created when chromiumoxide connects to a Chromium instance.
 #[derive(Debug)]
@@ -87,7 +87,8 @@ impl Browser {
         let handler_config = HandlerConfig {
             ignore_https_errors: config.ignore_https_errors,
             viewport: config.viewport.clone(),
-            context_ids: Vec::new()
+            context_ids: Vec::new(),
+            request_timeout: config.request_timeout,
         };
 
         let fut = Handler::new(conn, rx, handler_config);
@@ -228,8 +229,10 @@ pub struct BrowserConfig {
     incognito: bool,
 
     /// Ignore https errors, default is true
-    ignore_https_errors :bool,
+    ignore_https_errors: bool,
     viewport: Viewport,
+    /// The duration after a request with no response should time out
+    request_timeout: Duration,
 }
 
 #[derive(Debug, Clone)]
@@ -243,8 +246,9 @@ pub struct BrowserConfigBuilder {
     process_envs: Option<HashMap<String, String>>,
     user_data_dir: Option<PathBuf>,
     incognito: bool,
-    ignore_https_errors :bool,
-    viewport: Viewport
+    ignore_https_errors: bool,
+    viewport: Viewport,
+    request_timeout: Duration,
 }
 
 impl BrowserConfig {
@@ -268,9 +272,10 @@ impl Default for BrowserConfigBuilder {
             extensions: Vec::new(),
             process_envs: None,
             user_data_dir: None,
-            incognito:false,
-            ignore_https_errors :true,
-            viewport: Default::default()
+            incognito: false,
+            ignore_https_errors: true,
+            viewport: Default::default(),
+            request_timeout: Duration::from_millis(REQUEST_TIMEOUT),
         }
     }
 }
@@ -298,6 +303,11 @@ impl BrowserConfigBuilder {
 
     pub fn respect_https_errors(mut self) -> Self {
         self.ignore_https_errors = false;
+        self
+    }
+
+    pub fn request_timeout(mut self, timeout: Duration) -> Self {
+        self.request_timeout = timeout;
         self
     }
 
@@ -365,6 +375,7 @@ impl BrowserConfigBuilder {
             incognito: self.incognito,
             ignore_https_errors: self.ignore_https_errors,
             viewport: self.viewport,
+            request_timeout: self.request_timeout,
         })
     }
 }
