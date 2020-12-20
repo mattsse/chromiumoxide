@@ -419,23 +419,24 @@ impl Target {
 
 #[derive(Debug, Clone)]
 pub struct TargetConfig {
-    pub ignore_https_errors :bool,
+    pub ignore_https_errors: bool,
     pub viewport: Viewport,
 }
 
 impl TargetConfig {
-
-    pub fn new(ignore_https_errors :bool, viewport: Viewport) -> Self {
-        Self {ignore_https_errors, viewport}
+    pub fn new(ignore_https_errors: bool, viewport: Viewport) -> Self {
+        Self {
+            ignore_https_errors,
+            viewport,
+        }
     }
-
 }
 
 impl Default for TargetConfig {
     fn default() -> Self {
         Self {
             ignore_https_errors: true,
-            viewport: Default::default()
+            viewport: Default::default(),
         }
     }
 }
