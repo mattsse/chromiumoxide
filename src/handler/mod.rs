@@ -24,9 +24,10 @@ use crate::handler::frame::FrameNavigationRequest;
 use crate::handler::frame::{NavigationError, NavigationId, NavigationOk};
 use crate::handler::job::PeriodicJob;
 use crate::handler::session::Session;
-use crate::handler::target::Target;
+use crate::handler::target::{Target, TargetConfig};
 use crate::handler::target::TargetEvent;
 use crate::page::Page;
+use crate::handler::viewport::Viewport;
 
 /// Standard timeout in MS
 pub const REQUEST_TIMEOUT: u64 = 30_000;
@@ -39,7 +40,9 @@ pub mod network;
 mod page;
 mod session;
 pub mod target;
-mod viewport;
+pub mod viewport;
+mod domworld;
+pub mod execution;
 
 /// The handler that monitors the state of the chromium browser and drives all
 /// the requests and events.
@@ -69,12 +72,14 @@ pub struct Handler {
     evict_command_timeout: PeriodicJob,
     /// The internal identifier for a specific navigation
     next_navigation_id: usize,
+    /// How this handler will configure targets etc,
+    config: HandlerConfig
 }
 
 impl Handler {
     /// Create a new `Handler` that drives the connection and listens for
     /// messages on the receiver `rx`.
-    pub(crate) fn new(mut conn: Connection<CdpEventMessage>, rx: Receiver<HandlerMessage>) -> Self {
+    pub(crate) fn new(mut conn: Connection<CdpEventMessage>, rx: Receiver<HandlerMessage>, config: HandlerConfig) -> Self {
         let discover = SetDiscoverTargetsParams::new(true);
         let _ = conn.submit_command(
             discover.identifier(),
@@ -93,6 +98,7 @@ impl Handler {
             conn,
             evict_command_timeout: Default::default(),
             next_navigation_id: 0,
+            config
         }
     }
 
@@ -315,7 +321,7 @@ impl Handler {
     ///
     /// Creates a new `Target` instance and keeps track of it
     fn on_target_created(&mut self, event: EventTargetCreated) {
-        let target = Target::new(event.target_info);
+        let target = Target::new(event.target_info, TargetConfig::new(self.config.ignore_https_errors, self.config.viewport.clone()) );
         self.target_ids.push(target.target_id().clone());
         self.targets.insert(target.target_id().clone(), target);
     }
@@ -446,6 +452,24 @@ impl Stream for Handler {
         }
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct HandlerConfig {
+    pub ignore_https_errors :bool,
+    pub viewport: Viewport,
+    pub context_ids: Vec<BrowserContextId>
+}
+
+impl Default for HandlerConfig {
+    fn default() -> Self {
+        Self {
+            ignore_https_errors: true,
+            viewport: Default::default(),
+            context_ids: Vec::new()
+        }
+    }
+}
+
 
 /// Wraps the sender half of the channel who requested a navigation
 #[derive(Debug)]

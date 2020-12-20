@@ -17,8 +17,9 @@ use chromiumoxide_types::*;
 use crate::cmd::{to_command_response, CommandMessage};
 use crate::conn::Connection;
 use crate::error::{CdpError, Result};
-use crate::handler::{Handler, HandlerMessage};
+use crate::handler::{Handler, HandlerMessage, HandlerConfig};
 use crate::page::Page;
+use crate::handler::viewport::Viewport;
 
 /// A [`Browser`] is created when chromiumoxide connects to a Chromium instance.
 #[derive(Debug)]
@@ -42,7 +43,7 @@ impl Browser {
 
         let (tx, rx) = channel(1);
 
-        let fut = Handler::new(conn, rx);
+        let fut = Handler::new(conn, rx, HandlerConfig::default());
         let browser = Self {
             sender: tx,
             config: None,
@@ -83,7 +84,13 @@ impl Browser {
 
         let (tx, rx) = channel(1);
 
-        let fut = Handler::new(conn, rx);
+        let handler_config = HandlerConfig {
+            ignore_https_errors: config.ignore_https_errors,
+            viewport: config.viewport.clone(),
+            context_ids: Vec::new()
+        };
+
+        let fut = Handler::new(conn, rx, handler_config);
 
         let browser = Self {
             sender: tx,
@@ -216,6 +223,13 @@ pub struct BrowserConfig {
 
     /// Data dir for user data
     pub user_data_dir: Option<PathBuf>,
+
+    /// Whether to launch the `Browser` in incognito mode
+    incognito: bool,
+
+    /// Ignore https errors, default is true
+    ignore_https_errors :bool,
+    viewport: Viewport,
 }
 
 #[derive(Debug, Clone)]
@@ -228,6 +242,9 @@ pub struct BrowserConfigBuilder {
     extensions: Vec<String>,
     process_envs: Option<HashMap<String, String>>,
     user_data_dir: Option<PathBuf>,
+    incognito: bool,
+    ignore_https_errors :bool,
+    viewport: Viewport
 }
 
 impl BrowserConfig {
@@ -251,6 +268,9 @@ impl Default for BrowserConfigBuilder {
             extensions: Vec::new(),
             process_envs: None,
             user_data_dir: None,
+            incognito:false,
+            ignore_https_errors :true,
+            viewport: Default::default()
         }
     }
 }
@@ -268,6 +288,16 @@ impl BrowserConfigBuilder {
 
     pub fn with_head(mut self) -> Self {
         self.headless = false;
+        self
+    }
+
+    pub fn incognito(mut self) -> Self {
+        self.incognito = true;
+        self
+    }
+
+    pub fn respect_https_errors(mut self) -> Self {
+        self.ignore_https_errors = false;
         self
     }
 
@@ -332,6 +362,9 @@ impl BrowserConfigBuilder {
             extensions: self.extensions,
             process_envs: None,
             user_data_dir: None,
+            incognito: self.incognito,
+            ignore_https_errors: self.ignore_https_errors,
+            viewport: self.viewport,
         })
     }
 }
@@ -389,6 +422,10 @@ impl BrowserConfig {
 
         if self.headless {
             cmd.args(&["--headless", "--hide-scrollbars", "--mute-audio"]);
+        }
+
+        if self.incognito {
+            cmd.arg("--incognito");
         }
 
         if let Some(ref envs) = self.process_envs {

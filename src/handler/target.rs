@@ -57,6 +57,8 @@ macro_rules! advance_state {
 pub struct Target {
     /// Info about this target as returned from the chromium instance
     info: TargetInfo,
+    /// Configs for this target
+    config: TargetConfig,
     /// Whether this target was marked as closed
     is_closed: bool,
     /// The frame manager that maintains the state of all frames and handles
@@ -64,7 +66,6 @@ pub struct Target {
     frame_manager: FrameManager,
     network_manager: NetworkManager,
     emulation_manager: EmulationManager,
-    viewport: Viewport,
     /// The identifier of the session this target is attached to
     session_id: Option<SessionId>,
     /// The handle of the browser page of this target
@@ -86,14 +87,15 @@ pub struct Target {
 impl Target {
     /// Create a new target instance with `TargetInfo` after a
     /// `CreateTargetParams` request.
-    pub fn new(info: TargetInfo) -> Self {
+    pub fn new(info: TargetInfo, config: TargetConfig) -> Self {
+        let network_manager = NetworkManager::new(config.ignore_https_errors);
         Self {
             info,
+            config,
             is_closed: false,
             frame_manager: Default::default(),
-            network_manager: Default::default(),
+            network_manager,
             emulation_manager: Default::default(),
-            viewport: Default::default(),
             session_id: None,
             page: None,
             init_state: TargetInit::AttachToTarget,
@@ -283,7 +285,7 @@ impl Target {
                     now,
                     cmds,
                     TargetInit::InitializingEmulation(
-                        self.emulation_manager.init_commands(&self.viewport),
+                        self.emulation_manager.init_commands(&self.config.viewport),
                     )
                 );
             }
@@ -412,6 +414,29 @@ impl Target {
                 serde_json::to_value(enable_log).unwrap(),
             ),
         ])
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TargetConfig {
+    pub ignore_https_errors :bool,
+    pub viewport: Viewport,
+}
+
+impl TargetConfig {
+
+    pub fn new(ignore_https_errors :bool, viewport: Viewport) -> Self {
+        Self {ignore_https_errors, viewport}
+    }
+
+}
+
+impl Default for TargetConfig {
+    fn default() -> Self {
+        Self {
+            ignore_https_errors: true,
+            viewport: Default::default()
+        }
     }
 }
 
