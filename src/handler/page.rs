@@ -26,6 +26,7 @@ use crate::error::{CdpError, Result};
 use crate::handler::target::TargetMessage;
 use crate::keys;
 use crate::layout::Point;
+use chromiumoxide_cdp::cdp::browser_protocol::browser::{GetVersionParams, GetVersionReturns};
 
 #[derive(Debug)]
 pub struct PageHandle {
@@ -104,6 +105,11 @@ impl PageInner {
         self.execute(ActivateTargetParams::new(self.target_id().clone()))
             .await?;
         Ok(self)
+    }
+
+    /// Version information about the browser
+    pub async fn version(&self) -> Result<GetVersionReturns> {
+        Ok(self.execute(GetVersionParams::default()).await?.result)
     }
 
     /// Return all `Element`s inside the node that match the given selector

@@ -23,6 +23,7 @@ use crate::handler::browser::BrowserContext;
 use crate::handler::viewport::Viewport;
 use crate::handler::{Handler, HandlerConfig, HandlerMessage, REQUEST_TIMEOUT};
 use crate::page::Page;
+use chromiumoxide_cdp::cdp::browser_protocol::browser::{GetVersionParams, GetVersionReturns};
 
 /// A [`Browser`] is created when chromiumoxide connects to a Chromium instance.
 #[derive(Debug)]
@@ -192,10 +193,14 @@ impl Browser {
         rx.await?
     }
 
-    pub async fn new_blank_tab(&self) -> anyhow::Result<Page> {
-        Ok(self
-            .new_page(CreateTargetParams::new("about:blank"))
-            .await?)
+    /// Version information about the browser
+    pub async fn version(&self) -> Result<GetVersionReturns> {
+        Ok(self.execute(GetVersionParams::default()).await?.result)
+    }
+
+    /// Returns the user agent of the browser
+    pub async fn user_agent(&self) -> Result<String> {
+        Ok(self.version().await?.user_agent)
     }
 
     /// Call a browser method.

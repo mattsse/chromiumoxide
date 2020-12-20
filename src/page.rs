@@ -214,6 +214,11 @@ impl Page {
         Ok(self)
     }
 
+    /// Returns the user agent of the browser
+    pub async fn user_agent(&self) -> Result<String> {
+        Ok(self.inner.version().await?.user_agent)
+    }
+
     /// Returns the root DOM node (and optionally the subtree) of the page.
     ///
     /// # Note: This does not return the actual HTML document of the page. To
