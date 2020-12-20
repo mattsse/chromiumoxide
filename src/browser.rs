@@ -10,16 +10,19 @@ use futures::channel::mpsc::{channel, Sender};
 use futures::channel::oneshot::channel as oneshot_channel;
 use futures::SinkExt;
 
-use chromiumoxide_cdp::cdp::browser_protocol::target::CreateTargetParams;
+use chromiumoxide_cdp::cdp::browser_protocol::target::{
+    CreateBrowserContextParams, CreateTargetParams, DisposeBrowserContextParams,
+};
 use chromiumoxide_cdp::cdp::CdpEventMessage;
 use chromiumoxide_types::*;
 
 use crate::cmd::{to_command_response, CommandMessage};
 use crate::conn::Connection;
 use crate::error::{CdpError, Result};
-use crate::handler::{Handler, HandlerMessage, HandlerConfig};
-use crate::page::Page;
+use crate::handler::browser::BrowserContext;
 use crate::handler::viewport::Viewport;
+use crate::handler::{Handler, HandlerConfig, HandlerMessage, REQUEST_TIMEOUT};
+use crate::page::Page;
 
 /// A [`Browser`] is created when chromiumoxide connects to a Chromium instance.
 #[derive(Debug)]
@@ -33,6 +36,8 @@ pub struct Browser {
     child: Option<Child>,
     /// The debug web socket url of the chromium instance
     debug_ws_url: String,
+    /// The context of the browser
+    browser_context: BrowserContext,
 }
 
 impl Browser {
@@ -44,11 +49,14 @@ impl Browser {
         let (tx, rx) = channel(1);
 
         let fut = Handler::new(conn, rx, HandlerConfig::default());
+        let browser_context = fut.default_browser_context().clone();
+
         let browser = Self {
             sender: tx,
             config: None,
             child: None,
             debug_ws_url,
+            browser_context,
         };
         Ok((browser, fut))
     }
@@ -87,24 +95,78 @@ impl Browser {
         let handler_config = HandlerConfig {
             ignore_https_errors: config.ignore_https_errors,
             viewport: config.viewport.clone(),
-            context_ids: Vec::new()
+            context_ids: Vec::new(),
+            request_timeout: config.request_timeout,
         };
 
         let fut = Handler::new(conn, rx, handler_config);
+        let browser_context = fut.default_browser_context().clone();
 
         let browser = Self {
             sender: tx,
             config: Some(config),
             child: Some(child),
             debug_ws_url,
+            browser_context,
         };
 
         Ok((browser, fut))
     }
 
+    /// If not launched as incognito this creates a new incognito browser
+    /// context. After that this browser exists within the incognito session.
+    /// New pages created while being in incognito mode will also run in the
+    /// incognito context. Incognito contexts won't share cookies/cache with
+    /// other browser contexts.
+    pub async fn start_incognito_context(&mut self) -> Result<&mut Self> {
+        if !self.is_incognito_configured() {
+            let resp = self
+                .execute(CreateBrowserContextParams::default())
+                .await?
+                .result;
+            self.browser_context = BrowserContext::from(resp.browser_context_id);
+            self.sender
+                .clone()
+                .send(HandlerMessage::InsertContext(self.browser_context.clone()))
+                .await?;
+        }
+
+        Ok(self)
+    }
+
+    /// If a incognito session was created with
+    /// `Browser::start_incognito_context` this disposes this context.
+    ///
+    /// # Note This will also dispose all pages that were running within the
+    /// incognito context.
+    pub async fn quit_incognito_context(&mut self) -> Result<&mut Self> {
+        if let Some(id) = self.browser_context.take() {
+            self.execute(DisposeBrowserContextParams::new(id.clone()))
+                .await?;
+            self.sender
+                .clone()
+                .send(HandlerMessage::DisposeContext(BrowserContext::from(id)))
+                .await?;
+        }
+        Ok(self)
+    }
+
+    /// Whether incognito mode was configured from the start
+    fn is_incognito_configured(&self) -> bool {
+        self.config
+            .as_ref()
+            .map(|c| c.incognito)
+            .unwrap_or_default()
+    }
+
     /// Returns the address of the websocket this browser is attached to
     pub fn websocket_address(&self) -> &String {
         &self.debug_ws_url
+    }
+
+    /// Whether the BrowserContext is incognito.
+    pub fn is_incognito(&self) -> bool {
+        self.is_incognito_configured() || self.browser_context.is_incognito()
     }
 
     /// The config of the spawned chromium instance if any.
@@ -115,10 +177,16 @@ impl Browser {
     /// Create a new browser page
     pub async fn new_page(&self, params: impl Into<CreateTargetParams>) -> Result<Page> {
         let (tx, rx) = oneshot_channel();
+        let mut params = params.into();
+        if let Some(id) = self.browser_context.id() {
+            if params.browser_context_id.is_none() {
+                params.browser_context_id = Some(id.clone());
+            }
+        }
 
         self.sender
             .clone()
-            .send(HandlerMessage::CreatePage(params.into(), tx))
+            .send(HandlerMessage::CreatePage(params, tx))
             .await?;
 
         rx.await?
@@ -228,8 +296,10 @@ pub struct BrowserConfig {
     incognito: bool,
 
     /// Ignore https errors, default is true
-    ignore_https_errors :bool,
+    ignore_https_errors: bool,
     viewport: Viewport,
+    /// The duration after a request with no response should time out
+    request_timeout: Duration,
 }
 
 #[derive(Debug, Clone)]
@@ -243,8 +313,9 @@ pub struct BrowserConfigBuilder {
     process_envs: Option<HashMap<String, String>>,
     user_data_dir: Option<PathBuf>,
     incognito: bool,
-    ignore_https_errors :bool,
-    viewport: Viewport
+    ignore_https_errors: bool,
+    viewport: Viewport,
+    request_timeout: Duration,
 }
 
 impl BrowserConfig {
@@ -268,9 +339,10 @@ impl Default for BrowserConfigBuilder {
             extensions: Vec::new(),
             process_envs: None,
             user_data_dir: None,
-            incognito:false,
-            ignore_https_errors :true,
-            viewport: Default::default()
+            incognito: false,
+            ignore_https_errors: true,
+            viewport: Default::default(),
+            request_timeout: Duration::from_millis(REQUEST_TIMEOUT),
         }
     }
 }
@@ -298,6 +370,11 @@ impl BrowserConfigBuilder {
 
     pub fn respect_https_errors(mut self) -> Self {
         self.ignore_https_errors = false;
+        self
+    }
+
+    pub fn request_timeout(mut self, timeout: Duration) -> Self {
+        self.request_timeout = timeout;
         self
     }
 
@@ -365,6 +442,7 @@ impl BrowserConfigBuilder {
             incognito: self.incognito,
             ignore_https_errors: self.ignore_https_errors,
             viewport: self.viewport,
+            request_timeout: self.request_timeout,
         })
     }
 }

@@ -1,5 +1,5 @@
-use std::collections::HashSet;
 use chromiumoxide_cdp::cdp::js_protocol::runtime::EventBindingCalled;
+use std::collections::HashSet;
 
 #[derive(Debug, Clone)]
 pub struct DOMWorld {
@@ -9,8 +9,6 @@ pub struct DOMWorld {
 }
 
 impl DOMWorld {
-
-    pub fn on_runtime_binding_called(&mut self, ev: &EventBindingCalled) {
-
-    }
+    #[allow(dead_code)]
+    pub fn on_runtime_binding_called(&mut self, _ev: &EventBindingCalled) {}
 }
