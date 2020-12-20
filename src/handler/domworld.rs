@@ -9,5 +9,6 @@ pub struct DOMWorld {
 }
 
 impl DOMWorld {
-    pub fn on_runtime_binding_called(&mut self, ev: &EventBindingCalled) {}
+    #[allow(dead_code)]
+    pub fn on_runtime_binding_called(&mut self, _ev: &EventBindingCalled) {}
 }
