@@ -10,6 +10,7 @@ use thiserror::Error;
 use chromiumoxide_cdp::cdp::browser_protocol::page::FrameId;
 
 use crate::handler::frame::NavigationError;
+use chromiumoxide_cdp::cdp::js_protocol::runtime::ExceptionDetails;
 
 pub type Result<T, E = CdpError> = std::result::Result<T, E>;
 
@@ -41,6 +42,10 @@ pub enum CdpError {
     ScrollingFailed(String),
     #[error("Requested value not found.")]
     NotFound,
+    /// Detailed information about exception (or error) that was thrown during
+    /// script compilation or execution
+    #[error("{0:?}")]
+    JavascriptException(#[from] ExceptionDetails),
 }
 impl CdpError {
     pub fn msg(msg: impl Into<String>) -> Self {

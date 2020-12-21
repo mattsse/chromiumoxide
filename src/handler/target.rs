@@ -399,11 +399,12 @@ impl Target {
                             // register a new listener
                             self.event_listeners.add_listener(req);
                         }
-                        TargetMessage::GetExecutionContext {
-                            dom_world,
-                            frame_id,
-                            tx,
-                        } => {
+                        TargetMessage::GetExecutionContext(ctx) => {
+                            let GetExecutionContext {
+                                dom_world,
+                                frame_id,
+                                tx,
+                            } = ctx;
                             let frame = if let Some(frame_id) = frame_id {
                                 self.frame_manager.frame(&frame_id)
                             } else {
@@ -600,6 +601,26 @@ impl TargetInit {
 }
 
 #[derive(Debug)]
+pub struct GetExecutionContext {
+    /// For which world the execution context was requested
+    pub dom_world: DOMWorldKind,
+    /// The if of the frame to get the `ExecutionContext` for
+    pub frame_id: Option<FrameId>,
+    /// Sender half of the channel to send the response back
+    pub tx: Sender<Option<ExecutionContextId>>,
+}
+
+impl GetExecutionContext {
+    pub fn new(tx: Sender<Option<ExecutionContextId>>) -> Self {
+        Self {
+            dom_world: DOMWorldKind::Main,
+            frame_id: None,
+            tx,
+        }
+    }
+}
+
+#[derive(Debug)]
 pub(crate) enum TargetMessage {
     /// Execute a command within the session of this target
     Command(CommandMessage),
@@ -615,12 +636,5 @@ pub(crate) enum TargetMessage {
     /// received event
     AddEventListener(EventListenerRequest),
     /// Get the `ExecutionContext` if available
-    GetExecutionContext {
-        /// For which world the execution context was requested
-        dom_world: DOMWorldKind,
-        /// The if of the frame to get the `ExecutionContext` for
-        frame_id: Option<FrameId>,
-        /// Sender half of the channel to send the response back
-        tx: Sender<Option<ExecutionContextId>>,
-    },
+    GetExecutionContext(GetExecutionContext),
 }

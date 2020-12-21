@@ -5,6 +5,7 @@ use futures::channel::oneshot::channel as oneshot_channel;
 use futures::stream::Fuse;
 use futures::{SinkExt, StreamExt};
 
+use chromiumoxide_cdp::cdp::browser_protocol::browser::{GetVersionParams, GetVersionReturns};
 use chromiumoxide_cdp::cdp::browser_protocol::dom::{
     NodeId, QuerySelectorAllParams, QuerySelectorParams,
 };
@@ -17,16 +18,16 @@ use chromiumoxide_cdp::cdp::browser_protocol::page::{
 };
 use chromiumoxide_cdp::cdp::browser_protocol::target::{ActivateTargetParams, SessionId, TargetId};
 use chromiumoxide_cdp::cdp::js_protocol::runtime::{
-    CallFunctionOnParams, CallFunctionOnReturns, RemoteObjectId,
+    CallFunctionOnParams, CallFunctionOnReturns, EvaluateParams, ExecutionContextId, RemoteObjectId,
 };
 use chromiumoxide_types::{Command, CommandResponse};
 
 use crate::cmd::{to_command_response, CommandMessage};
 use crate::error::{CdpError, Result};
-use crate::handler::target::TargetMessage;
+use crate::handler::target::{GetExecutionContext, TargetMessage};
+use crate::js::EvaluationResult;
 use crate::keys;
 use crate::layout::Point;
-use chromiumoxide_cdp::cdp::browser_protocol::browser::{GetVersionParams, GetVersionReturns};
 
 #[derive(Debug)]
 pub struct PageHandle {
@@ -232,6 +233,36 @@ impl PageInner {
             )
             .await?;
         Ok(resp.result)
+    }
+
+    pub async fn evaluate(&self, evaluate: impl Into<EvaluateParams>) -> Result<EvaluationResult> {
+        let mut evaluate = evaluate.into();
+        if evaluate.context_id.is_none() {
+            evaluate.context_id = self.execution_context().await?;
+        }
+        if evaluate.await_promise.is_none() {
+            evaluate.await_promise = Some(true);
+        }
+        if evaluate.return_by_value.is_none() {
+            evaluate.return_by_value = Some(true);
+        }
+
+        let resp = self.execute(evaluate).await?.result;
+        if let Some(exception) = resp.exception_details {
+            return Err(exception.into());
+        }
+        Ok(EvaluationResult::new(resp.result))
+    }
+
+    pub async fn execution_context(&self) -> Result<Option<ExecutionContextId>> {
+        let (tx, rx) = oneshot_channel();
+        self.sender
+            .clone()
+            .send(TargetMessage::GetExecutionContext(
+                GetExecutionContext::new(tx),
+            ))
+            .await?;
+        Ok(rx.await?)
     }
 
     /// Returns metrics relating to the layout of the page

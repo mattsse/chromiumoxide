@@ -18,9 +18,7 @@ use chromiumoxide_cdp::cdp::browser_protocol::performance::{GetMetricsParams, Me
 use chromiumoxide_cdp::cdp::browser_protocol::target::{SessionId, TargetId};
 use chromiumoxide_cdp::cdp::js_protocol;
 use chromiumoxide_cdp::cdp::js_protocol::debugger::GetScriptSourceParams;
-use chromiumoxide_cdp::cdp::js_protocol::runtime::{
-    AddBindingParams, EvaluateParams, RemoteObject, ScriptId,
-};
+use chromiumoxide_cdp::cdp::js_protocol::runtime::{AddBindingParams, EvaluateParams, ScriptId};
 use chromiumoxide_cdp::cdp::{browser_protocol, IntoEventKind};
 use chromiumoxide_types::*;
 
@@ -28,6 +26,7 @@ use crate::element::Element;
 use crate::error::{CdpError, Result};
 use crate::handler::target::TargetMessage;
 use crate::handler::PageInner;
+use crate::js::EvaluationResult;
 use crate::layout::Point;
 use crate::listeners::{EventListenerRequest, EventStream};
 use crate::utils;
@@ -621,12 +620,10 @@ impl Page {
 
     /// Returns the title of the document.
     pub async fn get_title(&self) -> Result<Option<String>> {
-        let remote_object = self.evaluate("document.title").await?;
-        let title: String = serde_json::from_value(
-            remote_object
-                .value
-                .ok_or_else(|| CdpError::msg("No title found"))?,
-        )?;
+        let result = self.evaluate("document.title").await?;
+
+        let title: String = result.into_value()?;
+
         if title.is_empty() {
             Ok(None)
         } else {
@@ -648,9 +645,9 @@ impl Page {
         Ok(self.inner.layout_metrics().await?)
     }
 
-    /// Evaluates expression on global object.
-    pub async fn evaluate(&self, evaluate: impl Into<EvaluateParams>) -> Result<RemoteObject> {
-        Ok(self.execute(evaluate.into()).await?.result.result)
+    /// Evaluates the expression.
+    pub async fn evaluate(&self, evaluate: impl Into<EvaluateParams>) -> Result<EvaluationResult> {
+        Ok(self.inner.evaluate(evaluate).await?)
     }
 
     /// Evaluates given script in every frame upon creation (before loading
@@ -679,7 +676,7 @@ impl Page {
 
     /// Returns the HTML content of the page
     pub async fn content(&self) -> Result<String> {
-        let resp = self
+        Ok(self
             .evaluate(
                 "{
           let retVal = '';
@@ -693,9 +690,8 @@ impl Page {
       }
       ",
             )
-            .await?;
-        let value = resp.value.ok_or(CdpError::NotFound)?;
-        Ok(serde_json::from_value(value)?)
+            .await?
+            .into_value()?)
     }
 
     /// Returns source for the script with given id.
