@@ -645,7 +645,18 @@ impl Page {
         Ok(self.inner.layout_metrics().await?)
     }
 
-    /// Evaluates the expression.
+    /// Evaluates a function in the page's context and returns the result.
+    /// # Example
+    /// ```no_run
+    /// # use chromiumoxide::page::Page;
+    /// # use chromiumoxide::error::Result;
+    /// # use chromiumoxide_cdp::cdp::browser_protocol::network::CookieParam;
+    /// # async fn demo(page: Page) -> Result<()> {
+    ///     let sum:usize = page.evaluate("1 + 2").await?.into_value()?;
+    ///     assert_eq!(sum, 3);
+    ///     # Ok(())
+    /// # }
+    /// ```
     pub async fn evaluate(&self, evaluate: impl Into<EvaluateParams>) -> Result<EvaluationResult> {
         Ok(self.inner.evaluate(evaluate).await?)
     }

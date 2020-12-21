@@ -14,7 +14,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // switch to incognito mode and goto the url
-    let incognito_page = browser
+    let _incognito_page = browser
         .start_incognito_context()
         .await?
         .new_page("https://en.wikipedia.org")
