@@ -22,16 +22,17 @@ use crate::cmd::CommandMessage;
 use crate::error::{CdpError, DeadlineExceeded, Result};
 use crate::handler::browser::BrowserContext;
 use crate::handler::emulation::EmulationManager;
-use crate::handler::frame::FrameNavigationRequest;
 use crate::handler::frame::{
     FrameEvent, FrameManager, NavigationError, NavigationId, NavigationOk,
 };
+use crate::handler::frame::{FrameNavigationRequest, UTILITY_WORLD_NAME};
 use crate::handler::network::NetworkManager;
 use crate::handler::page::PageHandle;
 use crate::handler::viewport::Viewport;
 use crate::handler::PageInner;
 use crate::listeners::{EventListenerRequest, EventListeners};
 use crate::page::Page;
+use chromiumoxide_cdp::cdp::js_protocol::runtime::ExecutionContextId;
 
 macro_rules! advance_state {
     ($s:ident, $cx:ident, $now:ident, $cmds: ident, $next_state:expr ) => {{
@@ -224,8 +225,12 @@ impl Target {
             CdpEvent::RuntimeExecutionContextDestroyed(ev) => {
                 self.frame_manager.on_frame_execution_context_destroyed(ev)
             }
-            CdpEvent::RuntimeExecutionContextsCleared(ev) => {
-                self.frame_manager.on_execution_context_cleared(ev)
+            CdpEvent::RuntimeExecutionContextsCleared(_) => {
+                self.frame_manager.on_execution_contexts_cleared()
+            }
+            CdpEvent::RuntimeBindingCalled(ev) => {
+                // TODO check if binding registered and payload is json
+                self.frame_manager.on_runtime_binding_called(ev)
             }
             CdpEvent::PageLifecycleEvent(ev) => self.frame_manager.on_page_lifecycle_event(ev),
             CdpEvent::PageFrameStartedLoading(ev) => {
@@ -279,13 +284,30 @@ impl Target {
             }
             TargetInit::InitializingFrame(cmds) => {
                 self.session_id.as_ref()?;
-                advance_state!(
-                    self,
-                    cx,
-                    now,
-                    cmds,
-                    TargetInit::InitializingNetwork(self.network_manager.init_commands())
-                );
+                if let Poll::Ready(poll) = cmds.poll(now) {
+                    return match poll {
+                        None => {
+                            if let Some(isolated_world_cmds) =
+                                self.frame_manager.ensure_isolated_world(UTILITY_WORLD_NAME)
+                            {
+                                *cmds = isolated_world_cmds;
+                            } else {
+                                self.init_state = TargetInit::InitializingNetwork(
+                                    self.network_manager.init_commands(),
+                                );
+                            }
+                            self.poll(cx, now)
+                        }
+                        Some(Ok((method, params))) => Some(TargetEvent::Request(Request {
+                            method,
+                            session_id: self.session_id.clone().map(Into::into),
+                            params,
+                        })),
+                        Some(Err(err)) => Some(TargetEvent::RequestTimeout(err)),
+                    };
+                } else {
+                    return None;
+                }
             }
             TargetInit::InitializingNetwork(cmds) => {
                 advance_state!(
@@ -375,6 +397,12 @@ impl Target {
                         TargetMessage::AddEventListener(req) => {
                             // register a new listener
                             self.event_listeners.add_listener(req);
+                        }
+                        TargetMessage::GetExecutionContent { frame_id, tx } => {
+                            if let Some(frame_id) = frame_id {
+                                if let Some(frame) = self.frame_manager.frame(&frame_id) {}
+                            } else {
+                            }
                         }
                     }
                 }
@@ -567,4 +595,12 @@ pub(crate) enum TargetMessage {
     /// A request to submit a new listener that gets notified with every
     /// received event
     AddEventListener(EventListenerRequest),
+    /// Get the `ExecutionContext` if available
+    GetExecutionContent {
+        // TODO add `Kind` enum DOMKind: Main for Evaluating stuff and Secondary for edit
+        /// The if of the frame to get the `ExecutionContext` for
+        frame_id: Option<FrameId>,
+        /// Sender half of the channel to send the response back
+        tx: Sender<Result<Option<ExecutionContextId>>>,
+    },
 }

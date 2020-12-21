@@ -6,7 +6,8 @@ use serde_json::map::Entry;
 
 use chromiumoxide_cdp::cdp::browser_protocol::network::LoaderId;
 use chromiumoxide_cdp::cdp::browser_protocol::page::{
-    EventFrameDetached, EventFrameStartedLoading, EventFrameStoppedLoading, EventLifecycleEvent,
+    AddScriptToEvaluateOnNewDocumentParams, CreateIsolatedWorldParams, EventFrameDetached,
+    EventFrameStartedLoading, EventFrameStoppedLoading, EventLifecycleEvent,
     EventNavigatedWithinDocument, Frame as CdpFrame, FrameTree,
 };
 use chromiumoxide_cdp::cdp::browser_protocol::target::EventAttachedToTarget;
@@ -19,14 +20,19 @@ use chromiumoxide_types::{Method, MethodId, Request};
 
 use crate::cmd::CommandChain;
 use crate::error::DeadlineExceeded;
+use crate::handler::domworld::DOMWorld;
 use crate::handler::REQUEST_TIMEOUT;
 
-/// TODO FrameId could optimized by rolling usize based id setup, or find better
+pub const UTILITY_WORLD_NAME: &str = "__chromiumoxide_utility_world__";
+const EVALUATION_SCRIPT_URL: &str = "____chromiumoxide_utility_world___evaluation_script__";
+
 /// design for tracking child/parent
 #[derive(Debug)]
 pub struct Frame {
     pub parent_frame: Option<FrameId>,
     pub id: FrameId,
+    pub main_world: DOMWorld,
+    pub secondary_world: DOMWorld,
     pub loader_id: Option<LoaderId>,
     pub url: Option<String>,
     pub child_frames: HashSet<FrameId>,
@@ -39,6 +45,8 @@ impl Frame {
         Self {
             parent_frame: None,
             id,
+            main_world: Default::default(),
+            secondary_world: Default::default(),
             loader_id: None,
             url: None,
             child_frames: Default::default(),
@@ -52,6 +60,8 @@ impl Frame {
         Self {
             parent_frame: Some(parent.id.clone()),
             id,
+            main_world: Default::default(),
+            secondary_world: Default::default(),
             loader_id: None,
             url: None,
             child_frames: Default::default(),
@@ -90,6 +100,19 @@ impl Frame {
     pub fn is_loaded(&self) -> bool {
         self.lifecycle_events.contains("load")
     }
+
+    pub fn clear_contexts(&mut self) {
+        self.main_world.take_context();
+        self.secondary_world.take_context();
+    }
+
+    pub fn destroy_context(&mut self, ctx: ExecutionContextId) {
+        if self.main_world.context() == Some(ctx) {
+            self.main_world.take_context();
+        } else if self.secondary_world.context() == Some(ctx) {
+            self.secondary_world.take_context();
+        }
+    }
 }
 
 impl From<CdpFrame> for Frame {
@@ -97,6 +120,8 @@ impl From<CdpFrame> for Frame {
         Self {
             parent_frame: frame.parent_id.map(From::from),
             id: frame.id,
+            main_world: Default::default(),
+            secondary_world: Default::default(),
             loader_id: Some(frame.loader_id),
             url: Some(frame.url),
             child_frames: Default::default(),
@@ -113,6 +138,9 @@ impl From<CdpFrame> for Frame {
 pub struct FrameManager {
     main_frame: Option<FrameId>,
     frames: HashMap<FrameId, Frame>,
+    /// The contexts mapped with their frames
+    context_ids: HashMap<ExecutionContextId, FrameId>,
+    isolated_worlds: HashSet<String>,
     /// Timeout after which an anticipated event (related to navigation) doesn't
     /// arrive results in an error
     timeout: Duration,
@@ -325,15 +353,64 @@ impl FrameManager {
         }
     }
 
-    pub fn on_frame_execution_context_created(&mut self, _event: &EventExecutionContextCreated) {}
+    /// Notification is issued every time when binding is called
+    pub fn on_runtime_binding_called(&mut self, _ev: &EventBindingCalled) {}
 
-    pub fn on_frame_execution_context_destroyed(
-        &mut self,
-        _event: &EventExecutionContextDestroyed,
-    ) {
+    /// Issued when new execution context is created
+    pub fn on_frame_execution_context_created(&mut self, event: &EventExecutionContextCreated) {
+        if let Some(frame_id) = event
+            .context
+            .aux_data
+            .as_ref()
+            .and_then(|v| v["frameId"].as_str())
+        {
+            if let Some(frame) = self.frames.get_mut(frame_id) {
+                if event
+                    .context
+                    .aux_data
+                    .as_ref()
+                    .and_then(|v| v["isDefault"].as_bool())
+                    .unwrap_or_default()
+                {
+                    frame.main_world.set_context(event.context.id);
+                    self.context_ids.insert(event.context.id, frame.id.clone());
+                } else if event.context.name == UTILITY_WORLD_NAME
+                    && frame.secondary_world.context().is_none()
+                {
+                    frame.secondary_world.set_context(event.context.id);
+                    self.context_ids.insert(event.context.id, frame.id.clone());
+                }
+            }
+        }
+        if event
+            .context
+            .aux_data
+            .as_ref()
+            .filter(|v| v["type"].as_str() == Some("isolated"))
+            .is_some()
+        {
+            self.isolated_worlds.insert(event.context.name.clone());
+        }
     }
 
-    pub fn on_execution_context_cleared(&mut self, _event: &EventExecutionContextsCleared) {}
+    /// Issued when execution context is destroyed
+    pub fn on_frame_execution_context_destroyed(&mut self, event: &EventExecutionContextDestroyed) {
+        if let Some(id) = self.context_ids.remove(&event.execution_context_id) {
+            if let Some(frame) = self.frames.get_mut(&id) {
+                frame.destroy_context(event.execution_context_id);
+            }
+        }
+    }
+
+    /// Issued when all executionContexts were cleared
+    pub fn on_execution_contexts_cleared(&mut self) {
+        for id in self.context_ids.values() {
+            if let Some(frame) = self.frames.get_mut(id) {
+                frame.clear_contexts();
+            }
+        }
+        self.context_ids.clear()
+    }
 
     /// Fired for top level page lifecycle events (nav, load, paint, etc.)
     pub fn on_page_lifecycle_event(&mut self, event: &EventLifecycleEvent) {
@@ -362,6 +439,33 @@ impl FrameManager {
             None
         }
     }
+
+    pub fn ensure_isolated_world(&mut self, world_name: &str) -> Option<CommandChain> {
+        if self.isolated_worlds.contains(world_name) {
+            return None;
+        }
+        self.isolated_worlds.insert(world_name.to_string());
+        let cmd = AddScriptToEvaluateOnNewDocumentParams::builder()
+            .source(format!("//# sourceURL={}", EVALUATION_SCRIPT_URL))
+            .world_name(world_name)
+            .build()
+            .unwrap();
+
+        let mut cmds = Vec::with_capacity(self.frames.len() + 1);
+
+        cmds.push((cmd.identifier(), serde_json::to_value(cmd).unwrap()));
+
+        cmds.extend(self.frames.keys().map(|id| {
+            let cmd = CreateIsolatedWorldParams::builder()
+                .frame_id(id.clone())
+                .grant_univeral_access(true)
+                .world_name(world_name)
+                .build()
+                .unwrap();
+            (cmd.identifier(), serde_json::to_value(cmd).unwrap())
+        }));
+        Some(CommandChain::new(cmds))
+    }
 }
 
 impl Default for FrameManager {
@@ -369,6 +473,8 @@ impl Default for FrameManager {
         FrameManager {
             main_frame: None,
             frames: Default::default(),
+            context_ids: Default::default(),
+            isolated_worlds: Default::default(),
             timeout: Duration::from_millis(REQUEST_TIMEOUT),
             pending_navigations: Default::default(),
             navigation: None,

@@ -35,7 +35,6 @@ pub const REQUEST_TIMEOUT: u64 = 30_000;
 pub mod browser;
 mod domworld;
 pub mod emulation;
-pub mod execution;
 pub mod frame;
 mod job;
 pub mod network;
@@ -324,7 +323,7 @@ impl Handler {
     /// Process an incoming event read from the websocket
     fn on_event(&mut self, event: CdpEventMessage) {
         if let Some(ref session_id) = event.session_id {
-            if let Some(session) = self.sessions.get(session_id) {
+            if let Some(session) = self.sessions.get(session_id.as_str()) {
                 if let Some(target) = self.targets.get_mut(session.target_id()) {
                     return target.on_event(event);
                 }

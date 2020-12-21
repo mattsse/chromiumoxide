@@ -76,6 +76,7 @@ pub(crate) mod cmd;
 pub mod conn;
 pub mod element;
 pub mod error;
+pub mod fetcher;
 pub mod handler;
 pub mod keys;
 pub mod layout;
