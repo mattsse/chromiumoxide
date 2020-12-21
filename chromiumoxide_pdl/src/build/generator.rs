@@ -648,11 +648,11 @@ impl Generator {
                             }
                         }
                     });
-                    // Fixup specifically for `SessionId`
-                    if struct_ident == "SessionId" {
+                    // Fixup specifically types used as keys
+                    if struct_ident == "SessionId" || struct_ident == "FrameId" {
                         stream.extend(quote! {
-                            impl std::borrow::Borrow<String> for #name {
-                                fn borrow(&self) -> &String {
+                            impl std::borrow::Borrow<str> for #name {
+                                fn borrow(&self) -> &str {
                                     &self.0
                                 }
                             }
