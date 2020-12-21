@@ -21,6 +21,7 @@ use crate::cmd::CommandChain;
 use crate::cmd::CommandMessage;
 use crate::error::{CdpError, DeadlineExceeded, Result};
 use crate::handler::browser::BrowserContext;
+use crate::handler::domworld::DOMWorldKind;
 use crate::handler::emulation::EmulationManager;
 use crate::handler::frame::{
     FrameEvent, FrameManager, NavigationError, NavigationId, NavigationOk,
@@ -398,10 +399,28 @@ impl Target {
                             // register a new listener
                             self.event_listeners.add_listener(req);
                         }
-                        TargetMessage::GetExecutionContent { frame_id, tx } => {
-                            if let Some(frame_id) = frame_id {
-                                if let Some(frame) = self.frame_manager.frame(&frame_id) {}
+                        TargetMessage::GetExecutionContext {
+                            dom_world,
+                            frame_id,
+                            tx,
+                        } => {
+                            let frame = if let Some(frame_id) = frame_id {
+                                self.frame_manager.frame(&frame_id)
                             } else {
+                                self.frame_manager.main_frame()
+                            };
+
+                            if let Some(frame) = frame {
+                                match dom_world {
+                                    DOMWorldKind::Main => {
+                                        let _ = tx.send(frame.main_world.execution_context());
+                                    }
+                                    DOMWorldKind::Secondary => {
+                                        let _ = tx.send(frame.secondary_world.execution_context());
+                                    }
+                                }
+                            } else {
+                                let _ = tx.send(None);
                             }
                         }
                     }
@@ -596,11 +615,12 @@ pub(crate) enum TargetMessage {
     /// received event
     AddEventListener(EventListenerRequest),
     /// Get the `ExecutionContext` if available
-    GetExecutionContent {
-        // TODO add `Kind` enum DOMKind: Main for Evaluating stuff and Secondary for edit
+    GetExecutionContext {
+        /// For which world the execution context was requested
+        dom_world: DOMWorldKind,
         /// The if of the frame to get the `ExecutionContext` for
         frame_id: Option<FrameId>,
         /// Sender half of the channel to send the response back
-        tx: Sender<Result<Option<ExecutionContextId>>>,
+        tx: Sender<Option<ExecutionContextId>>,
     },
 }

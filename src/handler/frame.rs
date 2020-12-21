@@ -25,7 +25,6 @@ use crate::handler::REQUEST_TIMEOUT;
 
 pub const UTILITY_WORLD_NAME: &str = "__chromiumoxide_utility_world__";
 const EVALUATION_SCRIPT_URL: &str = "____chromiumoxide_utility_world___evaluation_script__";
-
 /// design for tracking child/parent
 #[derive(Debug)]
 pub struct Frame {
@@ -107,11 +106,15 @@ impl Frame {
     }
 
     pub fn destroy_context(&mut self, ctx: ExecutionContextId) {
-        if self.main_world.context() == Some(ctx) {
+        if self.main_world.execution_context() == Some(ctx) {
             self.main_world.take_context();
-        } else if self.secondary_world.context() == Some(ctx) {
+        } else if self.secondary_world.execution_context() == Some(ctx) {
             self.secondary_world.take_context();
         }
+    }
+
+    pub fn execution_context(&self) -> Option<ExecutionContextId> {
+        self.main_world.execution_context()
     }
 }
 
@@ -373,13 +376,12 @@ impl FrameManager {
                     .unwrap_or_default()
                 {
                     frame.main_world.set_context(event.context.id);
-                    self.context_ids.insert(event.context.id, frame.id.clone());
                 } else if event.context.name == UTILITY_WORLD_NAME
-                    && frame.secondary_world.context().is_none()
+                    && frame.secondary_world.execution_context().is_none()
                 {
                     frame.secondary_world.set_context(event.context.id);
-                    self.context_ids.insert(event.context.id, frame.id.clone());
                 }
+                self.context_ids.insert(event.context.id, frame.id.clone());
             }
         }
         if event
