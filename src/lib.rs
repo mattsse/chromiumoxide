@@ -68,6 +68,7 @@ pub use chromiumoxide_types::{self as types, Binary, Command, Method, MethodType
 pub use crate::browser::{Browser, BrowserConfig};
 pub use crate::conn::Connection;
 pub use crate::element::Element;
+pub use crate::error::Result;
 pub use crate::handler::Handler;
 pub use crate::page::Page;
 

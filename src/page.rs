@@ -18,7 +18,10 @@ use chromiumoxide_cdp::cdp::browser_protocol::performance::{GetMetricsParams, Me
 use chromiumoxide_cdp::cdp::browser_protocol::target::{SessionId, TargetId};
 use chromiumoxide_cdp::cdp::js_protocol;
 use chromiumoxide_cdp::cdp::js_protocol::debugger::GetScriptSourceParams;
-use chromiumoxide_cdp::cdp::js_protocol::runtime::{AddBindingParams, EvaluateParams, ScriptId};
+use chromiumoxide_cdp::cdp::js_protocol::runtime::{
+    AddBindingParams, CallFunctionOnParams, EvaluateParams, ExecutionContextId, RemoteObjectType,
+    ScriptId,
+};
 use chromiumoxide_cdp::cdp::{browser_protocol, IntoEventKind};
 use chromiumoxide_types::*;
 
@@ -26,7 +29,7 @@ use crate::element::Element;
 use crate::error::{CdpError, Result};
 use crate::handler::target::TargetMessage;
 use crate::handler::PageInner;
-use crate::js::EvaluationResult;
+use crate::js::{Evaluation, EvaluationResult};
 use crate::layout::Point;
 use crate::listeners::{EventListenerRequest, EventStream};
 use crate::utils;
@@ -645,20 +648,63 @@ impl Page {
         Ok(self.inner.layout_metrics().await?)
     }
 
-    /// Evaluates a function in the page's context and returns the result.
+    /// This evaluates strictly as expression
+    pub async fn evaluate_expression(
+        &self,
+        evaluate: impl Into<EvaluateParams>,
+    ) -> Result<EvaluationResult> {
+        Ok(self.inner.evaluate_expression(evaluate).await?)
+    }
+
+    /// Evaluates an expression in the page's context and returns the result.
     /// # Example
     /// ```no_run
     /// # use chromiumoxide::page::Page;
     /// # use chromiumoxide::error::Result;
-    /// # use chromiumoxide_cdp::cdp::browser_protocol::network::CookieParam;
     /// # async fn demo(page: Page) -> Result<()> {
     ///     let sum:usize = page.evaluate("1 + 2").await?.into_value()?;
     ///     assert_eq!(sum, 3);
     ///     # Ok(())
     /// # }
     /// ```
-    pub async fn evaluate(&self, evaluate: impl Into<EvaluateParams>) -> Result<EvaluationResult> {
-        Ok(self.inner.evaluate(evaluate).await?)
+    pub async fn evaluate(&self, evaluate: impl Into<Evaluation>) -> Result<EvaluationResult> {
+        match evaluate.into() {
+            Evaluation::Expression(mut expr) => {
+                if expr.context_id.is_none() {
+                    expr.context_id = self.execution_context().await?;
+                }
+                let fallback = expr.eval_as_function_fallback.and_then(|p| {
+                    if p {
+                        Some(expr.clone())
+                    } else {
+                        None
+                    }
+                });
+                let res = self.evaluate_expression(expr).await?;
+
+                if res.object().r#type == RemoteObjectType::Function {
+                    // expression was actually a function
+                    if let Some(fallback) = fallback {
+                        return Ok(self.evaluate_function(fallback).await?);
+                    }
+                }
+                Ok(res)
+            }
+            Evaluation::Function(fun) => Ok(self.evaluate_function(fun).await?),
+        }
+    }
+
+    pub async fn evaluate_function(
+        &self,
+        evaluate: impl Into<CallFunctionOnParams>,
+    ) -> Result<EvaluationResult> {
+        Ok(self.inner.evaluate_function(evaluate).await?)
+    }
+
+    /// Returns the default execution context identifier of this page that
+    /// represents the context for JavaScript execution.
+    pub async fn execution_context(&self) -> Result<Option<ExecutionContextId>> {
+        Ok(self.inner.execution_context().await?)
     }
 
     /// Evaluates given script in every frame upon creation (before loading

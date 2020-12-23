@@ -235,10 +235,36 @@ impl PageInner {
         Ok(resp.result)
     }
 
-    pub async fn evaluate(&self, evaluate: impl Into<EvaluateParams>) -> Result<EvaluationResult> {
+    pub async fn evaluate_expression(
+        &self,
+        evaluate: impl Into<EvaluateParams>,
+    ) -> Result<EvaluationResult> {
         let mut evaluate = evaluate.into();
         if evaluate.context_id.is_none() {
             evaluate.context_id = self.execution_context().await?;
+        }
+        if evaluate.await_promise.is_none() {
+            evaluate.await_promise = Some(true);
+        }
+        if evaluate.return_by_value.is_none() {
+            evaluate.return_by_value = Some(true);
+        }
+
+        let resp = self.execute(evaluate).await?.result;
+        if let Some(exception) = resp.exception_details {
+            return Err(exception.into());
+        }
+
+        Ok(EvaluationResult::new(resp.result))
+    }
+
+    pub async fn evaluate_function(
+        &self,
+        evaluate: impl Into<CallFunctionOnParams>,
+    ) -> Result<EvaluationResult> {
+        let mut evaluate = evaluate.into();
+        if evaluate.execution_context_id.is_none() {
+            evaluate.execution_context_id = self.execution_context().await?;
         }
         if evaluate.await_promise.is_none() {
             evaluate.await_promise = Some(true);
