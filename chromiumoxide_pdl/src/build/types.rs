@@ -251,6 +251,7 @@ pub struct FieldDefinition {
     pub optional: bool,
     pub deprecated: bool,
     pub is_enum: bool,
+    pub serde_skip: bool,
 }
 
 impl FieldDefinition {
@@ -268,37 +269,37 @@ impl FieldDefinition {
             desc.extend(quote! {#[deprecated]});
         }
 
-        let mut attr = if self.optional {
-            serde_support.generate_opt_field_attr()
-        } else if let Type::ArrayOf(_) = &param.r#type {
-            serde_support.generate_vec_field_attr()
-        } else {
-            TokenStream::default()
-        };
+        let mut serde_attr = TokenStream::default();
 
-        // add accurate rename attribute
-        let name = &self.name;
-        attr = quote! {
-            #[serde(rename = #name)]
-            #attr
-        };
-
-        let de_enum = if self.is_enum {
-            SerdeSupport::generate_enum_de_with(self.optional)
+        if self.serde_skip {
+            serde_attr.extend(quote! {#[serde(skip)]})
         } else {
-            TokenStream::default()
-        };
+            // add accurate rename attribute
+            let name = &self.name;
+            serde_attr.extend(quote! {
+                #[serde(rename = #name)]
+
+            });
+            if self.optional {
+                serde_attr.extend(serde_support.generate_opt_field_attr());
+            } else if let Type::ArrayOf(_) = &param.r#type {
+                serde_attr.extend(serde_support.generate_vec_field_attr());
+            }
+
+            if self.is_enum {
+                serde_attr.extend(SerdeSupport::generate_enum_de_with(self.optional));
+            }
+        }
 
         let def = self.field_definition();
         quote! {
             #desc
-            #attr
-            #de_enum
+            #serde_attr
             #def
         }
     }
 
-    fn field_definition(&self) -> TokenStream {
+    pub fn field_definition(&self) -> TokenStream {
         let name = &self.name_ident;
         let ty = &self.ty;
         if self.optional {

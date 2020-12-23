@@ -527,6 +527,41 @@ impl Generator {
         }
     }
 
+    /// Entry point to modify the builder for a struct manually
+    ///
+    /// This is useful to add utility fields that should not be serialized by
+    /// make things easier
+    fn apply_struct_fixup(&self, builder: &mut Builder, dt: &DomainDatatype) {
+        if dt.raw_name() == "Runtime.evaluate" {
+            let field = FieldDefinition {
+                name: "eval_as_function_fallback".to_string(),
+                name_ident: format_ident!("eval_as_function_fallback"),
+                ty: FieldType {
+                    needs_box: false,
+                    is_vec: false,
+                    ty: quote! {
+                        bool
+                    },
+                },
+                optional: true,
+                deprecated: false,
+                is_enum: false,
+                serde_skip: true,
+            };
+
+            let def = field.field_definition();
+
+            let meta = quote! {
+                /// This is a manually added field that is not part of the protocol definition, hence ignored during serde operations.
+                ///
+                /// If set to true, this field indicates, that if the command resulted in a response value of type `function` this, `EvaluateParams` command should be executed as a `CallFunctionOnParams` instead.
+                #[serde(skip)]
+                #def
+            };
+            builder.fields.push((meta, field));
+        }
+    }
+
     /// Generates the struct definitions including enum definitions inner
     /// parameter enums
     fn generate_struct<'a, T: 'a>(
@@ -579,12 +614,15 @@ impl Generator {
                 optional: param.optional,
                 deprecated: param.is_deprecated(),
                 is_enum,
+                serde_skip: false,
             };
 
             builder
                 .fields
                 .push((field.generate_meta(&self.serde_support, &param), field));
         }
+
+        self.apply_struct_fixup(&mut builder, dt);
 
         let derives = if !builder.has_mandatory_types() {
             quote! { #[derive(Debug, Clone, PartialEq, Default)]}
