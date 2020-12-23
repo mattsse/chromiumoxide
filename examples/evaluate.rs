@@ -18,6 +18,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let sum: usize = page.evaluate("1 + 2").await?.into_value()?;
     assert_eq!(sum, 3);
+    println!("1 + 2 = {}", sum);
+
+    let mult: usize = page
+        .evaluate("() => { return 21 * 2; }")
+        .await?
+        .into_value()?;
+    assert_eq!(mult, 42);
+    println!("21 * 2 = {}", mult);
+
+    let promise_div: usize = page
+        .evaluate("() => Promise.resolve(100 / 25)")
+        .await?
+        .into_value()?;
+    assert_eq!(promise_div, 4);
+    println!("100 / 25 = {}", promise_div);
 
     handle.await;
     Ok(())
