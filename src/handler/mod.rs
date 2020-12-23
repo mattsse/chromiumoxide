@@ -36,6 +36,7 @@ pub mod browser;
 pub mod domworld;
 pub mod emulation;
 pub mod frame;
+pub mod http;
 mod job;
 pub mod network;
 mod page;

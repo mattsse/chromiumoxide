@@ -9,15 +9,35 @@ use chromiumoxide_cdp::cdp::browser_protocol::{
 use chromiumoxide_types::Method;
 
 use crate::cmd::CommandChain;
+use crate::handler::http::HttpRequest;
+use std::collections::{HashMap, HashSet};
+use std::time::Instant;
 
 #[derive(Debug)]
 pub struct NetworkManager {
     ignore_httpserrors: bool,
+    requests: HashMap<String, HttpRequest>,
+    // TODO put event in an Arc?
+    requests_will_be_sent: HashMap<String, EventRequestWillBeSent>,
+    extra_headers: HashMap<String, String>,
+    user_cache_disabled: bool,
+    attempted_authentications: HashSet<String>,
+    user_request_interception_enabled: bool,
+    offline: bool,
 }
 
 impl NetworkManager {
     pub fn new(ignore_httpserrors: bool) -> Self {
-        Self { ignore_httpserrors }
+        Self {
+            ignore_httpserrors,
+            requests: Default::default(),
+            requests_will_be_sent: Default::default(),
+            extra_headers: Default::default(),
+            user_cache_disabled: false,
+            attempted_authentications: Default::default(),
+            user_request_interception_enabled: false,
+            offline: false,
+        }
     }
 
     pub fn init_commands(&self) -> CommandChain {
@@ -34,6 +54,10 @@ impl NetworkManager {
                 serde_json::to_value(enable).unwrap(),
             )])
         }
+    }
+
+    pub fn poll(&mut self, _now: Instant) -> Option<NetworkEvent> {
+        None
     }
 
     pub fn on_fetch_request_paused(&mut self, _event: &EventRequestPaused) {}
@@ -56,3 +80,6 @@ impl Default for NetworkManager {
         NetworkManager::new(true)
     }
 }
+
+#[derive(Debug)]
+pub enum NetworkEvent {}

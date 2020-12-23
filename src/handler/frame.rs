@@ -286,6 +286,7 @@ impl FrameManager {
             }
         }
     }
+
     pub fn on_frame_attached(&mut self, frame_id: FrameId, parent_frame_id: Option<FrameId>) {
         if self.frames.contains_key(&frame_id) {
             return;
