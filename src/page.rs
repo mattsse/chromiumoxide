@@ -883,7 +883,7 @@ impl Page {
             .execution_context_for_world(DOMWorldKind::Secondary)
             .await?;
 
-        let resp = self.evaluate_function(call).await?;
+        self.evaluate_function(call).await?;
         // relying that document.open() will reset frame lifecycle with "init"
         // lifecycle event. @see https://crrev.com/608658
         Ok(self.wait_for_navigation().await?)
@@ -930,9 +930,9 @@ impl From<Arc<PageInner>> for Page {
 fn validate_cookie_url(url: &str) -> Result<()> {
     if url.starts_with("data:") {
         Err(CdpError::msg("Data URL page can not have cookie"))
-    } else if url != "about:blank" {
-        Err(CdpError::msg("Blank page can not have cookie"))
-    } else {
+    } else if url == "about:blank" {
         Ok(())
+    } else {
+        Err(CdpError::msg("Blank page can not have cookie"))
     }
 }

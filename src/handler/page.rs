@@ -253,7 +253,7 @@ impl PageInner {
 
         let resp = self.execute(evaluate).await?.result;
         if let Some(exception) = resp.exception_details {
-            return Err(exception.into());
+            return Err(CdpError::JavascriptException(Box::new(exception)));
         }
 
         Ok(EvaluationResult::new(resp.result))
@@ -276,7 +276,7 @@ impl PageInner {
 
         let resp = self.execute(evaluate).await?.result;
         if let Some(exception) = resp.exception_details {
-            return Err(exception.into());
+            return Err(CdpError::JavascriptException(Box::new(exception)));
         }
         Ok(EvaluationResult::new(resp.result))
     }

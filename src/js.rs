@@ -1,5 +1,3 @@
-use std::fmt;
-
 use serde::de::DeserializeOwned;
 
 use chromiumoxide_cdp::cdp::js_protocol::runtime::{
@@ -7,15 +5,6 @@ use chromiumoxide_cdp::cdp::js_protocol::runtime::{
 };
 
 use crate::utils::is_likely_js_function;
-
-#[derive(Debug, Clone)]
-pub struct JsFunction {}
-
-impl fmt::Display for JsFunction {
-    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        unimplemented!()
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct EvaluationResult {
