@@ -285,6 +285,12 @@ impl PageInner {
         Ok(self.execution_context_for_world(DOMWorldKind::Main).await?)
     }
 
+    pub async fn secondary_execution_context(&self) -> Result<Option<ExecutionContextId>> {
+        Ok(self
+            .execution_context_for_world(DOMWorldKind::Secondary)
+            .await?)
+    }
+
     pub async fn execution_context_for_world(
         &self,
         dom_world: DOMWorldKind,
