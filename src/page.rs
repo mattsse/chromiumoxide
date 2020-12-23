@@ -19,14 +19,15 @@ use chromiumoxide_cdp::cdp::browser_protocol::target::{SessionId, TargetId};
 use chromiumoxide_cdp::cdp::js_protocol;
 use chromiumoxide_cdp::cdp::js_protocol::debugger::GetScriptSourceParams;
 use chromiumoxide_cdp::cdp::js_protocol::runtime::{
-    AddBindingParams, CallFunctionOnParams, EvaluateParams, ExecutionContextId, RemoteObjectType,
-    ScriptId,
+    AddBindingParams, CallArgument, CallFunctionOnParams, EvaluateParams, ExecutionContextId,
+    RemoteObjectType, ScriptId,
 };
 use chromiumoxide_cdp::cdp::{browser_protocol, IntoEventKind};
 use chromiumoxide_types::*;
 
 use crate::element::Element;
 use crate::error::{CdpError, Result};
+use crate::handler::domworld::DOMWorldKind;
 use crate::handler::target::TargetMessage;
 use crate::handler::PageInner;
 use crate::js::{Evaluation, EvaluationResult};
@@ -717,15 +718,28 @@ impl Page {
     }
 
     pub async fn set_content(&self, html: impl AsRef<str>) -> Result<&Self> {
-        let js = format!(
-            "(html) => {{
-      document.open();
-      document.write(html);
-      document.close();
-    }}, {})",
-            html.as_ref()
-        );
-        self.evaluate(js).await?;
+        let mut call = CallFunctionOnParams::builder()
+            .function_declaration(
+                "(html) => {
+            document.open();
+            document.write(html);
+            document.close();
+        }",
+            )
+            .argument(
+                CallArgument::builder()
+                    .value(serde_json::json!(html.as_ref()))
+                    .build(),
+            )
+            .build()
+            .unwrap();
+
+        call.execution_context_id = self
+            .inner
+            .execution_context_for_world(DOMWorldKind::Secondary)
+            .await?;
+
+        let resp = self.evaluate_function(call).await?;
         // relying that document.open() will reset frame lifecycle with "init"
         // lifecycle event. @see https://crrev.com/608658
         Ok(self.wait_for_navigation().await?)
