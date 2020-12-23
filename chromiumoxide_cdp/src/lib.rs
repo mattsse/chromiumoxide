@@ -2,7 +2,9 @@ use std::fmt;
 
 use crate::cdp::browser_protocol::network::{CookieParam, DeleteCookiesParams};
 use crate::cdp::browser_protocol::target::CreateTargetParams;
-use crate::cdp::js_protocol::runtime::{ExceptionDetails, StackTrace};
+use crate::cdp::js_protocol::runtime::{
+    CallFunctionOnParams, EvaluateParams, ExceptionDetails, StackTrace,
+};
 
 // Include all the types
 include!(concat!(env!("OUT_DIR"), "/cdp.rs"));
@@ -22,6 +24,23 @@ impl DeleteCookiesParams {
             url: param.url.clone(),
             domain: param.domain.clone(),
             path: param.path.clone(),
+        }
+    }
+}
+
+impl Into<CallFunctionOnParams> for EvaluateParams {
+    fn into(self) -> CallFunctionOnParams {
+        CallFunctionOnParams {
+            function_declaration: self.expression,
+            object_id: None,
+            arguments: None,
+            silent: self.silent,
+            return_by_value: self.return_by_value,
+            generate_preview: self.generate_preview,
+            user_gesture: self.user_gesture,
+            await_promise: self.await_promise,
+            execution_context_id: self.context_id,
+            object_group: self.object_group,
         }
     }
 }

@@ -24,6 +24,7 @@ use chromiumoxide_types::{Command, CommandResponse};
 
 use crate::cmd::{to_command_response, CommandMessage};
 use crate::error::{CdpError, Result};
+use crate::handler::domworld::DOMWorldKind;
 use crate::handler::target::{GetExecutionContext, TargetMessage};
 use crate::js::EvaluationResult;
 use crate::keys;
@@ -235,7 +236,10 @@ impl PageInner {
         Ok(resp.result)
     }
 
-    pub async fn evaluate(&self, evaluate: impl Into<EvaluateParams>) -> Result<EvaluationResult> {
+    pub async fn evaluate_expression(
+        &self,
+        evaluate: impl Into<EvaluateParams>,
+    ) -> Result<EvaluationResult> {
         let mut evaluate = evaluate.into();
         if evaluate.context_id.is_none() {
             evaluate.context_id = self.execution_context().await?;
@@ -249,18 +253,56 @@ impl PageInner {
 
         let resp = self.execute(evaluate).await?.result;
         if let Some(exception) = resp.exception_details {
-            return Err(exception.into());
+            return Err(CdpError::JavascriptException(Box::new(exception)));
+        }
+
+        Ok(EvaluationResult::new(resp.result))
+    }
+
+    pub async fn evaluate_function(
+        &self,
+        evaluate: impl Into<CallFunctionOnParams>,
+    ) -> Result<EvaluationResult> {
+        let mut evaluate = evaluate.into();
+        if evaluate.execution_context_id.is_none() {
+            evaluate.execution_context_id = self.execution_context().await?;
+        }
+        if evaluate.await_promise.is_none() {
+            evaluate.await_promise = Some(true);
+        }
+        if evaluate.return_by_value.is_none() {
+            evaluate.return_by_value = Some(true);
+        }
+
+        let resp = self.execute(evaluate).await?.result;
+        if let Some(exception) = resp.exception_details {
+            return Err(CdpError::JavascriptException(Box::new(exception)));
         }
         Ok(EvaluationResult::new(resp.result))
     }
 
     pub async fn execution_context(&self) -> Result<Option<ExecutionContextId>> {
+        Ok(self.execution_context_for_world(DOMWorldKind::Main).await?)
+    }
+
+    pub async fn secondary_execution_context(&self) -> Result<Option<ExecutionContextId>> {
+        Ok(self
+            .execution_context_for_world(DOMWorldKind::Secondary)
+            .await?)
+    }
+
+    pub async fn execution_context_for_world(
+        &self,
+        dom_world: DOMWorldKind,
+    ) -> Result<Option<ExecutionContextId>> {
         let (tx, rx) = oneshot_channel();
         self.sender
             .clone()
-            .send(TargetMessage::GetExecutionContext(
-                GetExecutionContext::new(tx),
-            ))
+            .send(TargetMessage::GetExecutionContext(GetExecutionContext {
+                dom_world,
+                frame_id: None,
+                tx,
+            }))
             .await?;
         Ok(rx.await?)
     }

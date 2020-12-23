@@ -45,7 +45,7 @@ pub enum CdpError {
     /// Detailed information about exception (or error) that was thrown during
     /// script compilation or execution
     #[error("{0:?}")]
-    JavascriptException(#[from] ExceptionDetails),
+    JavascriptException(Box<ExceptionDetails>),
 }
 impl CdpError {
     pub fn msg(msg: impl Into<String>) -> Self {
