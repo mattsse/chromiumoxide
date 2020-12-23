@@ -33,7 +33,7 @@ use crate::page::Page;
 pub const REQUEST_TIMEOUT: u64 = 30_000;
 
 pub mod browser;
-mod domworld;
+pub mod domworld;
 pub mod emulation;
 pub mod frame;
 mod job;

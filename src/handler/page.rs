@@ -24,6 +24,7 @@ use chromiumoxide_types::{Command, CommandResponse};
 
 use crate::cmd::{to_command_response, CommandMessage};
 use crate::error::{CdpError, Result};
+use crate::handler::domworld::DOMWorldKind;
 use crate::handler::target::{GetExecutionContext, TargetMessage};
 use crate::js::EvaluationResult;
 use crate::keys;
@@ -281,12 +282,21 @@ impl PageInner {
     }
 
     pub async fn execution_context(&self) -> Result<Option<ExecutionContextId>> {
+        Ok(self.execution_context_for_world(DOMWorldKind::Main).await?)
+    }
+
+    pub async fn execution_context_for_world(
+        &self,
+        dom_world: DOMWorldKind,
+    ) -> Result<Option<ExecutionContextId>> {
         let (tx, rx) = oneshot_channel();
         self.sender
             .clone()
-            .send(TargetMessage::GetExecutionContext(
-                GetExecutionContext::new(tx),
-            ))
+            .send(TargetMessage::GetExecutionContext(GetExecutionContext {
+                dom_world,
+                frame_id: None,
+                tx,
+            }))
             .await?;
         Ok(rx.await?)
     }
