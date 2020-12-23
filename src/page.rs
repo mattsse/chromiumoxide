@@ -830,6 +830,15 @@ impl Page {
         Ok(self.inner.execution_context().await?)
     }
 
+    /// Returns the secondary execution context identifier of this page that
+    /// represents the context for JavaScript execution for manipulating the
+    /// DOM.
+    ///
+    /// See `Page::set_contents`
+    pub async fn secondary_execution_context(&self) -> Result<Option<ExecutionContextId>> {
+        Ok(self.inner.secondary_execution_context().await?)
+    }
+
     /// Evaluates given script in every frame upon creation (before loading
     /// frame's scripts)
     pub async fn evaluate_on_new_document(
