@@ -119,5 +119,5 @@ Licensed under either of these:
 ## References
 
 * [chromedp](https://github.com/chromedp/chromedp)
-* [rust-headless-chrome](https://github.com/Edu4rdSHL/rust-headless-chrome) which the launch config, `KeyDefinition` and typing support among others is taken from.
+* [rust-headless-chrome](https://github.com/atroche/rust-headless-chrome) which the launch config, `KeyDefinition` and typing support among others is taken from.
 * [puppeteer](https://github.com/puppeteer/puppeteer)
