@@ -261,8 +261,10 @@ impl Page {
         Ok(resp.result.node)
     }
 
-    pub async fn close(self) {
-        todo!()
+    /// Closes page
+    pub async fn close(self) -> Result<()> {
+        self.execute(CloseParams {}).await?;
+        Ok(())
     }
 
     /// Performs a single mouse click event at the point's location.
