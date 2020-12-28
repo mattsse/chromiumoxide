@@ -72,6 +72,7 @@ pub use crate::error::Result;
 pub use crate::handler::Handler;
 pub use crate::page::Page;
 
+pub mod auth;
 pub mod browser;
 pub(crate) mod cmd;
 pub mod conn;
