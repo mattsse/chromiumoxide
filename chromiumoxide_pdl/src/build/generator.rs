@@ -650,6 +650,11 @@ impl Generator {
                     pub struct #name( #wrapped_ty);
 
                     impl #name {
+
+                        pub fn new(val: impl Into<#wrapped_ty>) -> Self {
+                            #name(val.into())
+                        }
+
                         pub fn inner(&self) -> &#wrapped_ty {
                             &self.0
                         }
@@ -687,7 +692,7 @@ impl Generator {
                         }
                     });
                     // Fixup specifically types used as keys
-                    if struct_ident == "SessionId" || struct_ident == "FrameId" {
+                    if struct_ident.ends_with("Id") {
                         stream.extend(quote! {
                             impl std::borrow::Borrow<str> for #name {
                                 fn borrow(&self) -> &str {
