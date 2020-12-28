@@ -261,9 +261,10 @@ impl Page {
         Ok(resp.result.node)
     }
 
-    /// Closes page
+    /// Tries to close page, running its beforeunload hooks, if any.
+    /// Calls Page.close with [`CloseParams`]
     pub async fn close(self) -> Result<()> {
-        self.execute(CloseParams {}).await?;
+        self.execute(CloseParams::default()).await?;
         Ok(())
     }
 
