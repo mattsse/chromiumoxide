@@ -148,6 +148,7 @@ impl Target {
         matches!(self.init_state, TargetInit::Initialized)
     }
 
+    /// Navigate a frame
     pub fn goto(&mut self, req: FrameNavigationRequest) {
         self.frame_manager.goto(req)
     }
@@ -386,6 +387,9 @@ impl Target {
                         }
                         TargetMessage::WaitForNavigation(tx) => {
                             if let Some(frame) = self.frame_manager.main_frame() {
+                                // TODO submit a navigation watcher: waitForFrameNavigation
+
+                                // TODO return the watchers navigationResponse
                                 if frame.is_loaded() {
                                     let _ = tx.send(frame.url.clone().ok_or(CdpError::NotFound));
                                 } else {
@@ -426,6 +430,14 @@ impl Target {
                         }
                     }
                 }
+            }
+
+            while let Some(event) = self.network_manager.poll() {
+                // TODO poll the network manager
+                /*
+                   notify the frame manager or submit the requests
+
+                */
             }
 
             while let Some(event) = self.frame_manager.poll(now) {

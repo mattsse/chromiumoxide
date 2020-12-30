@@ -76,7 +76,7 @@ impl NetworkManager {
             .push_back(NetworkEvent::SendCdpRequest((method, params)));
     }
 
-    pub fn poll(&mut self, _now: Instant) -> Option<NetworkEvent> {
+    pub fn poll(&mut self) -> Option<NetworkEvent> {
         None
     }
 
@@ -251,7 +251,7 @@ impl NetworkManager {
         event: &EventRequestWillBeSent,
         interception_id: Option<InterceptionId>,
     ) {
-        let  redirect_chain = Vec::new();
+        let redirect_chain = Vec::new();
         if let Some(redirect_resp) = event.redirect_response.as_ref() {
             if let Some(request) = self.requests.remove(event.request_id.as_ref()) {
                 // redirect_chain = request.redirect_chain;

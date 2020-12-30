@@ -21,21 +21,27 @@ use chromiumoxide_types::{Method, MethodId, Request};
 use crate::cmd::CommandChain;
 use crate::error::DeadlineExceeded;
 use crate::handler::domworld::DOMWorld;
+use crate::handler::http::HttpRequest;
 use crate::handler::REQUEST_TIMEOUT;
 
 pub const UTILITY_WORLD_NAME: &str = "__chromiumoxide_utility_world__";
 const EVALUATION_SCRIPT_URL: &str = "____chromiumoxide_utility_world___evaluation_script__";
-/// design for tracking child/parent
+
+/// Represents a frame on the page
 #[derive(Debug)]
 pub struct Frame {
     pub parent_frame: Option<FrameId>,
+    /// Cdp identifier of this frame
     pub id: FrameId,
     pub main_world: DOMWorld,
     pub secondary_world: DOMWorld,
     pub loader_id: Option<LoaderId>,
+    /// Current url of this frame
     pub url: Option<String>,
+    /// The frames contained in this frame
     pub child_frames: HashSet<FrameId>,
     pub name: Option<String>,
+    /// The received lifecycle events
     pub lifecycle_events: HashSet<MethodId>,
 }
 
@@ -222,8 +228,10 @@ impl FrameManager {
     }
 
     pub fn poll(&mut self, now: Instant) -> Option<FrameEvent> {
+        // check if the navigation completed
         if let Some((watcher, deadline)) = self.navigation.take() {
             if now > deadline {
+                // navigation request timed out
                 return Some(FrameEvent::NavigationResult(Err(
                     NavigationError::Timeout {
                         err: DeadlineExceeded::new(now, deadline),
@@ -233,8 +241,11 @@ impl FrameManager {
             }
             if let Some(frame) = self.frames.get(&watcher.frame_id) {
                 if let Some(nav) = self.check_lifecycle_complete(&watcher, frame) {
+                    // request is complete if the frame's lifecycle is complete = frame received all
+                    // required events
                     return Some(FrameEvent::NavigationResult(Ok(nav)));
                 } else {
+                    // not finished yet
                     self.navigation = Some((watcher, deadline));
                 }
             } else {
@@ -246,14 +257,15 @@ impl FrameManager {
                 )));
             }
         } else if let Some((req, watcher)) = self.pending_navigations.pop_front() {
-            let deadline = Instant::now() + Duration::from_millis(REQUEST_TIMEOUT);
+            // queue in the next navigation that is must be fulfilled until `deadline`
+            let deadline = Instant::now() + req.timeout;
             self.navigation = Some((watcher, deadline));
             return Some(FrameEvent::NavigationRequest(req.id, req.req));
         }
         None
     }
 
-    /// entrypoint for page navigation
+    /// Entrypoint for page navigation
     pub fn goto(&mut self, req: FrameNavigationRequest) {
         if let Some(frame_id) = self.main_frame.clone() {
             self.navigate_frame(frame_id, req);
@@ -538,6 +550,9 @@ pub struct NavigationWatcher {
     expected_lifecycle: HashSet<MethodId>,
     frame_id: FrameId,
     loader_id: Option<LoaderId>,
+    /// The http request associated with this navigation
+    // TODO this should probably move to the `Frame` and be Arc'ed
+    navigation_request: Option<HttpRequest>,
     /// Once we receive the response to the issued `Page.navigate` request we
     /// can detect whether we were navigating withing the same document or were
     /// navigating to a new document by checking if a loader was included in the
@@ -550,6 +565,7 @@ impl NavigationWatcher {
         Self {
             id,
             expected_lifecycle: std::iter::once("load".into()).collect(),
+            navigation_request: None,
             loader_id,
             frame_id: frame,
             same_document_navigation: false,
@@ -568,13 +584,19 @@ impl NavigationWatcher {
     }
 }
 
+/// An identifier for an ongoing navigation
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
 pub struct NavigationId(pub usize);
 
+/// Represents a the request for a navigation
 #[derive(Debug)]
 pub struct FrameNavigationRequest {
+    /// The internal identifier
     pub id: NavigationId,
+    /// the cdp request that will trigger the navigation
     pub req: Request,
+    /// The timeout after which the request will be considered timed out
+    // TODO make this an option?
     pub timeout: Duration,
 }
 
@@ -587,11 +609,37 @@ impl FrameNavigationRequest {
         }
     }
 
+    /// This will set the id of the frame into the `params` `frameId` field.
     pub fn set_frame_id(&mut self, frame_id: FrameId) {
         if let Some(params) = self.req.params.as_object_mut() {
             if let Entry::Vacant(entry) = params.entry("frameId") {
                 entry.insert(serde_json::Value::String(frame_id.into()));
             }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LifecycleEvent {
+    Load,
+    DomcontentLoaded,
+    NetworkIdle,
+    NetworkAlmostIdle,
+}
+
+impl Default for LifecycleEvent {
+    fn default() -> Self {
+        LifecycleEvent::Load
+    }
+}
+
+impl AsRef<str> for LifecycleEvent {
+    fn as_ref(&self) -> &str {
+        match self {
+            LifecycleEvent::Load => "load",
+            LifecycleEvent::DomcontentLoaded => "DOMContentLoaded",
+            LifecycleEvent::NetworkIdle0 => "networkIdle",
+            LifecycleEvent::NetworkIdle2 => "networkAlmostIdle",
         }
     }
 }

@@ -529,11 +529,16 @@ impl Stream for Handler {
     }
 }
 
+/// How to configure the handler
 #[derive(Debug, Clone)]
 pub struct HandlerConfig {
+    /// Whether the `NeetworkManager`s should ignore https errors
     pub ignore_https_errors: bool,
+    /// Window and device settings
     pub viewport: Viewport,
+    /// Context ids to set from the get go
     pub context_ids: Vec<BrowserContextId>,
+    /// default request timeout to use
     pub request_timeout: Duration,
 }
 
