@@ -326,12 +326,9 @@ impl Target {
                     cx,
                     now,
                     cmds,
-                    if emulation.is_some() {
-                        TargetInit::InitializingEmulation(emulation.unwrap())
-                    }
-                    else
-                    {
-                        TargetInit::Initialized
+                    match emulation {
+                        Some(e) => TargetInit::InitializingEmulation(e),
+                        None => TargetInit::Initialized,
                     }
                 );
             }
