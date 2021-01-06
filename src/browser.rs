@@ -95,7 +95,7 @@ impl Browser {
 
         let handler_config = HandlerConfig {
             ignore_https_errors: config.ignore_https_errors,
-            viewport: Some(config.viewport.clone()),
+            viewport: config.viewport.clone(),
             context_ids: Vec::new(),
             request_timeout: config.request_timeout,
         };

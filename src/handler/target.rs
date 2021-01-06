@@ -320,19 +320,14 @@ impl Target {
                 );
             }
             TargetInit::InitializingPage(cmds) => {
-                let emulation = self.emulation_manager.init_commands(&self.config.viewport);
                 advance_state!(
                     self,
                     cx,
                     now,
                     cmds,
-                    if emulation.is_some() {
-                        TargetInit::InitializingEmulation(emulation.unwrap())
-                    }
-                    else
-                    {
-                        TargetInit::Initialized
-                    }
+                    TargetInit::InitializingEmulation(
+                        self.emulation_manager.init_commands(&self.config.viewport),
+                    )
                 );
             }
             TargetInit::InitializingEmulation(cmds) => {
@@ -491,11 +486,11 @@ impl Target {
 #[derive(Debug, Clone)]
 pub struct TargetConfig {
     pub ignore_https_errors: bool,
-    pub viewport: Option<Viewport>,
+    pub viewport: Viewport,
 }
 
 impl TargetConfig {
-    pub fn new(ignore_https_errors: bool, viewport: Option<Viewport>) -> Self {
+    pub fn new(ignore_https_errors: bool, viewport: Viewport) -> Self {
         Self {
             ignore_https_errors,
             viewport,
