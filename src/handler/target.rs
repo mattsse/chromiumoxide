@@ -326,7 +326,9 @@ impl Target {
                     now,
                     cmds,
                     match self.config.viewport.as_ref() {
-                        Some(viewport) => TargetInit::InitializingEmulation(self.emulation_manager.init_commands(viewport)),
+                        Some(viewport) => TargetInit::InitializingEmulation(
+                            self.emulation_manager.init_commands(viewport)
+                        ),
                         None => TargetInit::Initialized,
                     }
                 );
