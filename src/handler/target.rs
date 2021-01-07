@@ -325,9 +325,12 @@ impl Target {
                     cx,
                     now,
                     cmds,
-                    TargetInit::InitializingEmulation(
-                        self.emulation_manager.init_commands(&self.config.viewport),
-                    )
+                    match self.config.viewport.as_ref() {
+                        Some(viewport) => TargetInit::InitializingEmulation(
+                            self.emulation_manager.init_commands(viewport)
+                        ),
+                        None => TargetInit::Initialized,
+                    }
                 );
             }
             TargetInit::InitializingEmulation(cmds) => {
@@ -486,11 +489,11 @@ impl Target {
 #[derive(Debug, Clone)]
 pub struct TargetConfig {
     pub ignore_https_errors: bool,
-    pub viewport: Viewport,
+    pub viewport: Option<Viewport>,
 }
 
 impl TargetConfig {
-    pub fn new(ignore_https_errors: bool, viewport: Viewport) -> Self {
+    pub fn new(ignore_https_errors: bool, viewport: Option<Viewport>) -> Self {
         Self {
             ignore_https_errors,
             viewport,
