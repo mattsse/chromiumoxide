@@ -531,7 +531,7 @@ impl Stream for Handler {
 #[derive(Debug, Clone)]
 pub struct HandlerConfig {
     pub ignore_https_errors: bool,
-    pub viewport: Viewport,
+    pub viewport: Option<Viewport>,
     pub context_ids: Vec<BrowserContextId>,
     pub request_timeout: Duration,
 }
