@@ -358,7 +358,7 @@ impl Target {
             if let Some(frame) = self.frame_manager.main_frame() {
                 if frame.is_loaded() {
                     while let Some(tx) = self.wait_until_frame_loaded.pop() {
-                        let _ = tx.send(frame.url.clone().ok_or(CdpError::NotFound));
+                        let _ = tx.send(frame.url().map(str::to_string).ok_or(CdpError::NotFound));
                     }
                 }
             }
@@ -375,15 +375,23 @@ impl Target {
                             self.queued_events.push_back(TargetEvent::Command(cmd));
                         }
                         TargetMessage::MainFrame(tx) => {
-                            let _ = tx.send(self.frame_manager.main_frame().map(|f| f.id.clone()));
+                            let _ =
+                                tx.send(self.frame_manager.main_frame().map(|f| f.id().clone()));
                         }
                         TargetMessage::AllFrames(tx) => {
-                            let _ = tx
-                                .send(self.frame_manager.frames().map(|f| f.id.clone()).collect());
+                            let _ = tx.send(
+                                self.frame_manager
+                                    .frames()
+                                    .map(|f| f.id().clone())
+                                    .collect(),
+                            );
                         }
                         TargetMessage::Url(tx) => {
-                            let _ = tx
-                                .send(self.frame_manager.main_frame().and_then(|f| f.url.clone()));
+                            let _ = tx.send(
+                                self.frame_manager
+                                    .main_frame()
+                                    .and_then(|f| f.url().map(str::to_string)),
+                            );
                         }
                         TargetMessage::WaitForNavigation(tx) => {
                             if let Some(frame) = self.frame_manager.main_frame() {
@@ -391,7 +399,9 @@ impl Target {
 
                                 // TODO return the watchers navigationResponse
                                 if frame.is_loaded() {
-                                    let _ = tx.send(frame.url.clone().ok_or(CdpError::NotFound));
+                                    let _ = tx.send(
+                                        frame.url().map(str::to_string).ok_or(CdpError::NotFound),
+                                    );
                                 } else {
                                     self.wait_until_frame_loaded.push(tx);
                                 }
@@ -418,10 +428,11 @@ impl Target {
                             if let Some(frame) = frame {
                                 match dom_world {
                                     DOMWorldKind::Main => {
-                                        let _ = tx.send(frame.main_world.execution_context());
+                                        let _ = tx.send(frame.main_world().execution_context());
                                     }
                                     DOMWorldKind::Secondary => {
-                                        let _ = tx.send(frame.secondary_world.execution_context());
+                                        let _ =
+                                            tx.send(frame.secondary_world().execution_context());
                                     }
                                 }
                             } else {

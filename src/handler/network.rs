@@ -16,7 +16,6 @@ use crate::auth::Credentials;
 use crate::cmd::CommandChain;
 use crate::handler::http::{HttpRequest, HttpResponse};
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::time::Instant;
 
 #[derive(Debug)]
 pub struct NetworkManager {

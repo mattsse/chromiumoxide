@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use serde_json::map::Entry;
@@ -30,19 +31,21 @@ const EVALUATION_SCRIPT_URL: &str = "____chromiumoxide_utility_world___evaluatio
 /// Represents a frame on the page
 #[derive(Debug)]
 pub struct Frame {
-    pub parent_frame: Option<FrameId>,
+    parent_frame: Option<FrameId>,
     /// Cdp identifier of this frame
-    pub id: FrameId,
-    pub main_world: DOMWorld,
-    pub secondary_world: DOMWorld,
-    pub loader_id: Option<LoaderId>,
+    id: FrameId,
+    main_world: DOMWorld,
+    secondary_world: DOMWorld,
+    loader_id: Option<LoaderId>,
     /// Current url of this frame
-    pub url: Option<String>,
+    url: Option<String>,
+    /// The http request that loaded this with this frame
+    http_request: Option<Arc<HttpRequest>>,
     /// The frames contained in this frame
-    pub child_frames: HashSet<FrameId>,
-    pub name: Option<String>,
+    child_frames: HashSet<FrameId>,
+    name: Option<String>,
     /// The received lifecycle events
-    pub lifecycle_events: HashSet<MethodId>,
+    lifecycle_events: HashSet<MethodId>,
 }
 
 impl Frame {
@@ -54,6 +57,7 @@ impl Frame {
             secondary_world: Default::default(),
             loader_id: None,
             url: None,
+            http_request: None,
             child_frames: Default::default(),
             name: None,
             lifecycle_events: Default::default(),
@@ -69,10 +73,31 @@ impl Frame {
             secondary_world: Default::default(),
             loader_id: None,
             url: None,
+            http_request: None,
             child_frames: Default::default(),
             name: None,
             lifecycle_events: Default::default(),
         }
+    }
+
+    pub fn id(&self) -> &FrameId {
+        &self.id
+    }
+
+    pub fn url(&self) -> Option<&str> {
+        self.url.as_deref()
+    }
+
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    pub fn main_world(&self) -> &DOMWorld {
+        &self.main_world
+    }
+
+    pub fn secondary_world(&self) -> &DOMWorld {
+        &self.secondary_world
     }
 
     pub fn lifecycle_events(&self) -> &HashSet<MethodId> {
@@ -133,6 +158,7 @@ impl From<CdpFrame> for Frame {
             secondary_world: Default::default(),
             loader_id: Some(frame.loader_id),
             url: Some(frame.url),
+            http_request: None,
             child_frames: Default::default(),
             name: frame.name,
             lifecycle_events: Default::default(),
@@ -550,9 +576,6 @@ pub struct NavigationWatcher {
     expected_lifecycle: HashSet<MethodId>,
     frame_id: FrameId,
     loader_id: Option<LoaderId>,
-    /// The http request associated with this navigation
-    // TODO this should probably move to the `Frame` and be Arc'ed
-    navigation_request: Option<HttpRequest>,
     /// Once we receive the response to the issued `Page.navigate` request we
     /// can detect whether we were navigating withing the same document or were
     /// navigating to a new document by checking if a loader was included in the
@@ -565,7 +588,6 @@ impl NavigationWatcher {
         Self {
             id,
             expected_lifecycle: std::iter::once("load".into()).collect(),
-            navigation_request: None,
             loader_id,
             frame_id: frame,
             same_document_navigation: false,
@@ -596,7 +618,6 @@ pub struct FrameNavigationRequest {
     /// the cdp request that will trigger the navigation
     pub req: Request,
     /// The timeout after which the request will be considered timed out
-    // TODO make this an option?
     pub timeout: Duration,
 }
 
@@ -638,8 +659,8 @@ impl AsRef<str> for LifecycleEvent {
         match self {
             LifecycleEvent::Load => "load",
             LifecycleEvent::DomcontentLoaded => "DOMContentLoaded",
-            LifecycleEvent::NetworkIdle0 => "networkIdle",
-            LifecycleEvent::NetworkIdle2 => "networkAlmostIdle",
+            LifecycleEvent::NetworkIdle => "networkIdle",
+            LifecycleEvent::NetworkAlmostIdle => "networkAlmostIdle",
         }
     }
 }
