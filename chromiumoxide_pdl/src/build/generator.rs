@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::io::{self, Error, ErrorKind};
 use std::ops::Deref;
@@ -63,7 +63,7 @@ pub struct Generator {
     /// Used to store the size of a specific type
     type_size: HashMap<String, usize>,
     /// Used to fix a type's size later if the ref was not processed yet
-    ref_sizes: Vec<(String, String)>,
+    ref_sizes: VecDeque<(String, String)>,
     /// This contains a list of all enums of all domains with their qualified
     /// names <domain>.<name>
     ///
@@ -83,7 +83,7 @@ impl Default for Generator {
             domains: Default::default(),
             target_mod: Default::default(),
             type_size: Default::default(),
-            ref_sizes: Vec::new(),
+            ref_sizes: VecDeque::new(),
             enums: Default::default(),
         }
     }
@@ -213,15 +213,24 @@ impl Generator {
             modules.extend(module);
         }
 
-        // fix unresolved type sizes
-        let mut refs = Vec::new();
+        // brute-force fix unresolved type sizes
+        let mut refs = VecDeque::new();
         std::mem::swap(&mut refs, &mut self.ref_sizes);
-        for (name, reff) in refs {
-            let ref_size = *self
-                .type_size
-                .get(&reff)
-                .unwrap_or_else(|| panic!(format!("No type found for ref {}", reff)));
-            self.store_size(&name, Either::Left(ref_size));
+        let mut sequential_retries = 0;
+        while let Some((name, reff)) = refs.pop_front() {
+            match self.type_size.get(&reff).copied() {
+                Some(ref_size) => {
+                    sequential_retries = 0;
+                    self.store_size(&name, Either::Left(ref_size));
+                }
+                None => {
+                    sequential_retries += 1;
+                    if sequential_retries > 10 {
+                        panic!(format!("No type found for ref {}", reff));
+                    }
+                    refs.push_back((name, reff));
+                }
+            }
         }
 
         let mod_name = self.target_mod.as_deref().unwrap_or("cdp");
@@ -523,7 +532,7 @@ impl Generator {
                 let s = self.type_size.entry(ty.to_string()).or_default();
                 *s += size;
             }
-            Either::Right(name) => self.ref_sizes.push((ty.to_string(), name)),
+            Either::Right(name) => self.ref_sizes.push_back((ty.to_string(), name)),
         }
     }
 
