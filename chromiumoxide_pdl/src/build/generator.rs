@@ -214,22 +214,18 @@ impl Generator {
         }
 
         // brute-force fix unresolved type sizes
-        let mut refs = VecDeque::new();
-        std::mem::swap(&mut refs, &mut self.ref_sizes);
+        let mut refs = std::mem::replace(&mut self.ref_sizes, VecDeque::new());
         let mut sequential_retries = 0;
         while let Some((name, reff)) = refs.pop_front() {
-            match self.type_size.get(&reff).copied() {
-                Some(ref_size) => {
-                    sequential_retries = 0;
-                    self.store_size(&name, Either::Left(ref_size));
+            if let Some(ref_size) = self.type_size.get(&reff).copied() {
+                sequential_retries = 0;
+                self.store_size(&name, Either::Left(ref_size));
+            } else {
+                sequential_retries += 1;
+                if sequential_retries > refs.len() {
+                    panic!(format!("No type found for ref {}", reff));
                 }
-                None => {
-                    sequential_retries += 1;
-                    if sequential_retries > 10 {
-                        panic!(format!("No type found for ref {}", reff));
-                    }
-                    refs.push_back((name, reff));
-                }
+                refs.push_back((name, reff));
             }
         }
 
