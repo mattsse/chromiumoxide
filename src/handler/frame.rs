@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use serde_json::map::Entry;
@@ -21,22 +22,30 @@ use chromiumoxide_types::{Method, MethodId, Request};
 use crate::cmd::CommandChain;
 use crate::error::DeadlineExceeded;
 use crate::handler::domworld::DOMWorld;
+use crate::handler::http::HttpRequest;
 use crate::handler::REQUEST_TIMEOUT;
 
 pub const UTILITY_WORLD_NAME: &str = "__chromiumoxide_utility_world__";
 const EVALUATION_SCRIPT_URL: &str = "____chromiumoxide_utility_world___evaluation_script__";
-/// design for tracking child/parent
+
+/// Represents a frame on the page
 #[derive(Debug)]
 pub struct Frame {
-    pub parent_frame: Option<FrameId>,
-    pub id: FrameId,
-    pub main_world: DOMWorld,
-    pub secondary_world: DOMWorld,
-    pub loader_id: Option<LoaderId>,
-    pub url: Option<String>,
-    pub child_frames: HashSet<FrameId>,
-    pub name: Option<String>,
-    pub lifecycle_events: HashSet<MethodId>,
+    parent_frame: Option<FrameId>,
+    /// Cdp identifier of this frame
+    id: FrameId,
+    main_world: DOMWorld,
+    secondary_world: DOMWorld,
+    loader_id: Option<LoaderId>,
+    /// Current url of this frame
+    url: Option<String>,
+    /// The http request that loaded this with this frame
+    http_request: Option<Arc<HttpRequest>>,
+    /// The frames contained in this frame
+    child_frames: HashSet<FrameId>,
+    name: Option<String>,
+    /// The received lifecycle events
+    lifecycle_events: HashSet<MethodId>,
 }
 
 impl Frame {
@@ -48,6 +57,7 @@ impl Frame {
             secondary_world: Default::default(),
             loader_id: None,
             url: None,
+            http_request: None,
             child_frames: Default::default(),
             name: None,
             lifecycle_events: Default::default(),
@@ -63,14 +73,39 @@ impl Frame {
             secondary_world: Default::default(),
             loader_id: None,
             url: None,
+            http_request: None,
             child_frames: Default::default(),
             name: None,
             lifecycle_events: Default::default(),
         }
     }
 
+    pub fn id(&self) -> &FrameId {
+        &self.id
+    }
+
+    pub fn url(&self) -> Option<&str> {
+        self.url.as_deref()
+    }
+
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    pub fn main_world(&self) -> &DOMWorld {
+        &self.main_world
+    }
+
+    pub fn secondary_world(&self) -> &DOMWorld {
+        &self.secondary_world
+    }
+
     pub fn lifecycle_events(&self) -> &HashSet<MethodId> {
         &self.lifecycle_events
+    }
+
+    pub fn http_request(&self) -> Option<&Arc<HttpRequest>> {
+        self.http_request.as_ref()
     }
 
     fn navigated(&mut self, frame: &CdpFrame) {
@@ -94,6 +129,7 @@ impl Frame {
 
     fn on_loading_started(&mut self) {
         self.lifecycle_events.clear();
+        self.http_request.take();
     }
 
     pub fn is_loaded(&self) -> bool {
@@ -116,6 +152,10 @@ impl Frame {
     pub fn execution_context(&self) -> Option<ExecutionContextId> {
         self.main_world.execution_context()
     }
+
+    pub fn set_request(&mut self, request: HttpRequest) {
+        self.http_request = Some(Arc::new(request))
+    }
 }
 
 impl From<CdpFrame> for Frame {
@@ -127,6 +167,7 @@ impl From<CdpFrame> for Frame {
             secondary_world: Default::default(),
             loader_id: Some(frame.loader_id),
             url: Some(frame.url),
+            http_request: None,
             child_frames: Default::default(),
             name: frame.name,
             lifecycle_events: Default::default(),
@@ -181,6 +222,14 @@ impl FrameManager {
         self.main_frame.as_ref().and_then(|id| self.frames.get(id))
     }
 
+    pub fn main_frame_mut(&mut self) -> Option<&mut Frame> {
+        if let Some(id) = self.main_frame.as_ref() {
+            self.frames.get_mut(id)
+        } else {
+            None
+        }
+    }
+
     pub fn frames(&self) -> impl Iterator<Item = &Frame> + '_ {
         self.frames.values()
     }
@@ -221,9 +270,20 @@ impl FrameManager {
         None
     }
 
+    /// Track the request in the frame
+    pub fn on_http_request_finished(&mut self, request: HttpRequest) {
+        if let Some(id) = request.frame.as_ref() {
+            if let Some(frame) = self.frames.get_mut(id) {
+                frame.set_request(request);
+            }
+        }
+    }
+
     pub fn poll(&mut self, now: Instant) -> Option<FrameEvent> {
+        // check if the navigation completed
         if let Some((watcher, deadline)) = self.navigation.take() {
             if now > deadline {
+                // navigation request timed out
                 return Some(FrameEvent::NavigationResult(Err(
                     NavigationError::Timeout {
                         err: DeadlineExceeded::new(now, deadline),
@@ -233,8 +293,11 @@ impl FrameManager {
             }
             if let Some(frame) = self.frames.get(&watcher.frame_id) {
                 if let Some(nav) = self.check_lifecycle_complete(&watcher, frame) {
+                    // request is complete if the frame's lifecycle is complete = frame received all
+                    // required events
                     return Some(FrameEvent::NavigationResult(Ok(nav)));
                 } else {
+                    // not finished yet
                     self.navigation = Some((watcher, deadline));
                 }
             } else {
@@ -246,14 +309,15 @@ impl FrameManager {
                 )));
             }
         } else if let Some((req, watcher)) = self.pending_navigations.pop_front() {
-            let deadline = Instant::now() + Duration::from_millis(REQUEST_TIMEOUT);
+            // queue in the next navigation that is must be fulfilled until `deadline`
+            let deadline = Instant::now() + req.timeout;
             self.navigation = Some((watcher, deadline));
             return Some(FrameEvent::NavigationRequest(req.id, req.req));
         }
         None
     }
 
-    /// entrypoint for page navigation
+    /// Entrypoint for page navigation
     pub fn goto(&mut self, req: FrameNavigationRequest) {
         if let Some(frame_id) = self.main_frame.clone() {
             self.navigate_frame(frame_id, req);
@@ -286,6 +350,7 @@ impl FrameManager {
             }
         }
     }
+
     pub fn on_frame_attached(&mut self, frame_id: FrameId, parent_frame_id: Option<FrameId>) {
         if self.frames.contains_key(&frame_id) {
             return;
@@ -567,13 +632,18 @@ impl NavigationWatcher {
     }
 }
 
+/// An identifier for an ongoing navigation
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
 pub struct NavigationId(pub usize);
 
+/// Represents a the request for a navigation
 #[derive(Debug)]
 pub struct FrameNavigationRequest {
+    /// The internal identifier
     pub id: NavigationId,
+    /// the cdp request that will trigger the navigation
     pub req: Request,
+    /// The timeout after which the request will be considered timed out
     pub timeout: Duration,
 }
 
@@ -586,11 +656,37 @@ impl FrameNavigationRequest {
         }
     }
 
+    /// This will set the id of the frame into the `params` `frameId` field.
     pub fn set_frame_id(&mut self, frame_id: FrameId) {
         if let Some(params) = self.req.params.as_object_mut() {
             if let Entry::Vacant(entry) = params.entry("frameId") {
                 entry.insert(serde_json::Value::String(frame_id.into()));
             }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LifecycleEvent {
+    Load,
+    DomcontentLoaded,
+    NetworkIdle,
+    NetworkAlmostIdle,
+}
+
+impl Default for LifecycleEvent {
+    fn default() -> Self {
+        LifecycleEvent::Load
+    }
+}
+
+impl AsRef<str> for LifecycleEvent {
+    fn as_ref(&self) -> &str {
+        match self {
+            LifecycleEvent::Load => "load",
+            LifecycleEvent::DomcontentLoaded => "DOMContentLoaded",
+            LifecycleEvent::NetworkIdle => "networkIdle",
+            LifecycleEvent::NetworkAlmostIdle => "networkAlmostIdle",
         }
     }
 }

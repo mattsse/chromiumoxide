@@ -28,6 +28,7 @@ use chromiumoxide_types::*;
 use crate::element::Element;
 use crate::error::{CdpError, Result};
 use crate::handler::domworld::DOMWorldKind;
+use crate::handler::http::HttpRequest;
 use crate::handler::target::TargetMessage;
 use crate::handler::PageInner;
 use crate::js::{Evaluation, EvaluationResult};
@@ -148,6 +149,11 @@ impl Page {
     /// This is necessary after an interaction with the page that may trigger a
     /// navigation (`click`, `press_key`) in order to wait until the new browser
     /// page is loaded
+    pub async fn wait_for_navigation_response(&self) -> Result<Option<Arc<HttpRequest>>> {
+        Ok(self.inner.wait_for_navigation().await?)
+    }
+
+    /// Same as `wait_for_navigation_response` but returns `Self` instead
     pub async fn wait_for_navigation(&self) -> Result<&Self> {
         self.inner.wait_for_navigation().await?;
         Ok(self)

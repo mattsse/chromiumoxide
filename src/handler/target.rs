@@ -19,7 +19,7 @@ use chromiumoxide_types::{Command, Method, Request, Response};
 
 use crate::cmd::CommandChain;
 use crate::cmd::CommandMessage;
-use crate::error::{CdpError, DeadlineExceeded, Result};
+use crate::error::{DeadlineExceeded, Result};
 use crate::handler::browser::BrowserContext;
 use crate::handler::domworld::DOMWorldKind;
 use crate::handler::emulation::EmulationManager;
@@ -27,7 +27,8 @@ use crate::handler::frame::{
     FrameEvent, FrameManager, NavigationError, NavigationId, NavigationOk,
 };
 use crate::handler::frame::{FrameNavigationRequest, UTILITY_WORLD_NAME};
-use crate::handler::network::NetworkManager;
+use crate::handler::http::HttpRequest;
+use crate::handler::network::{NetworkEvent, NetworkManager};
 use crate::handler::page::PageHandle;
 use crate::handler::viewport::Viewport;
 use crate::handler::PageInner;
@@ -71,6 +72,7 @@ pub struct Target {
     /// The frame manager that maintains the state of all frames and handles
     /// navigations of frames
     frame_manager: FrameManager,
+    /// Handles all the https
     network_manager: NetworkManager,
     emulation_manager: EmulationManager,
     /// The identifier of the session this target is attached to
@@ -84,7 +86,7 @@ pub struct Target {
     /// All registered event subscriptions
     event_listeners: EventListeners,
     /// Senders that need to be notified once the main frame has loaded
-    wait_until_frame_loaded: Vec<Sender<Result<String>>>,
+    wait_for_frame_navigation: Vec<Sender<Option<Arc<HttpRequest>>>>,
     /// The sender who requested the page.
     initiator: Option<Sender<Result<Page>>>,
     /// Used to tracked whether this target should initialize its state
@@ -108,7 +110,7 @@ impl Target {
             session_id: None,
             page: None,
             init_state: TargetInit::AttachToTarget,
-            wait_until_frame_loaded: Default::default(),
+            wait_for_frame_navigation: Default::default(),
             queued_events: Default::default(),
             event_listeners: Default::default(),
             initiator: None,
@@ -148,6 +150,7 @@ impl Target {
         matches!(self.init_state, TargetInit::Initialized)
     }
 
+    /// Navigate a frame
     pub fn goto(&mut self, req: FrameNavigationRequest) {
         self.frame_manager.goto(req)
     }
@@ -204,6 +207,8 @@ impl Target {
                     self.frame_manager.on_frame_tree(resp.frame_tree);
                 }
             }
+            // requests originated from the network manager all return an empty response, hence they
+            // can be ignored here
             _ => {}
         }
     }
@@ -359,8 +364,8 @@ impl Target {
         loop {
             if let Some(frame) = self.frame_manager.main_frame() {
                 if frame.is_loaded() {
-                    while let Some(tx) = self.wait_until_frame_loaded.pop() {
-                        let _ = tx.send(frame.url.clone().ok_or(CdpError::NotFound));
+                    while let Some(tx) = self.wait_for_frame_navigation.pop() {
+                        let _ = tx.send(frame.http_request().cloned());
                     }
                 }
             }
@@ -377,25 +382,36 @@ impl Target {
                             self.queued_events.push_back(TargetEvent::Command(cmd));
                         }
                         TargetMessage::MainFrame(tx) => {
-                            let _ = tx.send(self.frame_manager.main_frame().map(|f| f.id.clone()));
+                            let _ =
+                                tx.send(self.frame_manager.main_frame().map(|f| f.id().clone()));
                         }
                         TargetMessage::AllFrames(tx) => {
-                            let _ = tx
-                                .send(self.frame_manager.frames().map(|f| f.id.clone()).collect());
+                            let _ = tx.send(
+                                self.frame_manager
+                                    .frames()
+                                    .map(|f| f.id().clone())
+                                    .collect(),
+                            );
                         }
                         TargetMessage::Url(tx) => {
-                            let _ = tx
-                                .send(self.frame_manager.main_frame().and_then(|f| f.url.clone()));
+                            let _ = tx.send(
+                                self.frame_manager
+                                    .main_frame()
+                                    .and_then(|f| f.url().map(str::to_string)),
+                            );
                         }
                         TargetMessage::WaitForNavigation(tx) => {
                             if let Some(frame) = self.frame_manager.main_frame() {
+                                // TODO submit a navigation watcher: waitForFrameNavigation
+
+                                // TODO return the watchers navigationResponse
                                 if frame.is_loaded() {
-                                    let _ = tx.send(frame.url.clone().ok_or(CdpError::NotFound));
+                                    let _ = tx.send(frame.http_request().cloned());
                                 } else {
-                                    self.wait_until_frame_loaded.push(tx);
+                                    self.wait_for_frame_navigation.push(tx);
                                 }
                             } else {
-                                self.wait_until_frame_loaded.push(tx);
+                                self.wait_for_frame_navigation.push(tx);
                             }
                         }
                         TargetMessage::AddEventListener(req) => {
@@ -417,16 +433,38 @@ impl Target {
                             if let Some(frame) = frame {
                                 match dom_world {
                                     DOMWorldKind::Main => {
-                                        let _ = tx.send(frame.main_world.execution_context());
+                                        let _ = tx.send(frame.main_world().execution_context());
                                     }
                                     DOMWorldKind::Secondary => {
-                                        let _ = tx.send(frame.secondary_world.execution_context());
+                                        let _ =
+                                            tx.send(frame.secondary_world().execution_context());
                                     }
                                 }
                             } else {
                                 let _ = tx.send(None);
                             }
                         }
+                    }
+                }
+            }
+
+            while let Some(event) = self.network_manager.poll() {
+                match event {
+                    NetworkEvent::SendCdpRequest((method, params)) => {
+                        // send a message to the browser
+                        self.queued_events.push_back(TargetEvent::Request(Request {
+                            method,
+                            session_id: self.session_id.clone().map(Into::into),
+                            params,
+                        }))
+                    }
+                    NetworkEvent::Request(_) => {}
+                    NetworkEvent::Response(_) => {}
+                    NetworkEvent::RequestFailed(request) => {
+                        self.frame_manager.on_http_request_finished(request);
+                    }
+                    NetworkEvent::RequestFinished(request) => {
+                        self.frame_manager.on_http_request_finished(request);
                     }
                 }
             }
@@ -634,7 +672,7 @@ pub(crate) enum TargetMessage {
     /// Return the url of this target's page
     Url(Sender<Option<String>>),
     /// A Message that resolves when the frame finished loading a new url
-    WaitForNavigation(Sender<Result<String>>),
+    WaitForNavigation(Sender<Option<Arc<HttpRequest>>>),
     /// A request to submit a new listener that gets notified with every
     /// received event
     AddEventListener(EventListenerRequest),

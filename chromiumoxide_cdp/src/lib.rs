@@ -1,6 +1,7 @@
 use std::fmt;
 
-use crate::cdp::browser_protocol::network::{CookieParam, DeleteCookiesParams};
+use crate::cdp::browser_protocol::fetch;
+use crate::cdp::browser_protocol::network::{self, CookieParam, DeleteCookiesParams};
 use crate::cdp::browser_protocol::target::CreateTargetParams;
 use crate::cdp::js_protocol::runtime::{
     CallFunctionOnParams, EvaluateParams, ExceptionDetails, StackTrace,
@@ -13,6 +14,50 @@ include!(concat!(env!("OUT_DIR"), "/cdp.rs"));
 impl Default for CreateTargetParams {
     fn default() -> Self {
         "about:blank".into()
+    }
+}
+
+/// RequestId conversion
+
+impl From<fetch::RequestId> for network::RequestId {
+    fn from(req: fetch::RequestId) -> Self {
+        let s: String = req.into();
+        s.into()
+    }
+}
+
+impl From<network::RequestId> for fetch::RequestId {
+    fn from(req: network::RequestId) -> Self {
+        let s: String = req.into();
+        s.into()
+    }
+}
+
+impl From<network::InterceptionId> for fetch::RequestId {
+    fn from(req: network::InterceptionId) -> Self {
+        let s: String = req.into();
+        s.into()
+    }
+}
+
+impl From<network::InterceptionId> for network::RequestId {
+    fn from(req: network::InterceptionId) -> Self {
+        let s: String = req.into();
+        s.into()
+    }
+}
+
+impl From<fetch::RequestId> for network::InterceptionId {
+    fn from(req: fetch::RequestId) -> Self {
+        let s: String = req.into();
+        s.into()
+    }
+}
+
+impl From<network::RequestId> for network::InterceptionId {
+    fn from(req: network::RequestId) -> Self {
+        let s: String = req.into();
+        s.into()
     }
 }
 
