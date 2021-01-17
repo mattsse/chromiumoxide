@@ -73,13 +73,13 @@ By default `chromiumoxide` is configured with `async-std`.
 Use `chromiumoxide` with the `async-std` runtime:
 
 ```toml
-chromiumoxide = { git = "https://github.com/mattsse/chromiumoxide" }
+chromiumoxide = { git = "https://github.com/mattsse/chromiumoxide", branch = "main"}
 ```
 
 To use the `tokio` runtime instead add `features = ["tokio-runtime"]` and set `default-features = false` to disable the default runtime (`async-std`):
 
 ```toml
-chromiumoxide = { git = "https://github.com/mattsse/chromiumoxide", features = ["tokio-runtime"], default-features = false }
+chromiumoxide = { git = "https://github.com/mattsse/chromiumoxide", features = ["tokio-runtime"], default-features = false, branch = "main"}
 ```
 
 This configuration is made possible primarily by the websocket crate of choice: [`async-tungstenite`](https://github.com/sdroege/async-tungstenite).
@@ -119,5 +119,5 @@ Licensed under either of these:
 ## References
 
 * [chromedp](https://github.com/chromedp/chromedp)
-* [rust-headless-chrome](https://github.com/Edu4rdSHL/rust-headless-chrome) which the launch config, `KeyDefinition` and typing support among others is taken from.
+* [rust-headless-chrome](https://github.com/atroche/rust-headless-chrome) which the launch config, `KeyDefinition` and typing support among others is taken from.
 * [puppeteer](https://github.com/puppeteer/puppeteer)

@@ -855,11 +855,6 @@ domain Browser
       # For "camera" permission, may specify panTiltZoom.
       optional boolean panTiltZoom
 
-  # Browser command ids used by executeBrowserCommand.
-  experimental type BrowserCommandId extends string
-    enum
-      openTabSearch
-
   # Set permission settings for given origin.
   experimental command setPermission
     parameters
@@ -1018,11 +1013,6 @@ domain Browser
       optional string badgeLabel
       # Png encoded image.
       optional binary image
-
-  # Invoke custom browser commands used by telemetry.
-  experimental command executeBrowserCommand
-    parameters
-      BrowserCommandId commandId
 
 # This domain exposes CSS read/write operations. All CSS objects (stylesheets, rules, and styles)
 # have an associated `id` used in subsequent operations on the related object. Each object type has
@@ -1789,7 +1779,6 @@ domain DOM
       marker
       backdrop
       selection
-      target-text
       first-line-inherited
       scrollbar
       scrollbar-thumb
@@ -3310,17 +3299,6 @@ domain Emulation
   # Notification sent after the virtual time budget for the current VirtualTimePolicy has run out.
   experimental event virtualTimeBudgetExpired
 
-  # Enum of image types that can be disabled.
-  experimental type DisabledImageType extends string
-    enum
-      avif
-      webp
-
-  experimental command setDisabledImageTypes
-    parameters
-      # Image types to disable.
-      array of DisabledImageType imageTypes
-
   # Allows overriding user agent with the given string.
   command setUserAgentOverride
     parameters
@@ -3630,14 +3608,6 @@ domain Input
       optional number rotationAngle
       # Force (default: 1.0).
       optional number force
-      # The normalized tangential pressure, which has a range of [-1,1] (default: 0).
-      experimental optional number tangentialPressure
-      # The plane angle between the Y-Z plane and the plane containing both the stylus axis and the Y axis, in degrees of the range [-90,90], a positive tiltX is to the right (default: 0)
-      experimental optional integer tiltX
-      # The plane angle between the X-Z plane and the plane containing both the stylus axis and the X axis, in degrees of the range [-90,90], a positive tiltY is towards the user (default: 0).
-      experimental optional integer tiltY
-      # The clockwise rotation of a pen stylus around its own major axis, in degrees in the range [0,359] (default: 0).
-      experimental optional integer twist
       # Identifier used to track touch sources between events, must be unique within an event.
       optional number id
 
@@ -3737,16 +3707,6 @@ domain Input
       optional integer buttons
       # Number of times the mouse button was clicked (default: 0).
       optional integer clickCount
-      # The normalized pressure, which has a range of [0,1] (default: 0).
-      experimental optional number force
-      # The normalized tangential pressure, which has a range of [-1,1] (default: 0).
-      experimental optional number tangentialPressure
-      # The plane angle between the Y-Z plane and the plane containing both the stylus axis and the Y axis, in degrees of the range [-90,90], a positive tiltX is to the right (default: 0).
-      experimental optional integer tiltX
-      # The plane angle between the X-Z plane and the plane containing both the stylus axis and the X axis, in degrees of the range [-90,90], a positive tiltY is towards the user (default: 0).
-      experimental optional integer tiltY
-      # The clockwise rotation of a pen stylus around its own major axis, in degrees in the range [0,359] (default: 0).
-      experimental optional integer twist
       # X delta in CSS pixels for mouse wheel event (default: 0).
       optional number deltaX
       # Y delta in CSS pixels for mouse wheel event (default: 0).
@@ -4496,39 +4456,6 @@ domain Network
       corp-not-same-origin-after-defaulted-to-same-origin-by-coep
       corp-not-same-site
 
-  # The reason why request was blocked.
-  type CorsError extends string
-    enum
-      DisallowedByMode
-      InvalidResponse
-      WildcardOriginNotAllowed
-      MissingAllowOriginHeader
-      MultipleAllowOriginValues
-      InvalidAllowOriginValue
-      AllowOriginMismatch
-      InvalidAllowCredentials
-      CorsDisabledScheme
-      PreflightInvalidStatus
-      PreflightDisallowedRedirect
-      PreflightWildcardOriginNotAllowed
-      PreflightMissingAllowOriginHeader
-      PreflightMultipleAllowOriginValues
-      PreflightInvalidAllowOriginValue
-      PreflightAllowOriginMismatch
-      PreflightInvalidAllowCredentials
-      PreflightMissingAllowExternal
-      PreflightInvalidAllowExternal
-      InvalidAllowMethodsPreflightResponse
-      InvalidAllowHeadersPreflightResponse
-      MethodDisallowedByPreflightResponse
-      HeaderDisallowedByPreflightResponse
-      RedirectContainsCredentials
-
-  type CorsErrorStatus extends object
-    properties
-      CorsError corsError
-      string failedParameter
-
   # Source of serviceworker response.
   type ServiceWorkerResponseSource extends string
     enum
@@ -5210,10 +5137,10 @@ domain Network
       # Map with extra HTTP headers.
       Headers headers
 
-  # Specifies whether to attach a page script stack id in requests
-  experimental command setAttachDebugStack
+  # Specifies whether to sned a debug header to all outgoing requests.
+  experimental command setAttachDebugHeader
     parameters
-      # Whether to attach a page script stack for debugging purpose.
+      # Whether to send a debug header.
       boolean enabled
 
   # Sets the requests to intercept that match the provided patterns and optionally resource types.
@@ -5279,8 +5206,6 @@ domain Network
       optional boolean canceled
       # The reason why loading was blocked, if any.
       optional BlockedReason blockedReason
-       # The reason why loading was blocked by CORS, if any.
-      optional CorsErrorStatus corsErrorStatus
 
   # Fired when HTTP request has finished loading.
   event loadingFinished
@@ -7835,15 +7760,6 @@ experimental domain Tracing
       none
       gzip
 
-  # Details exposed when memory request explicitly declared.
-  # Keep consistent with memory_dump_request_args.h and
-  # memory_instrumentation.mojom
-  type MemoryDumpLevelOfDetail extends string
-    enum
-      background
-      light
-      detailed
-
   # Stop trace events collection.
   command end
 
@@ -7864,8 +7780,6 @@ experimental domain Tracing
     parameters
       # Enables more deterministic results by forcing garbage collection
       optional boolean deterministic
-      # Specifies level of details in memory dump. Defaults to "detailed".
-      optional MemoryDumpLevelOfDetail levelOfDetail
     returns
       # GUID of the resulting global memory dump.
       string dumpGuid
@@ -8340,11 +8254,6 @@ experimental domain WebAuthn
       # Client To Authenticator Protocol 2.
       ctap2
 
-  type Ctap2Version extends string
-    enum
-      ctap2_0
-      ctap2_1
-
   type AuthenticatorTransport extends string
     enum
       # Cross-Platform authenticator attachments:
@@ -8358,8 +8267,6 @@ experimental domain WebAuthn
   type VirtualAuthenticatorOptions extends object
     properties
       AuthenticatorProtocol protocol
-      # Defaults to ctap2_0. Ignored if |protocol| == u2f.
-      optional Ctap2Version ctap2Version
       AuthenticatorTransport transport
       # Defaults to false.
       optional boolean hasResidentKey
@@ -8392,9 +8299,6 @@ experimental domain WebAuthn
       # assertion.
       # See https://w3c.github.io/webauthn/#signature-counter
       integer signCount
-      # The large blob associated with the credential.
-      # See https://w3c.github.io/webauthn/#sctn-large-blob-extension
-      optional binary largeBlob
 
   # Enable the WebAuthn domain and start intercepting credential storage and
   # retrieval with a virtual authenticator.
