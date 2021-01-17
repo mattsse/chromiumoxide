@@ -14,7 +14,7 @@ use chromiumoxide_types::{Command, Method, MethodId};
 
 use crate::auth::Credentials;
 use crate::cmd::CommandChain;
-use crate::handler::http::{HttpRequest, HttpResponse};
+use crate::handler::http::HttpRequest;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 #[derive(Debug)]
@@ -75,8 +75,9 @@ impl NetworkManager {
             .push_back(NetworkEvent::SendCdpRequest((method, params)));
     }
 
+    /// The next event to handle
     pub fn poll(&mut self) -> Option<NetworkEvent> {
-        None
+        self.queued_events.pop_front()
     }
 
     pub fn extra_headers(&self) -> &HashMap<String, String> {
@@ -208,19 +209,14 @@ impl NetworkManager {
 
     pub fn on_response_received(&mut self, event: &EventResponseReceived) {
         if let Some(mut request) = self.requests.remove(event.request_id.as_ref()) {
-            // TODO get rid of the response clone
-            let response = HttpResponse::new(event.request_id.clone(), event.response.clone());
-            request.set_response(response);
+            request.set_response(event.response.clone());
             self.queued_events
-                .push_back(NetworkEvent::Response(event.request_id.clone()))
+                .push_back(NetworkEvent::RequestFinished(request))
         }
     }
 
     pub fn on_network_loading_finished(&mut self, event: &EventLoadingFinished) {
-        if let Some(mut request) = self.requests.remove(event.request_id.as_ref()) {
-            if let Some(response) = request.response_mut() {
-                response.resolve_body();
-            }
+        if let Some(request) = self.requests.remove(event.request_id.as_ref()) {
             if let Some(interception_id) = request.interception_id.as_ref() {
                 self.attempted_authentications
                     .remove(interception_id.as_ref());
@@ -233,9 +229,6 @@ impl NetworkManager {
     pub fn on_network_loading_failed(&mut self, event: &EventLoadingFailed) {
         if let Some(mut request) = self.requests.remove(event.request_id.as_ref()) {
             request.failure_text = Some(event.error_text.clone());
-            if let Some(response) = request.response_mut() {
-                response.resolve_body();
-            }
             if let Some(interception_id) = request.interception_id.as_ref() {
                 self.attempted_authentications
                     .remove(interception_id.as_ref());
@@ -250,12 +243,12 @@ impl NetworkManager {
         event: &EventRequestWillBeSent,
         interception_id: Option<InterceptionId>,
     ) {
-        let redirect_chain = Vec::new();
+        let mut redirect_chain = Vec::new();
         if let Some(redirect_resp) = event.redirect_response.as_ref() {
-            if let Some(request) = self.requests.remove(event.request_id.as_ref()) {
-                // redirect_chain = request.redirect_chain;
-                // TODO move the redirect chain and add the redirected request
-                self.handle_request_redirect(request, redirect_resp.clone());
+            if let Some(mut request) = self.requests.remove(event.request_id.as_ref()) {
+                self.handle_request_redirect(&mut request, redirect_resp.clone());
+                redirect_chain = std::mem::replace(&mut request.redirect_chain, Vec::new());
+                redirect_chain.push(request);
             }
         }
         let request = HttpRequest::new(
@@ -271,16 +264,12 @@ impl NetworkManager {
             .push_back(NetworkEvent::Request(event.request_id.clone()));
     }
 
-    fn handle_request_redirect(&mut self, mut request: HttpRequest, response: Response) {
-        //     request._redirectChain.push(request);
-        let response = HttpResponse::new(request.request_id().clone(), response);
+    fn handle_request_redirect(&mut self, request: &mut HttpRequest, response: Response) {
         request.set_response(response);
         if let Some(interception_id) = request.interception_id.as_ref() {
             self.attempted_authentications
                 .remove(interception_id.as_ref());
         }
-        self.queued_events
-            .push_back(NetworkEvent::RequestFinished(request))
     }
 }
 

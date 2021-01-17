@@ -104,6 +104,10 @@ impl Frame {
         &self.lifecycle_events
     }
 
+    pub fn http_request(&self) -> Option<&Arc<HttpRequest>> {
+        self.http_request.as_ref()
+    }
+
     fn navigated(&mut self, frame: &CdpFrame) {
         self.name = frame.name.clone();
         let url = if let Some(ref fragment) = frame.url_fragment {
@@ -125,6 +129,7 @@ impl Frame {
 
     fn on_loading_started(&mut self) {
         self.lifecycle_events.clear();
+        self.http_request.take();
     }
 
     pub fn is_loaded(&self) -> bool {
@@ -146,6 +151,10 @@ impl Frame {
 
     pub fn execution_context(&self) -> Option<ExecutionContextId> {
         self.main_world.execution_context()
+    }
+
+    pub fn set_request(&mut self, request: HttpRequest) {
+        self.http_request = Some(Arc::new(request))
     }
 }
 
@@ -213,6 +222,14 @@ impl FrameManager {
         self.main_frame.as_ref().and_then(|id| self.frames.get(id))
     }
 
+    pub fn main_frame_mut(&mut self) -> Option<&mut Frame> {
+        if let Some(id) = self.main_frame.as_ref() {
+            self.frames.get_mut(id)
+        } else {
+            None
+        }
+    }
+
     pub fn frames(&self) -> impl Iterator<Item = &Frame> + '_ {
         self.frames.values()
     }
@@ -251,6 +268,15 @@ impl FrameManager {
             return Some(NavigationOk::NewDocumentNavigation(watcher.id));
         }
         None
+    }
+
+    /// Track the request in the frame
+    pub fn on_http_request_finished(&mut self, request: HttpRequest) {
+        if let Some(id) = request.frame.as_ref() {
+            if let Some(frame) = self.frames.get_mut(id) {
+                frame.set_request(request);
+            }
+        }
     }
 
     pub fn poll(&mut self, now: Instant) -> Option<FrameEvent> {

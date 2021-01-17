@@ -25,6 +25,7 @@ use chromiumoxide_types::{Command, CommandResponse};
 use crate::cmd::{to_command_response, CommandMessage};
 use crate::error::{CdpError, Result};
 use crate::handler::domworld::DOMWorldKind;
+use crate::handler::http::HttpRequest;
 use crate::handler::target::{GetExecutionContext, TargetMessage};
 use crate::js::EvaluationResult;
 use crate::keys;
@@ -68,15 +69,14 @@ impl PageInner {
         Ok(execute(cmd, self.sender.clone(), Some(self.session_id.clone())).await?)
     }
 
-    /// This responds with the current url of the page, once the navigation
-    /// finished and the page is loaded
-    pub(crate) async fn wait_for_navigation(&self) -> Result<String> {
+    /// This responds with the final http response when the page is loaded
+    pub(crate) async fn wait_for_navigation(&self) -> Result<Option<Arc<HttpRequest>>> {
         let (tx, rx) = oneshot_channel();
         self.sender
             .clone()
             .send(TargetMessage::WaitForNavigation(tx))
             .await?;
-        Ok(rx.await??)
+        Ok(rx.await?)
     }
 
     /// The identifier of this page's target

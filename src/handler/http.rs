@@ -8,7 +8,7 @@ pub struct HttpRequest {
     pub from_memory_cache: bool,
     pub failure_text: Option<String>,
     pub interception_id: Option<InterceptionId>,
-    response: Option<HttpResponse>,
+    pub response: Option<Response>,
     pub headers: HashMap<String, String>,
     pub frame: Option<FrameId>,
     pub is_navigation_request: bool,
@@ -52,32 +52,7 @@ impl HttpRequest {
         &self.request_id
     }
 
-    pub fn response(&self) -> Option<&HttpResponse> {
-        self.response.as_ref()
-    }
-
-    pub fn response_mut(&mut self) -> Option<&mut HttpResponse> {
-        self.response.as_mut()
-    }
-
-    pub fn set_response(&mut self, response: HttpResponse) {
+    pub(crate) fn set_response(&mut self, response: Response) {
         self.response = Some(response)
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct HttpResponse {
-    request_id: RequestId,
-    inner: Response,
-}
-
-impl HttpResponse {
-    pub fn new(request_id: RequestId, response: Response) -> Self {
-        Self {
-            request_id,
-            inner: response,
-        }
-    }
-
-    pub fn resolve_body(&mut self) {}
 }
