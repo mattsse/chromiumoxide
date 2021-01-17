@@ -456,7 +456,7 @@ impl Stream for Handler {
                         let pages: Vec<_> = pin
                             .targets
                             .values_mut()
-                            .filter(|p| p.r#type().is_page())
+                            .filter(|p| p.is_page())
                             .filter_map(|target| target.get_or_create_page())
                             .map(|page| Page::from(page.clone()))
                             .collect();

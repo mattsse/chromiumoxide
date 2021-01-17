@@ -89,8 +89,6 @@ pub struct Target {
     wait_for_frame_navigation: Vec<Sender<Option<Arc<HttpRequest>>>>,
     /// The sender who requested the page.
     initiator: Option<Sender<Result<Page>>>,
-    /// Used to tracked whether this target should initialize its state
-    initialize: bool,
 }
 
 impl Target {
@@ -114,7 +112,6 @@ impl Target {
             queued_events: Default::default(),
             event_listeners: Default::default(),
             initiator: None,
-            initialize: false,
             browser_context,
         }
     }
@@ -171,7 +168,7 @@ impl Target {
     }
 
     pub fn is_page(&self) -> bool {
-        todo!()
+        self.r#type().is_page()
     }
 
     pub fn browser_context_id(&self) -> Option<&BrowserContextId> {
@@ -271,7 +268,8 @@ impl Target {
 
     /// Advance that target's state
     pub(crate) fn poll(&mut self, cx: &mut Context<'_>, now: Instant) -> Option<TargetEvent> {
-        if !self.initialize {
+        if !self.is_page() {
+            // can only poll pages
             return None;
         }
         match &mut self.init_state {
@@ -492,12 +490,6 @@ impl Target {
     /// target
     pub fn set_initiator(&mut self, tx: Sender<Result<Page>>) {
         self.initiator = Some(tx);
-        self.initialize();
-    }
-
-    /// Start with the initialization process
-    pub fn initialize(&mut self) {
-        self.initialize = true;
     }
 
     // TODO move to other location
