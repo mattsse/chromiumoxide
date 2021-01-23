@@ -14,22 +14,22 @@ categories = ["web-programming", "api-bindings", "development-tools::testing"]
 [dependencies]
 async-tungstenite = { git = "https://github.com/sdroege/async-tungstenite" }
 serde = { version = "1.0", features = ["derive"] }
-async-std = { version = "1.6", features = ["attributes", "unstable"], optional = true }
+async-std = { version = "1.9", features = ["attributes", "unstable"], optional = true }
 anyhow = "1.0"
 futures = "0.3"
-chromiumoxide_types = { path = "chromiumoxide_types", version = "0.1.0" }
-chromiumoxide_cdp = { path = "chromiumoxide_cdp", version = "0.1.0" }
+chromiumoxide_types = { path = "chromiumoxide_types", version = "0.1" }
+chromiumoxide_cdp = { path = "chromiumoxide_cdp", version = "0.1" }
 serde_json = "1.0"
-which = "4.0.2"
+which = "4.0"
 thiserror = "1.0"
-url = "2.1"
+url = "2.2"
 log = "0.4"
 base64 = "0.13"
 fnv = "1.0"
 futures-timer = "3.0"
 pretty_env_logger = "0.4"
 cfg-if = "1.0"
-tokio = { version = "1.0", features = ["rt", "rt-multi-thread", "time", "fs", "macros"], optional = true }
+tokio = { version = "1.1", features = ["rt", "rt-multi-thread", "time", "fs", "macros"], optional = true }
 
 [dev-dependencies]
 quote = "1.0"
