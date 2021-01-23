@@ -434,7 +434,7 @@ impl Handler {
 }
 
 impl Stream for Handler {
-    type Item = Result<CdpEventMessage>;
+    type Item = Result<()>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let pin = self.get_mut();
