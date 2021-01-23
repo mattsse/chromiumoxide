@@ -28,7 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
    // spawn a new task that continuously polls the handler
     let handle = async_std::task::spawn(async move {
         loop {
-            handler.next().await.unwrap();
+           let _ = handler.next().await.unwrap();
         }
     });
     

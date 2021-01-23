@@ -13,7 +13,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let handle = async_std::task::spawn(async move {
         loop {
-            handler.next().await.unwrap();
+            let _ = handler.next().await.unwrap();
         }
     });
 
