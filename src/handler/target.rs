@@ -188,8 +188,11 @@ impl Target {
         &mut self.frame_manager
     }
 
-    /// Received a response to a command issued by this target
+    pub fn event_listeners_mut(&mut self) -> &mut EventListeners {
+        &mut self.event_listeners
+    }
 
+    /// Received a response to a command issued by this target
     pub fn on_response(&mut self, resp: Response, method: &str) {
         if let Some(cmds) = self.init_state.commands_mut() {
             cmds.received_response(method);

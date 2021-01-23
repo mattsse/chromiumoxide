@@ -498,6 +498,9 @@ impl Stream for Handler {
                         }
                     }
 
+                    // poll the target's event listeners
+                    target.event_listeners_mut().poll(cx);
+
                     pin.targets.insert(id, target);
                     pin.target_ids.push(target_id);
                 }
