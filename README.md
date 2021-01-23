@@ -6,10 +6,6 @@ chromiumoxide
 
 chromiumoxide provides a high-level and async API to control Chrome or Chromium over the [DevTools Protocol](https://chromedevtools.github.io/devtools-protocol/). It comes with support for all types of the [Chrome DevTools Protocol](https://chromedevtools.github.io/devtools-protocol/) and can launch a [headless](https://developers.google.com/web/updates/2017/04/headless-chrome) or full (non-headless) Chrome or Chromium instance or connect to an already running instance.
 
-
-⚠️ The API is still unstable, subject to change, untested and incomplete. However all message types, as defined in the protocol definition files ([browser_protocol.pdl](chromiumoxide_cdp/browser_protocol.pdl) and [js_protocol.pdl](chromiumoxide_cdp/js_protocol.pdl)) are supported. PRs, feature requests and issues are welcome.
-
-
 ## Usage
 
 ```rust
@@ -53,7 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-The current API is still rather limited, but the [`Page::execute`](src/page.rs) function allows sending all `chromiumoxide_types::Command` types (see [Generated Code](README.md#generated-code)). Most `Element` and `Page` functions are basically just simplified command constructions and combinations, like `Page::pdf`:
+The current API still lacks some functionality, but the [`Page::execute`](src/page.rs) function allows sending all `chromiumoxide_types::Command` types (see [Generated Code](README.md#generated-code)). Most `Element` and `Page` functions are basically just simplified command constructions and combinations, like `Page::pdf`:
 
 ```rust
 pub async fn pdf(&self, params: PrintToPdfParams) -> Result<Vec<u8>> {
