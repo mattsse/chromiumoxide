@@ -12,7 +12,7 @@ keywords = ["chrome", "chromedriver", "puppeteer", "automation"]
 categories = ["web-programming", "api-bindings", "development-tools::testing"]
 
 [dependencies]
-async-tungstenite = { version = "0.10" }
+async-tungstenite = { git = "https://github.com/sdroege/async-tungstenite" }
 serde = { version = "1.0", features = ["derive"] }
 async-std = { version = "1.6", features = ["attributes", "unstable"], optional = true }
 anyhow = "1.0"
@@ -23,14 +23,13 @@ serde_json = "1.0"
 which = "4.0.2"
 thiserror = "1.0"
 url = "2.1"
-tungstenite = "0.11"
 log = "0.4"
 base64 = "0.13"
 fnv = "1.0"
 futures-timer = "3.0"
 pretty_env_logger = "0.4"
 cfg-if = "1.0"
-tokio = { version = "0.3", features = ["rt", "rt-multi-thread", "time", "fs", "macros"], optional = true }
+tokio = { version = "1.0", features = ["rt", "rt-multi-thread", "time", "fs", "macros"], optional = true }
 
 [dev-dependencies]
 quote = "1.0"
