@@ -8,6 +8,7 @@ use futures::channel::oneshot::Sender as OneshotSender;
 use futures::stream::{Fuse, Stream, StreamExt};
 use futures::task::{Context, Poll};
 
+use crate::listeners::{EventListenerRequest, EventListeners};
 use chromiumoxide_cdp::cdp::browser_protocol::browser::*;
 use chromiumoxide_cdp::cdp::browser_protocol::target::*;
 use chromiumoxide_cdp::cdp::events::CdpEvent;
@@ -75,6 +76,8 @@ pub struct Handler {
     next_navigation_id: usize,
     /// How this handler will configure targets etc,
     config: HandlerConfig,
+    /// All registered event subscriptions
+    event_listeners: EventListeners,
 }
 
 impl Handler {
@@ -111,6 +114,7 @@ impl Handler {
             evict_command_timeout: Default::default(),
             next_navigation_id: 0,
             config,
+            event_listeners: Default::default(),
         }
     }
 
@@ -331,12 +335,20 @@ impl Handler {
             }
         }
         match event.params {
+            CdpEvent::TargetTargetInfoChanged(ev) => self.on_target_changed(ev),
             CdpEvent::TargetTargetCreated(ev) => self.on_target_created(ev),
             CdpEvent::TargetAttachedToTarget(ev) => self.on_attached_to_target(ev),
             CdpEvent::TargetTargetDestroyed(ev) => self.on_target_destroyed(ev),
             CdpEvent::TargetDetachedFromTarget(ev) => self.on_detached_from_target(ev),
             _ => {}
         }
+    }
+
+    /// Fired when the target has changed
+    ///
+    /// For example after a Navigation happens or a new Tab opened
+    fn on_target_changed(&mut self, event: EventTargetInfoChanged) {
+        self.event_listeners.start_send(event);
     }
 
     /// Fired when a new target was created on the chromium instance
@@ -351,7 +363,7 @@ impl Handler {
             .filter(|id| self.browser_contexts.contains(id))
             .unwrap_or_else(|| self.default_browser_context.clone());
         let target = Target::new(
-            event.target_info,
+            event.target_info.clone(),
             TargetConfig::new(
                 self.config.ignore_https_errors,
                 self.config.viewport.clone(),
@@ -360,6 +372,7 @@ impl Handler {
         );
         self.target_ids.push(target.target_id().clone());
         self.targets.insert(target.target_id().clone(), target);
+        self.event_listeners.start_send(event);
     }
 
     /// A new session is attached to a target
@@ -431,6 +444,10 @@ impl Handler {
             }
         }
     }
+
+    pub fn event_listeners_mut(&mut self) -> &mut EventListeners {
+        &mut self.event_listeners
+    }
 }
 
 impl Stream for Handler {
@@ -468,6 +485,27 @@ impl Stream for Handler {
                     HandlerMessage::DisposeContext(ctx) => {
                         pin.browser_contexts.remove(&ctx);
                     }
+                    HandlerMessage::AddEventListener(req) => {
+                        pin.event_listeners.add_listener(req);
+                    }
+                    HandlerMessage::GetPage(target_id, tx) => {
+                        let target = pin
+                            .targets
+                            .values_mut()
+                            .find(|p| p.target_id() == &target_id);
+
+                        match target {
+                            Some(target) => {
+                                let page = target
+                                    .get_or_create_page()
+                                    .map(|page| Page::from(page.clone()));
+                                let _ = tx.send(page);
+                            }
+                            None => {
+                                let _ = tx.send(None);
+                            }
+                        }
+                    }
                 }
             }
 
@@ -500,6 +538,8 @@ impl Stream for Handler {
 
                     // poll the target's event listeners
                     target.event_listeners_mut().poll(cx);
+                    // poll the handler's event listeners
+                    pin.event_listeners_mut().poll(cx);
 
                     pin.targets.insert(id, target);
                     pin.target_ids.push(target_id);
@@ -626,4 +666,6 @@ pub(crate) enum HandlerMessage {
     DisposeContext(BrowserContext),
     GetPages(OneshotSender<Vec<Page>>),
     Command(CommandMessage),
+    AddEventListener(EventListenerRequest),
+    GetPage(TargetId, OneshotSender<Option<Page>>),
 }
