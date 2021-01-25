@@ -6,12 +6,13 @@ use std::{
     process::{self, Child, Stdio},
 };
 
-use futures::channel::mpsc::{channel, Sender};
+use futures::channel::mpsc::{channel, unbounded, Sender};
 use futures::channel::oneshot::channel as oneshot_channel;
 use futures::SinkExt;
 
 use chromiumoxide_cdp::cdp::browser_protocol::target::{
     CreateBrowserContextParams, CreateTargetParams, DisposeBrowserContextParams,
+    EventTargetCreated, EventTargetInfoChanged, TargetId,
 };
 use chromiumoxide_cdp::cdp::CdpEventMessage;
 use chromiumoxide_types::*;
@@ -22,6 +23,7 @@ use crate::error::{CdpError, Result};
 use crate::handler::browser::BrowserContext;
 use crate::handler::viewport::Viewport;
 use crate::handler::{Handler, HandlerConfig, HandlerMessage, REQUEST_TIMEOUT};
+use crate::listeners::{EventListenerRequest, EventStream};
 use crate::page::Page;
 use chromiumoxide_cdp::cdp::browser_protocol::browser::{GetVersionParams, GetVersionReturns};
 
@@ -225,6 +227,46 @@ impl Browser {
             .send(HandlerMessage::GetPages(tx))
             .await?;
         Ok(rx.await?)
+    }
+
+    /// Create Listener for Target Changed Event
+    pub async fn target_changed_listener(&self) -> Result<EventStream<EventTargetInfoChanged>> {
+        let (tx, rx) = unbounded();
+        self.sender
+            .clone()
+            .send(HandlerMessage::AddEventListener(
+                EventListenerRequest::new::<EventTargetInfoChanged>(tx),
+            ))
+            .await?;
+
+        Ok(EventStream::new(rx))
+    }
+
+    /// Create Listener for Target Created Event
+    pub async fn target_created_listener(&self) -> Result<EventStream<EventTargetCreated>> {
+        let (tx, rx) = unbounded();
+        self.sender
+            .clone()
+            .send(HandlerMessage::AddEventListener(
+                EventListenerRequest::new::<EventTargetCreated>(tx),
+            ))
+            .await?;
+
+        Ok(EventStream::new(rx))
+    }
+
+    /// Return page of given target_id
+    pub async fn get_page(&self, target_id: TargetId) -> Result<Page> {
+        let (tx, rx) = oneshot_channel();
+        self.sender
+            .clone()
+            .send(HandlerMessage::GetPage(target_id, tx))
+            .await?;
+        match rx.await? {
+            Some(rx) => Ok(rx),
+            None => Err(CdpError::NotFound),
+        }
+        // Ok(rx.await?)
     }
 }
 
