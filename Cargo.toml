@@ -12,7 +12,7 @@ keywords = ["chrome", "chromedriver", "puppeteer", "automation"]
 categories = ["web-programming", "api-bindings", "development-tools::testing"]
 
 [dependencies]
-async-tungstenite = { git = "https://github.com/sdroege/async-tungstenite" }
+async-tungstenite = "0.13"
 serde = { version = "1.0", features = ["derive"] }
 async-std = { version = "1.9", features = ["attributes", "unstable"], optional = true }
 anyhow = "1.0"
