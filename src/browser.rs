@@ -557,9 +557,7 @@ pub fn default_executable() -> Result<std::path::PathBuf, String> {
 
     #[cfg(windows)]
     {
-        use crate::browser::process::get_chrome_path_from_registry;
-
-        if let Some(path) = get_chrome_path_from_registry() {
+        if let Some(path) = get_chrome_path_from_windows_registry() {
             if path.exists() {
                 return Ok(path);
             }
@@ -567,6 +565,15 @@ pub fn default_executable() -> Result<std::path::PathBuf, String> {
     }
 
     Err("Could not auto detect a chrome executable".to_string())
+}
+
+#[cfg(windows)]
+pub(crate) fn get_chrome_path_from_windows_registry() -> Option<std::path::PathBuf> {
+    winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE)
+        .open_subkey("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\chrome.exe")
+        .and_then(|key| key.get_value::<String, _>(""))
+        .map(std::path::PathBuf::from)
+        .ok()
 }
 
 /// These are passed to the Chrome binary by default.
