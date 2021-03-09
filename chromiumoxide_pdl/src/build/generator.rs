@@ -223,7 +223,7 @@ impl Generator {
             } else {
                 sequential_retries += 1;
                 if sequential_retries > refs.len() {
-                    panic!(format!("No type found for ref {}", reff));
+                    panic!("No type found for ref {}", reff);
                 }
                 refs.push_back((name, reff));
             }
@@ -930,9 +930,10 @@ impl Generator {
                 .filter(|ev| self.with_deprecated || !ev.is_deprecated())
                 .filter(|ev| self.with_experimental || !ev.is_experimental())
             {
-                let domain_idx = self.domains.get(domain.name.as_ref()).unwrap_or_else(|| {
-                    panic!(format!("No matching domain registered for {}", domain.name))
-                });
+                let domain_idx = self
+                    .domains
+                    .get(domain.name.as_ref())
+                    .unwrap_or_else(|| panic!("No matching domain registered for {}", domain.name));
                 let protocol_mod = format_ident!("{}", self.protocol_mods[*domain_idx]);
 
                 let ev_name = format!("Event{}", event.name().to_camel_case());
@@ -940,7 +941,7 @@ impl Generator {
                 let size = *self
                     .type_size
                     .get(&ev_name)
-                    .unwrap_or_else(|| panic!(format!("No type found for ref {}", ev_name)));
+                    .unwrap_or_else(|| panic!("No type found for ref {}", ev_name));
 
                 // See https://rust-lang.github.io/rust-clippy/master/#large_enum_variant
                 // The maximum size of a enum’s variant to avoid box suggestion is 200
