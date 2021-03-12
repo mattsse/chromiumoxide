@@ -469,20 +469,12 @@ impl Stream for Handler {
                         pin.browser_contexts.remove(&ctx);
                     }
                     HandlerMessage::GetPage(target_id, tx) => {
-                        let target = pin
-                            .targets.get_mut(&target_id);
-
-                        match target {
-                            Some(target) => {
-                                let page = target
-                                    .get_or_create_page()
-                                    .map(|page| Page::from(page.clone()));
-                                let _ = tx.send(page);
-                            }
-                            None => {
-                                let _ = tx.send(None);
-                            }
-                        }
+                        let page = pin
+                            .targets
+                            .get_mut(&target_id)
+                            .and_then(|target| target.get_or_create_page())
+                            .map(|page| Page::from(page.clone()));
+                        let _ = tx.send(page);
                     }
                 }
             }
