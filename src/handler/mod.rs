@@ -470,9 +470,7 @@ impl Stream for Handler {
                     }
                     HandlerMessage::GetPage(target_id, tx) => {
                         let target = pin
-                            .targets
-                            .values_mut()
-                            .find(|p| p.target_id() == &target_id);
+                            .targets.get_mut(&target_id);
 
                         match target {
                             Some(target) => {
