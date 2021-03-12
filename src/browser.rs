@@ -234,11 +234,7 @@ impl Browser {
             .clone()
             .send(HandlerMessage::GetPage(target_id, tx))
             .await?;
-        match rx.await? {
-            Some(rx) => Ok(rx),
-            None => Err(CdpError::NotFound),
-        }
-        // Ok(rx.await?)
+        rx.await?.ok_or(CdpError::NotFound)
     }
 }
 
