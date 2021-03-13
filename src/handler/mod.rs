@@ -334,21 +334,18 @@ impl Handler {
                 }
             }
         }
-        match event.params {
-            CdpEvent::TargetTargetInfoChanged(ev) => self.on_target_changed(ev),
+        let CdpEventMessage { params, method, .. } = event;
+        match params.clone() {
             CdpEvent::TargetTargetCreated(ev) => self.on_target_created(ev),
             CdpEvent::TargetAttachedToTarget(ev) => self.on_attached_to_target(ev),
             CdpEvent::TargetTargetDestroyed(ev) => self.on_target_destroyed(ev),
             CdpEvent::TargetDetachedFromTarget(ev) => self.on_detached_from_target(ev),
             _ => {}
         }
-    }
-
-    /// Fired when the target has changed
-    ///
-    /// For example after a Navigation happens or a new Tab opened
-    fn on_target_changed(&mut self, event: EventTargetInfoChanged) {
-        self.event_listeners.start_send(event);
+        chromiumoxide_cdp::consume_event!(match params {
+           |ev| self.event_listeners.start_send(ev),
+           |json| { let _ = self.event_listeners.try_send_custom(&method, json);}
+        });
     }
 
     /// Fired when a new target was created on the chromium instance
@@ -363,7 +360,7 @@ impl Handler {
             .filter(|id| self.browser_contexts.contains(id))
             .unwrap_or_else(|| self.default_browser_context.clone());
         let target = Target::new(
-            event.target_info.clone(),
+            event.target_info,
             TargetConfig::new(
                 self.config.ignore_https_errors,
                 self.config.viewport.clone(),
@@ -372,7 +369,6 @@ impl Handler {
         );
         self.target_ids.push(target.target_id().clone());
         self.targets.insert(target.target_id().clone(), target);
-        self.event_listeners.start_send(event);
     }
 
     /// A new session is attached to a target

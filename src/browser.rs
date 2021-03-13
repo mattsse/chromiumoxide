@@ -12,7 +12,7 @@ use futures::SinkExt;
 
 use chromiumoxide_cdp::cdp::browser_protocol::target::{
     CreateBrowserContextParams, CreateTargetParams, DisposeBrowserContextParams,
-    EventTargetCreated, EventTargetInfoChanged, TargetId
+    EventTargetCreated, EventTargetInfoChanged, TargetId,
 };
 use chromiumoxide_cdp::cdp::CdpEventMessage;
 use chromiumoxide_types::*;
