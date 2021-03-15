@@ -11,7 +11,7 @@ use futures::channel::oneshot::channel as oneshot_channel;
 use futures::SinkExt;
 
 use chromiumoxide_cdp::cdp::browser_protocol::target::{
-    CreateBrowserContextParams, CreateTargetParams, DisposeBrowserContextParams,
+    CreateBrowserContextParams, CreateTargetParams, DisposeBrowserContextParams, TargetId,
 };
 use chromiumoxide_cdp::cdp::CdpEventMessage;
 use chromiumoxide_types::*;
@@ -225,6 +225,16 @@ impl Browser {
             .send(HandlerMessage::GetPages(tx))
             .await?;
         Ok(rx.await?)
+    }
+
+    /// Return page of given target_id
+    pub async fn get_page(&self, target_id: TargetId) -> Result<Page> {
+        let (tx, rx) = oneshot_channel();
+        self.sender
+            .clone()
+            .send(HandlerMessage::GetPage(target_id, tx))
+            .await?;
+        rx.await?.ok_or(CdpError::NotFound)
     }
 }
 
