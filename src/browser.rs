@@ -393,6 +393,11 @@ impl BrowserConfigBuilder {
         self
     }
 
+    pub fn viewport(mut self, viewport: Viewport) -> Self {
+        self.viewport = viewport;
+        self
+    }
+
     pub fn user_data_dir(mut self, data_dir: impl AsRef<Path>) -> Self {
         self.user_data_dir = Some(data_dir.as_ref().to_path_buf());
         self
