@@ -11,10 +11,9 @@ use futures::channel::oneshot::channel as oneshot_channel;
 use futures::SinkExt;
 
 use chromiumoxide_cdp::cdp::browser_protocol::target::{
-    CreateBrowserContextParams, CreateTargetParams, DisposeBrowserContextParams,
-    EventTargetCreated, EventTargetInfoChanged, TargetId,
+    CreateBrowserContextParams, CreateTargetParams, DisposeBrowserContextParams, TargetId,
 };
-use chromiumoxide_cdp::cdp::CdpEventMessage;
+use chromiumoxide_cdp::cdp::{CdpEventMessage, IntoEventKind};
 use chromiumoxide_types::*;
 
 use crate::cmd::{to_command_response, CommandMessage};
@@ -238,26 +237,14 @@ impl Browser {
             .await?;
         rx.await?.ok_or(CdpError::NotFound)
     }
-    /// Creaste Listener for Target Changed Event
-    pub async fn target_changed_listener(&self) -> Result<EventStream<EventTargetInfoChanged>> {
+
+    //Set listener for browser event
+    pub async fn event_listener<T: IntoEventKind>(&self) -> Result<EventStream<T>> {
         let (tx, rx) = unbounded();
         self.sender
             .clone()
             .send(HandlerMessage::AddEventListener(
-                EventListenerRequest::new::<EventTargetInfoChanged>(tx),
-            ))
-            .await?;
-
-        Ok(EventStream::new(rx))
-    }
-
-    /// Create Listener for Target Created Event
-    pub async fn target_created_listener(&self) -> Result<EventStream<EventTargetCreated>> {
-        let (tx, rx) = unbounded();
-        self.sender
-            .clone()
-            .send(HandlerMessage::AddEventListener(
-                EventListenerRequest::new::<EventTargetCreated>(tx),
+                EventListenerRequest::new::<T>(tx),
             ))
             .await?;
 
