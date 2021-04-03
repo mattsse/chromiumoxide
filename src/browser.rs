@@ -315,6 +315,9 @@ pub struct BrowserConfig {
     viewport: Viewport,
     /// The duration after a request with no response should time out
     request_timeout: Duration,
+
+    /// Additional command line arguments to pass to the browser instance.
+    args: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -331,6 +334,7 @@ pub struct BrowserConfigBuilder {
     ignore_https_errors: bool,
     viewport: Viewport,
     request_timeout: Duration,
+    args: Vec<String>,
 }
 
 impl BrowserConfig {
@@ -358,6 +362,7 @@ impl Default for BrowserConfigBuilder {
             ignore_https_errors: true,
             viewport: Default::default(),
             request_timeout: Duration::from_millis(REQUEST_TIMEOUT),
+            args: Vec::new(),
         }
     }
 }
@@ -443,6 +448,23 @@ impl BrowserConfigBuilder {
         self
     }
 
+    pub fn arg(mut self, arg: impl Into<String>) -> Self {
+        self.args.push(arg.into());
+        self
+    }
+
+    pub fn args<I, S>(mut self, args: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        for arg in args {
+            self.args.push(arg.into());
+        }
+        self
+    }
+
+
     pub fn build(self) -> std::result::Result<BrowserConfig, String> {
         let executable = if let Some(e) = self.executable {
             e
@@ -463,6 +485,7 @@ impl BrowserConfigBuilder {
             ignore_https_errors: self.ignore_https_errors,
             viewport: self.viewport,
             request_timeout: self.request_timeout,
+            args: self.args,
         })
     }
 }
@@ -500,7 +523,7 @@ impl BrowserConfig {
         ];
 
         let mut cmd = process::Command::new(&self.executable);
-        cmd.args(&args).args(&DEFAULT_ARGS).args(
+        cmd.args(&args).args(&DEFAULT_ARGS).args(&self.args).args(
             self.extensions
                 .iter()
                 .map(|e| format!("--load-extension={}", e)),
