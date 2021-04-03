@@ -464,7 +464,6 @@ impl BrowserConfigBuilder {
         self
     }
 
-
     pub fn build(self) -> std::result::Result<BrowserConfig, String> {
         let executable = if let Some(e) = self.executable {
             e
