@@ -765,7 +765,7 @@ impl Page {
                 if res.object().r#type == RemoteObjectType::Function {
                     // expression was actually a function
                     if let Some(fallback) = fallback {
-                        return Ok(self.evaluate_function(fallback).await?);
+                        return self.evaluate_function(fallback).await;
                     }
                 }
                 Ok(res)

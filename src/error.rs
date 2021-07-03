@@ -97,6 +97,6 @@ impl DeadlineExceeded {
     /// panics if `now > deadline`
     pub fn new(now: Instant, deadline: Instant) -> Self {
         assert!(now > deadline);
-        Self { now, deadline }
+        Self { deadline, now }
     }
 }

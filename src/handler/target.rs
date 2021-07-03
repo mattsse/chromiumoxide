@@ -220,7 +220,7 @@ impl Target {
             CdpEvent::PageFrameAttached(ev) => self
                 .frame_manager
                 .on_frame_attached(ev.frame_id.clone(), Some(ev.parent_frame_id.clone())),
-            CdpEvent::PageFrameDetached(ev) => self.frame_manager.on_frame_detached(&ev),
+            CdpEvent::PageFrameDetached(ev) => self.frame_manager.on_frame_detached(ev),
             CdpEvent::PageFrameNavigated(ev) => self.frame_manager.on_frame_navigated(&ev.frame),
             CdpEvent::PageNavigatedWithinDocument(ev) => {
                 self.frame_manager.on_frame_navigated_within_document(ev)
