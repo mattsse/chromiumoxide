@@ -375,7 +375,7 @@ impl FrameManager {
                 }
                 // this is necessary since we can't borrow mut and then remove recursively
                 f.child_frames.clear();
-                f.navigated(&frame);
+                f.navigated(frame);
                 self.frames.insert(id, f);
             }
         } else {
@@ -393,7 +393,7 @@ impl FrameManager {
                 // initial main frame navigation
                 Frame::new(frame.id.clone())
             };
-            f.navigated(&frame);
+            f.navigated(frame);
             self.main_frame = Some(f.id.clone());
             self.frames.insert(f.id.clone(), f);
         }

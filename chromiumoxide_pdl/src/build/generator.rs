@@ -179,7 +179,7 @@ impl Generator {
         let mut protocols = vec![];
 
         for (idx, input) in inputs.iter().enumerate() {
-            let pdl = parse_pdl(&input).map_err(|e| Error::new(ErrorKind::Other, e.message))?;
+            let pdl = parse_pdl(input).map_err(|e| Error::new(ErrorKind::Other, e.message))?;
 
             self.domains
                 .extend(pdl.domains.iter().map(|d| (d.name.to_string(), idx)));
@@ -214,7 +214,7 @@ impl Generator {
         }
 
         // brute-force fix unresolved type sizes
-        let mut refs = std::mem::replace(&mut self.ref_sizes, VecDeque::new());
+        let mut refs = std::mem::take(&mut self.ref_sizes);
         let mut sequential_retries = 0;
         while let Some((name, reff)) = refs.pop_front() {
             if let Some(ref_size) = self.type_size.get(&reff).copied() {
@@ -624,7 +624,7 @@ impl Generator {
 
             builder
                 .fields
-                .push((field.generate_meta(&self.serde_support, &param), field));
+                .push((field.generate_meta(&self.serde_support, param), field));
         }
 
         self.apply_struct_fixup(&mut builder, dt);
@@ -684,9 +684,9 @@ impl Generator {
                             }
                         }
 
-                        impl Into<String> for #name {
-                            fn into(self) -> String {
-                                self.0
+                        impl From<#name> for String {
+                            fn from(el: #name) -> String {
+                                el.0
                             }
                         }
 

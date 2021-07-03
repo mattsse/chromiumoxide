@@ -73,19 +73,19 @@ impl DeleteCookiesParams {
     }
 }
 
-impl Into<CallFunctionOnParams> for EvaluateParams {
-    fn into(self) -> CallFunctionOnParams {
+impl From<EvaluateParams> for CallFunctionOnParams {
+    fn from(params: EvaluateParams) -> CallFunctionOnParams {
         CallFunctionOnParams {
-            function_declaration: self.expression,
+            function_declaration: params.expression,
             object_id: None,
             arguments: None,
-            silent: self.silent,
-            return_by_value: self.return_by_value,
-            generate_preview: self.generate_preview,
-            user_gesture: self.user_gesture,
-            await_promise: self.await_promise,
-            execution_context_id: self.context_id,
-            object_group: self.object_group,
+            silent: params.silent,
+            return_by_value: params.return_by_value,
+            generate_preview: params.generate_preview,
+            user_gesture: params.user_gesture,
+            await_promise: params.await_promise,
+            execution_context_id: params.context_id,
+            object_group: params.object_group,
         }
     }
 }

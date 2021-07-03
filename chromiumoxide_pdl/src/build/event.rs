@@ -77,7 +77,7 @@ impl<'a> EventBuilder<'a> {
                             CdpEvent::#var_ident(val) => Ok(*val),
                         },
                         quote! {
-                            CdpEvent::#var_ident(Box::new(self))
+                            CdpEvent::#var_ident(Box::new(el))
                         },
                         quote! {
                             CdpEvent::#var_ident(event) => {$builtin(*event);}
@@ -92,7 +92,7 @@ impl<'a> EventBuilder<'a> {
                             CdpEvent::#var_ident(val) => Ok(val),
                         },
                         quote! {
-                            CdpEvent::#var_ident(self)
+                            CdpEvent::#var_ident(el)
                         },
                         quote! {
                             CdpEvent::#var_ident(event) => {$builtin(event);}
@@ -118,8 +118,8 @@ impl<'a> EventBuilder<'a> {
                         }
                     }
                 }
-                impl Into<CdpEvent> for #ty_qualifier {
-                    fn into(self) -> CdpEvent {
+                impl From<#ty_qualifier> for CdpEvent {
+                    fn from(el: #ty_qualifier) -> CdpEvent {
                         #into_event
                     }
                 }

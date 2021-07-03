@@ -57,10 +57,10 @@ impl std::ops::Div<f64> for Point {
 }
 
 /// Converts a point into Left-Down-Single-Mouseclick
-impl Into<DispatchMouseEventParams> for Point {
-    fn into(self) -> DispatchMouseEventParams {
+impl From<Point> for DispatchMouseEventParams {
+    fn from(el: Point) -> DispatchMouseEventParams {
         let mut params =
-            DispatchMouseEventParams::new(DispatchMouseEventType::MousePressed, self.x, self.y);
+            DispatchMouseEventParams::new(DispatchMouseEventType::MousePressed, el.x, el.y);
         params.button = Some(MouseButton::Left);
         params.click_count = Some(1);
         params
@@ -224,7 +224,7 @@ impl ElementQuad {
 
     /// If `self` is within the boundaries defined by `other`.
     pub fn within_bounds_of(&self, other: &Self) -> bool {
-        self.within_horizontal_bounds_of(&other) && self.within_vertical_bounds_of(&other)
+        self.within_horizontal_bounds_of(other) && self.within_vertical_bounds_of(other)
     }
 }
 
