@@ -468,6 +468,14 @@ impl Stream for Handler {
                     HandlerMessage::DisposeContext(ctx) => {
                         pin.browser_contexts.remove(&ctx);
                     }
+                    HandlerMessage::GetPage(target_id, tx) => {
+                        let page = pin
+                            .targets
+                            .get_mut(&target_id)
+                            .and_then(|target| target.get_or_create_page())
+                            .map(|page| Page::from(page.clone()));
+                        let _ = tx.send(page);
+                    }
                 }
             }
 
@@ -626,4 +634,5 @@ pub(crate) enum HandlerMessage {
     DisposeContext(BrowserContext),
     GetPages(OneshotSender<Vec<Page>>),
     Command(CommandMessage),
+    GetPage(TargetId, OneshotSender<Option<Page>>),
 }

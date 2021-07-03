@@ -11,7 +11,7 @@ use futures::channel::oneshot::channel as oneshot_channel;
 use futures::SinkExt;
 
 use chromiumoxide_cdp::cdp::browser_protocol::target::{
-    CreateBrowserContextParams, CreateTargetParams, DisposeBrowserContextParams,
+    CreateBrowserContextParams, CreateTargetParams, DisposeBrowserContextParams, TargetId,
 };
 use chromiumoxide_cdp::cdp::CdpEventMessage;
 use chromiumoxide_types::*;
@@ -226,6 +226,16 @@ impl Browser {
             .await?;
         Ok(rx.await?)
     }
+
+    /// Return page of given target_id
+    pub async fn get_page(&self, target_id: TargetId) -> Result<Page> {
+        let (tx, rx) = oneshot_channel();
+        self.sender
+            .clone()
+            .send(HandlerMessage::GetPage(target_id, tx))
+            .await?;
+        rx.await?.ok_or(CdpError::NotFound)
+    }
 }
 
 impl Drop for Browser {
@@ -305,6 +315,9 @@ pub struct BrowserConfig {
     viewport: Viewport,
     /// The duration after a request with no response should time out
     request_timeout: Duration,
+
+    /// Additional command line arguments to pass to the browser instance.
+    args: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -321,6 +334,7 @@ pub struct BrowserConfigBuilder {
     ignore_https_errors: bool,
     viewport: Viewport,
     request_timeout: Duration,
+    args: Vec<String>,
 }
 
 impl BrowserConfig {
@@ -348,6 +362,7 @@ impl Default for BrowserConfigBuilder {
             ignore_https_errors: true,
             viewport: Default::default(),
             request_timeout: Duration::from_millis(REQUEST_TIMEOUT),
+            args: Vec::new(),
         }
     }
 }
@@ -380,6 +395,11 @@ impl BrowserConfigBuilder {
 
     pub fn request_timeout(mut self, timeout: Duration) -> Self {
         self.request_timeout = timeout;
+        self
+    }
+
+    pub fn viewport(mut self, viewport: Viewport) -> Self {
+        self.viewport = viewport;
         self
     }
 
@@ -428,6 +448,22 @@ impl BrowserConfigBuilder {
         self
     }
 
+    pub fn arg(mut self, arg: impl Into<String>) -> Self {
+        self.args.push(arg.into());
+        self
+    }
+
+    pub fn args<I, S>(mut self, args: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        for arg in args {
+            self.args.push(arg.into());
+        }
+        self
+    }
+
     pub fn build(self) -> std::result::Result<BrowserConfig, String> {
         let executable = if let Some(e) = self.executable {
             e
@@ -442,12 +478,13 @@ impl BrowserConfigBuilder {
             port: self.port,
             executable,
             extensions: self.extensions,
-            process_envs: None,
-            user_data_dir: None,
+            process_envs: self.process_envs,
+            user_data_dir: self.user_data_dir,
             incognito: self.incognito,
             ignore_https_errors: self.ignore_https_errors,
             viewport: self.viewport,
             request_timeout: self.request_timeout,
+            args: self.args,
         })
     }
 }
@@ -485,7 +522,7 @@ impl BrowserConfig {
         ];
 
         let mut cmd = process::Command::new(&self.executable);
-        cmd.args(&args).args(&DEFAULT_ARGS).args(
+        cmd.args(&args).args(&DEFAULT_ARGS).args(&self.args).args(
             self.extensions
                 .iter()
                 .map(|e| format!("--load-extension={}", e)),

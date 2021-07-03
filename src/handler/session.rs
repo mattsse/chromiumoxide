@@ -15,8 +15,8 @@ impl Session {
     pub fn new(id: SessionId, target_type: String, target_id: TargetId) -> Self {
         Self {
             id,
-            target_id,
             target_type,
+            target_id,
         }
     }
 

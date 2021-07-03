@@ -36,7 +36,7 @@ use crate::layout::Point;
 use crate::listeners::{EventListenerRequest, EventStream};
 use crate::utils;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Page {
     inner: Arc<PageInner>,
 }

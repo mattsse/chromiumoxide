@@ -24,17 +24,14 @@ impl PeriodicJob {
         }
         false
     }
-
-    pub fn new(interval: Duration) -> Self {
-        Self {
-            delay: Delay::new(interval),
-            interval,
-        }
-    }
 }
 
 impl Default for PeriodicJob {
     fn default() -> Self {
-        Self::new(Duration::from_millis(REQUEST_TIMEOUT))
+        let interval = Duration::from_millis(REQUEST_TIMEOUT);
+        Self {
+            delay: Delay::new(interval),
+            interval,
+        }
     }
 }
