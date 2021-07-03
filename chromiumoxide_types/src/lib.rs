@@ -254,9 +254,9 @@ impl AsRef<[u8]> for Binary {
     }
 }
 
-impl Into<String> for Binary {
-    fn into(self) -> String {
-        self.0
+impl From<Binary> for String {
+    fn from(b: Binary) -> String {
+        b.0
     }
 }
 
