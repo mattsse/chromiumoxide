@@ -108,7 +108,7 @@ impl Handler {
             navigations: Default::default(),
             sessions: Default::default(),
             conn,
-            evict_command_timeout: Default::default(),
+            evict_command_timeout: PeriodicJob::new(config.request_timeout),
             next_navigation_id: 0,
             config,
         }
@@ -543,7 +543,7 @@ impl Stream for Handler {
 /// How to configure the handler
 #[derive(Debug, Clone)]
 pub struct HandlerConfig {
-    /// Whether the `NeetworkManager`s should ignore https errors
+    /// Whether the `NetworkManager`s should ignore https errors
     pub ignore_https_errors: bool,
     /// Window and device settings
     pub viewport: Option<Viewport>,
