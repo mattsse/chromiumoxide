@@ -6,15 +6,26 @@ use chromiumoxide_types::Method;
 
 use crate::cmd::CommandChain;
 use crate::handler::viewport::Viewport;
+use std::time::Duration;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct EmulationManager {
     pub emulating_mobile: bool,
     pub has_touch: bool,
     pub needs_reload: bool,
+    pub request_timeout: Duration,
 }
 
 impl EmulationManager {
+    pub fn new(request_timeout: Duration) -> Self {
+        Self {
+            emulating_mobile: false,
+            has_touch: false,
+            needs_reload: false,
+            request_timeout,
+        }
+    }
+
     pub fn init_commands(&mut self, viewport: &Viewport) -> CommandChain {
         let orientation = if viewport.is_landscape {
             ScreenOrientation::new(ScreenOrientationType::LandscapePrimary, 90)
@@ -33,16 +44,19 @@ impl EmulationManager {
 
         let set_touch = SetTouchEmulationEnabledParams::new(true);
 
-        let chain = CommandChain::new(vec![
-            (
-                set_device.identifier(),
-                serde_json::to_value(set_device).unwrap(),
-            ),
-            (
-                set_touch.identifier(),
-                serde_json::to_value(set_touch).unwrap(),
-            ),
-        ]);
+        let chain = CommandChain::new(
+            vec![
+                (
+                    set_device.identifier(),
+                    serde_json::to_value(set_device).unwrap(),
+                ),
+                (
+                    set_touch.identifier(),
+                    serde_json::to_value(set_touch).unwrap(),
+                ),
+            ],
+            self.request_timeout,
+        );
 
         self.needs_reload = self.emulating_mobile != viewport.emulating_mobile
             || self.has_touch != viewport.has_touch;

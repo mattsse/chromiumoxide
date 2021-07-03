@@ -187,7 +187,7 @@ pub struct FrameManager {
     isolated_worlds: HashSet<String>,
     /// Timeout after which an anticipated event (related to navigation) doesn't
     /// arrive results in an error
-    timeout: Duration,
+    request_timeout: Duration,
     /// Track currently in progress navigation
     pending_navigations: VecDeque<(FrameNavigationRequest, NavigationWatcher)>,
     /// The currently ongoing navigation
@@ -195,27 +195,42 @@ pub struct FrameManager {
 }
 
 impl FrameManager {
+    pub fn new(request_timeout: Duration) -> Self {
+        FrameManager {
+            main_frame: None,
+            frames: Default::default(),
+            context_ids: Default::default(),
+            isolated_worlds: Default::default(),
+            request_timeout,
+            pending_navigations: Default::default(),
+            navigation: None,
+        }
+    }
+
     /// The commands to execute in order to initialize this frame manager
-    pub fn init_commands() -> CommandChain {
+    pub fn init_commands(timeout: Duration) -> CommandChain {
         let enable = page::EnableParams::default();
         let get_tree = page::GetFrameTreeParams::default();
         let set_lifecycle = page::SetLifecycleEventsEnabledParams::new(true);
         let enable_runtime = runtime::EnableParams::default();
-        CommandChain::new(vec![
-            (enable.identifier(), serde_json::to_value(enable).unwrap()),
-            (
-                get_tree.identifier(),
-                serde_json::to_value(get_tree).unwrap(),
-            ),
-            (
-                set_lifecycle.identifier(),
-                serde_json::to_value(set_lifecycle).unwrap(),
-            ),
-            (
-                enable_runtime.identifier(),
-                serde_json::to_value(enable_runtime).unwrap(),
-            ),
-        ])
+        CommandChain::new(
+            vec![
+                (enable.identifier(), serde_json::to_value(enable).unwrap()),
+                (
+                    get_tree.identifier(),
+                    serde_json::to_value(get_tree).unwrap(),
+                ),
+                (
+                    set_lifecycle.identifier(),
+                    serde_json::to_value(set_lifecycle).unwrap(),
+                ),
+                (
+                    enable_runtime.identifier(),
+                    serde_json::to_value(enable_runtime).unwrap(),
+                ),
+            ],
+            timeout,
+        )
     }
 
     pub fn main_frame(&self) -> Option<&Frame> {
@@ -531,21 +546,7 @@ impl FrameManager {
                 .unwrap();
             (cmd.identifier(), serde_json::to_value(cmd).unwrap())
         }));
-        Some(CommandChain::new(cmds))
-    }
-}
-
-impl Default for FrameManager {
-    fn default() -> Self {
-        FrameManager {
-            main_frame: None,
-            frames: Default::default(),
-            context_ids: Default::default(),
-            isolated_worlds: Default::default(),
-            timeout: Duration::from_millis(REQUEST_TIMEOUT),
-            pending_navigations: Default::default(),
-            navigation: None,
-        }
+        Some(CommandChain::new(cmds, self.request_timeout))
     }
 }
 

@@ -354,6 +354,7 @@ impl Handler {
             event.target_info,
             TargetConfig::new(
                 self.config.ignore_https_errors,
+                self.config.request_timeout,
                 self.config.viewport.clone(),
             ),
             browser_ctx,
@@ -490,9 +491,6 @@ impl Stream for Handler {
                                     req,
                                     now,
                                 );
-                            }
-                            TargetEvent::RequestTimeout(_) => {
-                                continue;
                             }
                             TargetEvent::Command(msg) => {
                                 pin.on_target_message(&mut target, msg, now);

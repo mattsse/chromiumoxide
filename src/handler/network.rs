@@ -16,6 +16,7 @@ use crate::auth::Credentials;
 use crate::cmd::CommandChain;
 use crate::handler::http::HttpRequest;
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::time::Duration;
 
 #[derive(Debug)]
 pub struct NetworkManager {
@@ -32,10 +33,11 @@ pub struct NetworkManager {
     user_request_interception_enabled: bool,
     protocol_request_interception_enabled: bool,
     offline: bool,
+    request_timeout: Duration,
 }
 
 impl NetworkManager {
-    pub fn new(ignore_httpserrors: bool) -> Self {
+    pub fn new(ignore_httpserrors: bool, request_timeout: Duration) -> Self {
         Self {
             queued_events: Default::default(),
             ignore_httpserrors,
@@ -49,23 +51,22 @@ impl NetworkManager {
             user_request_interception_enabled: false,
             protocol_request_interception_enabled: false,
             offline: false,
+            request_timeout,
         }
     }
 
     pub fn init_commands(&self) -> CommandChain {
         let enable = EnableParams::default();
-        if self.ignore_httpserrors {
+        let cmds = if self.ignore_httpserrors {
             let ignore = SetIgnoreCertificateErrorsParams::new(true);
-            CommandChain::new(vec![
+            vec![
                 (enable.identifier(), serde_json::to_value(enable).unwrap()),
                 (ignore.identifier(), serde_json::to_value(ignore).unwrap()),
-            ])
+            ]
         } else {
-            CommandChain::new(vec![(
-                enable.identifier(),
-                serde_json::to_value(enable).unwrap(),
-            )])
-        }
+            vec![(enable.identifier(), serde_json::to_value(enable).unwrap())]
+        };
+        CommandChain::new(cmds, self.request_timeout)
     }
 
     fn push_cdp_request<T: Command>(&mut self, cmd: T) {
@@ -270,12 +271,6 @@ impl NetworkManager {
             self.attempted_authentications
                 .remove(interception_id.as_ref());
         }
-    }
-}
-
-impl Default for NetworkManager {
-    fn default() -> Self {
-        NetworkManager::new(true)
     }
 }
 
