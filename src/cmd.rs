@@ -106,14 +106,14 @@ impl CommandChain {
     /// Creates a new `CommandChain` from an `Iterator`.
     ///
     /// The order of the commands corresponds to the iterator's
-    pub fn new<I>(cmds: I) -> Self
+    pub fn new<I>(cmds: I, timeout: Duration) -> Self
     where
         I: IntoIterator<Item = (MethodId, serde_json::Value)>,
     {
         Self {
             cmds: VecDeque::from_iter(cmds),
             waiting: None,
-            timeout: Duration::from_millis(REQUEST_TIMEOUT),
+            timeout,
         }
     }
 
@@ -136,8 +136,13 @@ impl CommandChain {
     /// Return the next command to process or `None` if done.
     /// If the response timeout an error is returned instead
     pub fn poll(&mut self, now: Instant) -> NextCommand {
-        if let Some((_, deadline)) = self.waiting.as_ref() {
+        if let Some((cmd, deadline)) = self.waiting.as_ref() {
             if now > *deadline {
+                log::error!(
+                    "Command {:?} exceeded deadline by {:?}",
+                    cmd,
+                    now - *deadline
+                );
                 Poll::Ready(Some(Err(DeadlineExceeded::new(now, *deadline))))
             } else {
                 Poll::Pending

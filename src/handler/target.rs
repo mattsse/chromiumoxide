@@ -17,9 +17,10 @@ use chromiumoxide_cdp::cdp::events::CdpEvent;
 use chromiumoxide_cdp::cdp::CdpEventMessage;
 use chromiumoxide_types::{Command, Method, Request, Response};
 
+use crate::cdp::browser_protocol::target::CloseTargetParams;
 use crate::cmd::CommandChain;
 use crate::cmd::CommandMessage;
-use crate::error::{DeadlineExceeded, Result};
+use crate::error::{CdpError, Result};
 use crate::handler::browser::BrowserContext;
 use crate::handler::domworld::DOMWorldKind;
 use crate::handler::emulation::EmulationManager;
@@ -31,10 +32,11 @@ use crate::handler::http::HttpRequest;
 use crate::handler::network::{NetworkEvent, NetworkManager};
 use crate::handler::page::PageHandle;
 use crate::handler::viewport::Viewport;
-use crate::handler::PageInner;
+use crate::handler::{PageInner, REQUEST_TIMEOUT};
 use crate::listeners::{EventListenerRequest, EventListeners};
 use crate::page::Page;
 use chromiumoxide_cdp::cdp::js_protocol::runtime::ExecutionContextId;
+use std::time::Duration;
 
 macro_rules! advance_state {
     ($s:ident, $cx:ident, $now:ident, $cmds: ident, $next_state:expr ) => {{
@@ -49,7 +51,7 @@ macro_rules! advance_state {
                     session_id: $s.session_id.clone().map(Into::into),
                     params,
                 })),
-                Some(Err(err)) => Some(TargetEvent::RequestTimeout(err)),
+                Some(Err(_)) => Some($s.on_initialization_failed()),
             };
         } else {
             return None;
@@ -95,16 +97,17 @@ impl Target {
     /// Create a new target instance with `TargetInfo` after a
     /// `CreateTargetParams` request.
     pub fn new(info: TargetInfo, config: TargetConfig, browser_context: BrowserContext) -> Self {
-        let network_manager = NetworkManager::new(config.ignore_https_errors);
         let ty = TargetType::new(&info.r#type);
+        let request_timeout = config.request_timeout;
+        let network_manager = NetworkManager::new(config.ignore_https_errors, request_timeout);
         Self {
             info,
             r#type: ty,
             config,
             is_closed: false,
-            frame_manager: Default::default(),
+            frame_manager: FrameManager::new(request_timeout),
             network_manager,
-            emulation_manager: Default::default(),
+            emulation_manager: EmulationManager::new(request_timeout),
             session_id: None,
             page: None,
             init_state: TargetInit::AttachToTarget,
@@ -269,6 +272,20 @@ impl Target {
         });
     }
 
+    /// Called when a init command timed out
+    fn on_initialization_failed(&mut self) -> TargetEvent {
+        if let Some(initiator) = self.initiator.take() {
+            let _ = initiator.send(Err(CdpError::Timeout));
+        }
+        self.init_state = TargetInit::Closing;
+        let close_target = CloseTargetParams::new(self.info.target_id.clone());
+        TargetEvent::Request(Request {
+            method: close_target.identifier(),
+            session_id: self.session_id.clone().map(Into::into),
+            params: serde_json::to_value(close_target).unwrap(),
+        })
+    }
+
     /// Advance that target's state
     pub(crate) fn poll(&mut self, cx: &mut Context<'_>, now: Instant) -> Option<TargetEvent> {
         if !self.is_page() {
@@ -277,7 +294,9 @@ impl Target {
         }
         match &mut self.init_state {
             TargetInit::AttachToTarget => {
-                self.init_state = TargetInit::InitializingFrame(FrameManager::init_commands());
+                self.init_state = TargetInit::InitializingFrame(FrameManager::init_commands(
+                    self.config.request_timeout,
+                ));
                 let params = AttachToTargetParams::builder()
                     .target_id(self.target_id().clone())
                     .flatten(true)
@@ -310,7 +329,7 @@ impl Target {
                             session_id: self.session_id.clone().map(Into::into),
                             params,
                         })),
-                        Some(Err(err)) => Some(TargetEvent::RequestTimeout(err)),
+                        Some(Err(_)) => Some(self.on_initialization_failed()),
                     };
                 } else {
                     return None;
@@ -322,7 +341,9 @@ impl Target {
                     cx,
                     now,
                     cmds,
-                    TargetInit::InitializingPage(Self::page_init_commands())
+                    TargetInit::InitializingPage(Self::page_init_commands(
+                        self.config.request_timeout
+                    ))
                 );
             }
             TargetInit::InitializingPage(cmds) => {
@@ -361,6 +382,7 @@ impl Target {
                     }
                 }
             }
+            TargetInit::Closing => return None,
         };
         loop {
             if let Some(frame) = self.frame_manager.main_frame() {
@@ -495,8 +517,7 @@ impl Target {
         self.initiator = Some(tx);
     }
 
-    // TODO move to other location
-    pub(crate) fn page_init_commands() -> CommandChain {
+    pub(crate) fn page_init_commands(timeout: Duration) -> CommandChain {
         let attach = SetAutoAttachParams::builder()
             .flatten(true)
             .auto_attach(true)
@@ -505,30 +526,40 @@ impl Target {
             .unwrap();
         let enable_performance = performance::EnableParams::default();
         let enable_log = cdplog::EnableParams::default();
-        CommandChain::new(vec![
-            (attach.identifier(), serde_json::to_value(attach).unwrap()),
-            (
-                enable_performance.identifier(),
-                serde_json::to_value(enable_performance).unwrap(),
-            ),
-            (
-                enable_log.identifier(),
-                serde_json::to_value(enable_log).unwrap(),
-            ),
-        ])
+        CommandChain::new(
+            vec![
+                (attach.identifier(), serde_json::to_value(attach).unwrap()),
+                (
+                    enable_performance.identifier(),
+                    serde_json::to_value(enable_performance).unwrap(),
+                ),
+                (
+                    enable_log.identifier(),
+                    serde_json::to_value(enable_log).unwrap(),
+                ),
+            ],
+            timeout,
+        )
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct TargetConfig {
     pub ignore_https_errors: bool,
+    ///  Request timeout to use
+    pub request_timeout: Duration,
     pub viewport: Option<Viewport>,
 }
 
 impl TargetConfig {
-    pub fn new(ignore_https_errors: bool, viewport: Option<Viewport>) -> Self {
+    pub fn new(
+        ignore_https_errors: bool,
+        request_timeout: Duration,
+        viewport: Option<Viewport>,
+    ) -> Self {
         Self {
             ignore_https_errors,
+            request_timeout,
             viewport,
         }
     }
@@ -538,6 +569,7 @@ impl Default for TargetConfig {
     fn default() -> Self {
         Self {
             ignore_https_errors: true,
+            request_timeout: Duration::from_secs(REQUEST_TIMEOUT),
             viewport: Default::default(),
         }
     }
@@ -606,8 +638,6 @@ pub(crate) enum TargetEvent {
     NavigationRequest(NavigationId, Request),
     /// Indicates that a previous requested navigation has finished
     NavigationResult(Result<NavigationOk, NavigationError>),
-    /// An internal request timed out
-    RequestTimeout(DeadlineExceeded),
     /// A new command arrived via a channel
     Command(CommandMessage),
 }
@@ -621,6 +651,7 @@ pub enum TargetInit {
     InitializingEmulation(CommandChain),
     AttachToTarget,
     Initialized,
+    Closing,
 }
 
 impl TargetInit {
@@ -632,6 +663,7 @@ impl TargetInit {
             TargetInit::InitializingEmulation(cmd) => Some(cmd),
             TargetInit::AttachToTarget => None,
             TargetInit::Initialized => None,
+            TargetInit::Closing => None,
         }
     }
 }
