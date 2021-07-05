@@ -6,14 +6,14 @@ use std::{
     process::{self, Child, Stdio},
 };
 
-use futures::channel::mpsc::{channel, Sender};
+use futures::channel::mpsc::{channel, unbounded, Sender};
 use futures::channel::oneshot::channel as oneshot_channel;
 use futures::SinkExt;
 
 use chromiumoxide_cdp::cdp::browser_protocol::target::{
     CreateBrowserContextParams, CreateTargetParams, DisposeBrowserContextParams, TargetId,
 };
-use chromiumoxide_cdp::cdp::CdpEventMessage;
+use chromiumoxide_cdp::cdp::{CdpEventMessage, IntoEventKind};
 use chromiumoxide_types::*;
 
 use crate::cmd::{to_command_response, CommandMessage};
@@ -22,6 +22,7 @@ use crate::error::{CdpError, Result};
 use crate::handler::browser::BrowserContext;
 use crate::handler::viewport::Viewport;
 use crate::handler::{Handler, HandlerConfig, HandlerMessage, REQUEST_TIMEOUT};
+use crate::listeners::{EventListenerRequest, EventStream};
 use crate::page::Page;
 use chromiumoxide_cdp::cdp::browser_protocol::browser::{GetVersionParams, GetVersionReturns};
 
@@ -235,6 +236,19 @@ impl Browser {
             .send(HandlerMessage::GetPage(target_id, tx))
             .await?;
         rx.await?.ok_or(CdpError::NotFound)
+    }
+
+    //Set listener for browser event
+    pub async fn event_listener<T: IntoEventKind>(&self) -> Result<EventStream<T>> {
+        let (tx, rx) = unbounded();
+        self.sender
+            .clone()
+            .send(HandlerMessage::AddEventListener(
+                EventListenerRequest::new::<T>(tx),
+            ))
+            .await?;
+
+        Ok(EventStream::new(rx))
     }
 }
 

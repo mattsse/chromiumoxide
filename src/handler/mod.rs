@@ -8,6 +8,7 @@ use futures::channel::oneshot::Sender as OneshotSender;
 use futures::stream::{Fuse, Stream, StreamExt};
 use futures::task::{Context, Poll};
 
+use crate::listeners::{EventListenerRequest, EventListeners};
 use chromiumoxide_cdp::cdp::browser_protocol::browser::*;
 use chromiumoxide_cdp::cdp::browser_protocol::target::*;
 use chromiumoxide_cdp::cdp::events::CdpEvent;
@@ -75,6 +76,8 @@ pub struct Handler {
     next_navigation_id: usize,
     /// How this handler will configure targets etc,
     config: HandlerConfig,
+    /// All registered event subscriptions
+    event_listeners: EventListeners,
 }
 
 impl Handler {
@@ -111,6 +114,7 @@ impl Handler {
             evict_command_timeout: PeriodicJob::new(config.request_timeout),
             next_navigation_id: 0,
             config,
+            event_listeners: Default::default(),
         }
     }
 
@@ -330,13 +334,18 @@ impl Handler {
                 }
             }
         }
-        match event.params {
+        let CdpEventMessage { params, method, .. } = event;
+        match params.clone() {
             CdpEvent::TargetTargetCreated(ev) => self.on_target_created(ev),
             CdpEvent::TargetAttachedToTarget(ev) => self.on_attached_to_target(ev),
             CdpEvent::TargetTargetDestroyed(ev) => self.on_target_destroyed(ev),
             CdpEvent::TargetDetachedFromTarget(ev) => self.on_detached_from_target(ev),
             _ => {}
         }
+        chromiumoxide_cdp::consume_event!(match params {
+           |ev| self.event_listeners.start_send(ev),
+           |json| { let _ = self.event_listeners.try_send_custom(&method, json);}
+        });
     }
 
     /// Fired when a new target was created on the chromium instance
@@ -432,6 +441,10 @@ impl Handler {
             }
         }
     }
+
+    pub fn event_listeners_mut(&mut self) -> &mut EventListeners {
+        &mut self.event_listeners
+    }
 }
 
 impl Stream for Handler {
@@ -477,6 +490,9 @@ impl Stream for Handler {
                             .map(|page| Page::from(page.clone()));
                         let _ = tx.send(page);
                     }
+                    HandlerMessage::AddEventListener(req) => {
+                        pin.event_listeners.add_listener(req);
+                    }
                 }
             }
 
@@ -506,6 +522,8 @@ impl Stream for Handler {
 
                     // poll the target's event listeners
                     target.event_listeners_mut().poll(cx);
+                    // poll the handler's event listeners
+                    pin.event_listeners_mut().poll(cx);
 
                     pin.targets.insert(id, target);
                     pin.target_ids.push(target_id);
@@ -633,4 +651,5 @@ pub(crate) enum HandlerMessage {
     GetPages(OneshotSender<Vec<Page>>),
     Command(CommandMessage),
     GetPage(TargetId, OneshotSender<Option<Page>>),
+    AddEventListener(EventListenerRequest),
 }
