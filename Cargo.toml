@@ -1,6 +1,6 @@
 [package]
 name = "chromiumoxide"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
@@ -12,16 +12,16 @@ keywords = ["chrome", "chromedriver", "puppeteer", "automation"]
 categories = ["web-programming", "api-bindings", "development-tools::testing"]
 
 [dependencies]
-async-tungstenite = "0.13.1"
+async-tungstenite = "0.14.0"
 serde = { version = "1.0.126", features = ["derive"] }
 async-std = { version = "1.9.0", features = ["attributes", "unstable"], optional = true }
 anyhow = "1.0.41"
 futures = "0.3.15"
-chromiumoxide_types = { path = "chromiumoxide_types", version = "0.3" }
-chromiumoxide_cdp = { path = "chromiumoxide_cdp", version = "0.3" }
+chromiumoxide_types = { path = "chromiumoxide_types", version = "0.3.1" }
+chromiumoxide_cdp = { path = "chromiumoxide_cdp", version = "0.3.1" }
 serde_json = "1.0.64"
 which = "4.1.0"
-thiserror = "1.0.25"
+thiserror = "1.0.26"
 url = "2.2.2"
 log = "0.4.14"
 base64 = "0.13.0"
@@ -29,7 +29,7 @@ fnv = "1.0.7"
 futures-timer = "3.0.2"
 pretty_env_logger = "0.4.0"
 cfg-if = "1.0.0"
-tokio = { version = "1.7.1", features = ["rt", "rt-multi-thread", "time", "fs", "macros"], optional = true }
+tokio = { version = "1.8.1", features = ["rt", "rt-multi-thread", "time", "fs", "macros"], optional = true }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.9.0"

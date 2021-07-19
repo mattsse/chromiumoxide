@@ -1,6 +1,6 @@
 [package]
 name = "chromiumoxide_pdl"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
@@ -18,5 +18,5 @@ proc-macro2 = "1.0.27"
 heck = "0.3.3"
 serde_json = "1.0.64"
 serde = { version = "1.0.126", features = ["derive"] }
-chromiumoxide_types = { path = "../chromiumoxide_types", version = "0.3.0" }
+chromiumoxide_types = { path = "../chromiumoxide_types", version = "0.3.1" }
 either = "1.6.1"
