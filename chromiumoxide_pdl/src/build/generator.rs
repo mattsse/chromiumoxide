@@ -979,16 +979,16 @@ fn generate_enum_str_fns(name: &Ident, vars: &[Ident], str_vals: &[Vec<String>])
             }
         }
 
-    impl ::std::str::FromStr for #name {
-        type Err = String;
+        impl ::std::str::FromStr for #name {
+            type Err = String;
 
-        fn from_str(s: &str) -> Result<Self, Self::Err> {
-            match s {
-                #from_str_stream
-                _=> Err(s.to_string())
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                match s {
+                    #from_str_stream
+                    _=> Err(s.to_string())
+                }
             }
         }
-    }
     }
 }
 
@@ -1163,7 +1163,7 @@ impl Default for SerdeSupport {
 
 pub fn fmt(out_dir: impl AsRef<Path>) {
     use std::io::Write;
-    use std::process::{exit, Command};
+    use std::process::Command;
     let out_dir = out_dir.as_ref();
     let dir = std::fs::read_dir(out_dir).unwrap();
 
@@ -1183,12 +1183,10 @@ pub fn fmt(out_dir: impl AsRef<Path>) {
         match result {
             Err(e) => {
                 eprintln!("error running rustfmt: {:?}", e);
-                exit(1)
             }
             Ok(output) => {
                 if !output.status.success() {
                     io::stderr().write_all(&output.stderr).unwrap();
-                    exit(output.status.code().unwrap_or(1))
                 }
             }
         }
