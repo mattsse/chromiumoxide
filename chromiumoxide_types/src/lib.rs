@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::fmt;
+use std::fmt::Debug;
 use std::ops::Deref;
 
 use serde::de::DeserializeOwned;
@@ -103,7 +104,7 @@ impl EventMessage for CdpJsonEventMessage {
 }
 
 /// A trait that mark
-pub trait EventMessage: Method + DeserializeOwned {
+pub trait EventMessage: Method + DeserializeOwned + Debug {
     /// The identifier of the session this event was meant for.
     fn session_id(&self) -> Option<&str>;
 }

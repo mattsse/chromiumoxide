@@ -520,7 +520,10 @@ impl Stream for Handler {
                     Ok(Message::Event(ev)) => {
                         pin.on_event(ev);
                     }
-                    Err(err) => return Poll::Ready(Some(Err(err))),
+                    Err(err) => {
+                        log::error!("WS Connection error: {:?}", err);
+                        return Poll::Ready(Some(Err(err)));
+                    }
                 }
                 done = false;
             }
