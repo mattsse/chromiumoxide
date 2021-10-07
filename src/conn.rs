@@ -93,6 +93,11 @@ impl<T: EventMessage> Connection<T> {
         }
         if self.pending_flush.is_none() && !self.needs_flush {
             if let Some(cmd) = self.pending_commands.pop_front() {
+                // if cmd.id.to_string().contains("1") {
+                //     log::error!("CMD {:?}", cmd);
+                //     return Ok(())
+                // }
+                log::trace!("Sending {:?}", cmd);
                 let msg = serde_json::to_string(&cmd)?;
                 Sink::start_send(Pin::new(&mut self.ws), msg.into())?;
                 self.pending_flush = Some(cmd);
@@ -125,8 +130,14 @@ impl<T: EventMessage + Unpin> Stream for Connection<T> {
         match Stream::poll_next(Pin::new(&mut pin.ws), cx) {
             Poll::Ready(Some(Ok(msg))) => {
                 return match serde_json::from_slice::<Message<T>>(&msg.into_data()) {
-                    Ok(msg) => Poll::Ready(Some(Ok(msg))),
-                    Err(err) => Poll::Ready(Some(Err(err.into()))),
+                    Ok(msg) => {
+                        log::trace!("Received {:?}", msg);
+                        Poll::Ready(Some(Ok(msg)))
+                    }
+                    Err(err) => {
+                        log::error!("Failed to deserialize WS response {}", err);
+                        Poll::Ready(Some(Err(err.into())))
+                    }
                 };
             }
             Poll::Ready(Some(Err(err))) => {
