@@ -492,11 +492,7 @@ impl BrowserConfigBuilder {
 impl BrowserConfig {
     pub fn launch(&self) -> io::Result<Child> {
         let dbg_port = format!("--remote-debugging-port={}", self.port);
-
-        let args = [
-            dbg_port.as_str(),
-            "--enable-blink-features=IdleDetection",
-        ];
+        let args = [dbg_port.as_str(), "--enable-blink-features=IdleDetection"];
 
         let mut cmd = process::Command::new(&self.executable);
         cmd.args(&args).args(&DEFAULT_ARGS).args(&self.args).args(
