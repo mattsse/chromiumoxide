@@ -505,23 +505,19 @@ impl BrowserConfig {
         let dbg_port = format!("--remote-debugging-port={}", self.port);
 
         let mut cmd = process::Command::new(&self.executable);
-        match &self.disable_default_args {
-            true => {
-                cmd.args(&self.args).args(
-                    self.extensions
-                        .iter()
-                        .map(|e| format!("--load-extension={}", e)),
-                );
-            }
-            false => {
-                let args = [dbg_port.as_str(), "--enable-blink-features=IdleDetection"];
-                cmd.args(&args).args(&DEFAULT_ARGS).args(&self.args).args(
-                    self.extensions
-                        .iter()
-                        .map(|e| format!("--load-extension={}", e)),
-                );
-            }
+
+        if self.disable_default_args {
+            cmd.args(&self.args);
+        } else {
+            let args = [dbg_port.as_str(), "--enable-blink-features=IdleDetection"];
+            cmd.args(&args).args(&DEFAULT_ARGS).args(&self.args);
         }
+
+        cmd.args(
+            self.extensions
+                .iter()
+                .map(|e| format!("--load-extension={}", e)),
+        );
 
         if let Some(ref user_data) = self.user_data_dir {
             cmd.arg(format!("--user-data-dir={}", user_data.display()));
