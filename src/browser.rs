@@ -318,6 +318,9 @@ pub struct BrowserConfig {
 
     /// Additional command line arguments to pass to the browser instance.
     args: Vec<String>,
+
+    /// Whether to disable DEFAULT_ARGS or not, default is false
+    disable_default_args: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -335,6 +338,7 @@ pub struct BrowserConfigBuilder {
     viewport: Viewport,
     request_timeout: Duration,
     args: Vec<String>,
+    disable_default_args: bool,
 }
 
 impl BrowserConfig {
@@ -363,6 +367,7 @@ impl Default for BrowserConfigBuilder {
             viewport: Default::default(),
             request_timeout: Duration::from_millis(REQUEST_TIMEOUT),
             args: Vec::new(),
+            disable_default_args: false,
         }
     }
 }
@@ -464,6 +469,11 @@ impl BrowserConfigBuilder {
         self
     }
 
+    pub fn disable_default_args(mut self) -> Self {
+        self.disable_default_args = true;
+        self
+    }
+
     pub fn build(self) -> std::result::Result<BrowserConfig, String> {
         let executable = if let Some(e) = self.executable {
             e
@@ -485,6 +495,7 @@ impl BrowserConfigBuilder {
             viewport: self.viewport,
             request_timeout: self.request_timeout,
             args: self.args,
+            disable_default_args: self.disable_default_args,
         })
     }
 }
@@ -492,10 +503,17 @@ impl BrowserConfigBuilder {
 impl BrowserConfig {
     pub fn launch(&self) -> io::Result<Child> {
         let dbg_port = format!("--remote-debugging-port={}", self.port);
-        let args = [dbg_port.as_str(), "--enable-blink-features=IdleDetection"];
 
         let mut cmd = process::Command::new(&self.executable);
-        cmd.args(&args).args(&DEFAULT_ARGS).args(&self.args).args(
+
+        if self.disable_default_args {
+            cmd.args(&self.args);
+        } else {
+            let args = [dbg_port.as_str(), "--enable-blink-features=IdleDetection"];
+            cmd.args(&args).args(&DEFAULT_ARGS).args(&self.args);
+        }
+
+        cmd.args(
             self.extensions
                 .iter()
                 .map(|e| format!("--load-extension={}", e)),
