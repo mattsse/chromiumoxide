@@ -492,34 +492,7 @@ impl BrowserConfigBuilder {
 impl BrowserConfig {
     pub fn launch(&self) -> io::Result<Child> {
         let dbg_port = format!("--remote-debugging-port={}", self.port);
-
-        let args = [
-            dbg_port.as_str(),
-            "--disable-background-networking",
-            "--enable-features=NetworkService,NetworkServiceInProcess",
-            "--disable-background-timer-throttling",
-            "--disable-backgrounding-occluded-windows",
-            "--disable-breakpad",
-            "--disable-client-side-phishing-detection",
-            "--disable-component-extensions-with-background-pages",
-            "--disable-default-apps",
-            "--disable-dev-shm-usage",
-            "--disable-extensions",
-            "--disable-features=TranslateUI",
-            "--disable-hang-monitor",
-            "--disable-ipc-flooding-protection",
-            "--disable-popup-blocking",
-            "--disable-prompt-on-repost",
-            "--disable-renderer-backgrounding",
-            "--disable-sync",
-            "--force-color-profile=srgb",
-            "--metrics-recording-only",
-            "--no-first-run",
-            "--enable-automation",
-            "--password-store=basic",
-            "--use-mock-keychain",
-            "--enable-blink-features=IdleDetection",
-        ];
+        let args = [dbg_port.as_str(), "--enable-blink-features=IdleDetection"];
 
         let mut cmd = process::Command::new(&self.executable);
         cmd.args(&args).args(&DEFAULT_ARGS).args(&self.args).args(
