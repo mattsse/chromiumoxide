@@ -398,6 +398,11 @@ impl BrowserConfigBuilder {
         self
     }
 
+    pub fn port(mut self, port: u16) -> Self {
+        self.port = port;
+        self
+    }
+
     pub fn request_timeout(mut self, timeout: Duration) -> Self {
         self.request_timeout = timeout;
         self
