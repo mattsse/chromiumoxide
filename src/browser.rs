@@ -502,15 +502,12 @@ impl BrowserConfigBuilder {
 
 impl BrowserConfig {
     pub fn launch(&self) -> io::Result<Child> {
-        let dbg_port = format!("--remote-debugging-port={}", self.port);
-
         let mut cmd = process::Command::new(&self.executable);
 
         if self.disable_default_args {
             cmd.args(&self.args);
         } else {
-            let args = [dbg_port.as_str(), "--enable-blink-features=IdleDetection"];
-            cmd.args(&args).args(&DEFAULT_ARGS).args(&self.args);
+            cmd.args(&DEFAULT_ARGS).args(&self.args);
         }
 
         cmd.args(
@@ -529,6 +526,10 @@ impl BrowserConfig {
 
         if !self.sandbox {
             cmd.args(&["--no-sandbox", "--disable-setuid-sandbox"]);
+        }
+
+        if self.port != 0 {
+            cmd.arg(format!("--remote-debugging-port={}", self.port));
         }
 
         if self.headless {
@@ -606,7 +607,7 @@ pub(crate) fn get_chrome_path_from_windows_registry() -> Option<std::path::PathB
 
 /// These are passed to the Chrome binary by default.
 /// Via https://github.com/puppeteer/puppeteer/blob/4846b8723cf20d3551c0d755df394cc5e0c82a94/src/node/Launcher.ts#L157
-static DEFAULT_ARGS: [&str; 23] = [
+static DEFAULT_ARGS: [&str; 24] = [
     "--disable-background-networking",
     "--enable-features=NetworkService,NetworkServiceInProcess",
     "--disable-background-timer-throttling",
@@ -630,4 +631,5 @@ static DEFAULT_ARGS: [&str; 23] = [
     "--enable-automation",
     "--password-store=basic",
     "--use-mock-keychain",
+    "--enable-blink-features=IdleDetection",
 ];
