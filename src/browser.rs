@@ -515,6 +515,14 @@ impl BrowserConfig {
             cmd.args(&DEFAULT_ARGS).args(&self.args);
         }
 
+        if !self
+            .args
+            .iter()
+            .any(|arg| arg.contains("--remote-debugging-port="))
+        {
+            cmd.arg(format!("--remote-debugging-port={}", self.port));
+        }
+
         cmd.args(
             self.extensions
                 .iter()
@@ -531,10 +539,6 @@ impl BrowserConfig {
 
         if !self.sandbox {
             cmd.args(&["--no-sandbox", "--disable-setuid-sandbox"]);
-        }
-
-        if self.port != 0 {
-            cmd.arg(format!("--remote-debugging-port={}", self.port));
         }
 
         if self.headless {
