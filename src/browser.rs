@@ -521,6 +521,14 @@ impl BrowserConfig {
 
         if let Some(ref user_data) = self.user_data_dir {
             cmd.arg(format!("--user-data-dir={}", user_data.display()));
+        } else {
+            // If the user did not specify a data directory, this would default to the systems default
+            // data directory. In most cases, we would rather have a fresh instance of Chromium. Specify
+            // a temp dir just for chromiumoxide instead.
+            cmd.arg(format!(
+                "--user-data-dir={}",
+                std::env::temp_dir().join("chromiumoxide-runner").display()
+            ));
         }
 
         if let Some((width, height)) = self.window_size {
