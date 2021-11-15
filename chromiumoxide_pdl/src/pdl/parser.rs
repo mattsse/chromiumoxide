@@ -322,7 +322,7 @@ pub fn parse_pdl(input: &str) -> Result<Protocol, Error> {
         }
 
         // enum literal
-        if regex!("^      (  )?[^\\s]+$").is_match(line) {
+        if regex!("^      (  )?[^\\n\\t]+$").is_match(line) {
             if member_enum {
                 let param = match member
                     .as_mut()

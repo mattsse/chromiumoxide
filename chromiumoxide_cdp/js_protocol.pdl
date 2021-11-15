@@ -517,6 +517,7 @@ domain Debugger
         other
         promiseRejection
         XHR
+        Break on start
       # Object containing break-specific auxiliary properties.
       optional object data
       # Hit breakpoints IDs
