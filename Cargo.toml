@@ -12,29 +12,29 @@ keywords = ["chrome", "chromedriver", "puppeteer", "automation"]
 categories = ["web-programming", "api-bindings", "development-tools::testing"]
 
 [dependencies]
-async-tungstenite = "0.15.0"
+async-tungstenite = "0.16.0"
 serde = { version = "1.0.130", features = ["derive"] }
 async-std = { version = "1.10.0", features = ["attributes", "unstable"], optional = true }
-futures = "0.3.17"
+futures = "0.3.18"
 chromiumoxide_types = { path = "chromiumoxide_types", version = "0.3.1" }
 chromiumoxide_cdp = { path = "chromiumoxide_cdp", version = "0.3.1" }
-serde_json = "1.0.68"
+serde_json = "1.0.72"
 which = "4.2.2"
-thiserror = "1.0.29"
+thiserror = "1.0.30"
 url = "2.2.2"
 log = "0.4.14"
 base64 = "0.13.0"
 fnv = "1.0.7"
 futures-timer = "3.0.2"
 cfg-if = "1.0.0"
-tokio = { version = "1.12.0", features = ["rt", "rt-multi-thread", "time", "fs", "macros"], optional = true }
+tokio = { version = "1.14.0", features = ["rt", "rt-multi-thread", "time", "fs", "macros"], optional = true }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.10.1"
 
 [dev-dependencies]
 quote = "1.0.10"
-proc-macro2 = "1.0.29"
+proc-macro2 = "1.0.32"
 chrono = "0.4.19"
 pretty_env_logger = "0.4.0"
 
