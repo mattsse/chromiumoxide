@@ -10,10 +10,7 @@ pub struct Session {
 }
 impl Session {
     pub fn new(id: SessionId, target_id: TargetId) -> Self {
-        Self {
-            id,
-            target_id,
-        }
+        Self { id, target_id }
     }
 
     pub fn session_id(&self) -> &SessionId {

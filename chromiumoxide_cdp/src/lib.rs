@@ -7,8 +7,7 @@ use crate::cdp::js_protocol::runtime::{
     CallFunctionOnParams, EvaluateParams, ExceptionDetails, StackTrace,
 };
 
-// Include all the types
-include!(concat!(env!("OUT_DIR"), "/cdp.rs"));
+pub mod cdp;
 
 /// convenience fixups
 impl Default for CreateTargetParams {

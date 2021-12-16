@@ -8,11 +8,11 @@ license = "MIT OR Apache-2.0"
 homepage = "https://github.com/mattsse/chromiumoxide"
 repository = "https://github.com/mattsse/chromiumoxide"
 readme = "../README.md"
-include = ["src/**/*", "*.pdl", "build.rs", "LICENSE-*"]
+include = ["src/**/*", "*.pdl", "LICENSE-*"]
 
-
-[build-dependencies]
+[dev-dependencies]
 chromiumoxide_pdl = { path = "../chromiumoxide_pdl", version = "0.3.1" }
+tempfile = "3.2.0"
 
 [dependencies]
 chromiumoxide_pdl = { path = "../chromiumoxide_pdl", version = "0.3.1" }
