@@ -151,7 +151,7 @@ impl Element {
             .quads
             .iter()
             .filter(|q| q.inner().len() == 8)
-            .map(|q| ElementQuad::from_quad(q))
+            .map(ElementQuad::from_quad)
             .filter(|q| q.quad_area() > 1.)
             .map(|q| q.quad_center())
             .next()
