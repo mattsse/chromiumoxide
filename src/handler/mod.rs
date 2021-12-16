@@ -367,7 +367,6 @@ impl Handler {
     fn on_attached_to_target(&mut self, event: EventAttachedToTarget) {
         let session = Session::new(
             event.session_id.clone(),
-            event.target_info.r#type,
             event.target_info.target_id,
         );
         if let Some(target) = self.targets.get_mut(session.target_id()) {

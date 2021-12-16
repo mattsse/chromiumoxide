@@ -67,8 +67,6 @@ pub struct Target {
     r#type: TargetType,
     /// Configs for this target
     config: TargetConfig,
-    /// Whether this target was marked as closed
-    is_closed: bool,
     /// The context this target is running in
     browser_context: BrowserContext,
     /// The frame manager that maintains the state of all frames and handles
@@ -104,7 +102,6 @@ impl Target {
             info,
             r#type: ty,
             config,
-            is_closed: false,
             frame_manager: FrameManager::new(request_timeout),
             network_manager,
             emulation_manager: EmulationManager::new(request_timeout),
