@@ -233,6 +233,7 @@ impl Generator {
         let events = self.generate_event_enums(&protocols);
         let imports = self.serde_support.generate_serde_import_deserialize();
         let stream = quote! {
+            /// This file is generated and should not be edited directly.
             pub use events::*;
 
             /// This trait allows for implementing custom events that are not covered by the
