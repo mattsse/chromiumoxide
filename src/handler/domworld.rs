@@ -1,10 +1,7 @@
 use chromiumoxide_cdp::cdp::js_protocol::runtime::ExecutionContextId;
-use std::collections::HashSet;
 
 #[derive(Debug, Clone, Default)]
 pub struct DOMWorld {
-    /// Bindings that have been registered in the current context
-    ctx_bindings: HashSet<String>,
     execution_ctx: Option<ExecutionContextId>,
     detached: bool,
 }
@@ -12,7 +9,6 @@ pub struct DOMWorld {
 impl DOMWorld {
     pub fn main_world() -> Self {
         Self {
-            ctx_bindings: Default::default(),
             execution_ctx: None,
             detached: false,
         }
@@ -20,7 +16,6 @@ impl DOMWorld {
 
     pub fn secondary_world() -> Self {
         Self {
-            ctx_bindings: Default::default(),
             execution_ctx: None,
             detached: false,
         }
