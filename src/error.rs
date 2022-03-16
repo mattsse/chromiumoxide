@@ -46,6 +46,8 @@ pub enum CdpError {
     /// script compilation or execution
     #[error("{0:?}")]
     JavascriptException(Box<ExceptionDetails>),
+    #[error("{0}")]
+    Url(#[from] url::ParseError),
 }
 impl CdpError {
     pub fn msg(msg: impl Into<String>) -> Self {
