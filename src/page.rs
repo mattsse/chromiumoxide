@@ -44,7 +44,7 @@ pub struct Page {
 impl Page {
     /// Execute a command and return the `Command::Response`
     pub async fn execute<T: Command>(&self, cmd: T) -> Result<CommandResponse<T::Response>> {
-        Ok(self.inner.execute(cmd).await?)
+        self.inner.execute(cmd).await
     }
 
     /// Adds an event listener to the `Target` and returns the receiver part as
@@ -150,7 +150,7 @@ impl Page {
     /// navigation (`click`, `press_key`) in order to wait until the new browser
     /// page is loaded
     pub async fn wait_for_navigation_response(&self) -> Result<Option<Arc<HttpRequest>>> {
-        Ok(self.inner.wait_for_navigation().await?)
+        self.inner.wait_for_navigation().await
     }
 
     /// Same as `wait_for_navigation_response` but returns `Self` instead
@@ -244,14 +244,14 @@ impl Page {
     pub async fn find_element(&self, selector: impl Into<String>) -> Result<Element> {
         let root = self.get_document().await?.node_id;
         let node_id = self.inner.find_element(selector, root).await?;
-        Ok(Element::new(Arc::clone(&self.inner), node_id).await?)
+        Element::new(Arc::clone(&self.inner), node_id).await
     }
 
     /// Return all `Element`s in the document that match the given selector
     pub async fn find_elements(&self, selector: impl Into<String>) -> Result<Vec<Element>> {
         let root = self.get_document().await?.node_id;
         let node_ids = self.inner.find_elements(selector, root).await?;
-        Ok(Element::from_nodes(&self.inner, &node_ids).await?)
+        Element::from_nodes(&self.inner, &node_ids).await
     }
 
     /// Describes node given its id
@@ -350,7 +350,7 @@ impl Page {
 
     /// Take a screenshot of the current page
     pub async fn screenshot(&self, params: impl Into<CaptureScreenshotParams>) -> Result<Vec<u8>> {
-        Ok(self.inner.screenshot(params).await?)
+        self.inner.screenshot(params).await
     }
 
     /// Save a screenshot of the page
@@ -445,7 +445,7 @@ impl Page {
     /// ```
     pub async fn reload(&self) -> Result<&Self> {
         self.execute(ReloadParams::default()).await?;
-        Ok(self.wait_for_navigation().await?)
+        self.wait_for_navigation().await
     }
 
     /// Enables log domain. Enabled by default.
@@ -655,7 +655,7 @@ impl Page {
 
     /// Returns metrics relating to the layout of the page
     pub async fn layout_metrics(&self) -> Result<GetLayoutMetricsReturns> {
-        Ok(self.inner.layout_metrics().await?)
+        self.inner.layout_metrics().await
     }
 
     /// This evaluates strictly as expression.
@@ -684,7 +684,7 @@ impl Page {
         &self,
         evaluate: impl Into<EvaluateParams>,
     ) -> Result<EvaluationResult> {
-        Ok(self.inner.evaluate_expression(evaluate).await?)
+        self.inner.evaluate_expression(evaluate).await
     }
 
     /// Evaluates an expression or function in the page's context and returns
@@ -830,13 +830,13 @@ impl Page {
         &self,
         evaluate: impl Into<CallFunctionOnParams>,
     ) -> Result<EvaluationResult> {
-        Ok(self.inner.evaluate_function(evaluate).await?)
+        self.inner.evaluate_function(evaluate).await
     }
 
     /// Returns the default execution context identifier of this page that
     /// represents the context for JavaScript execution.
     pub async fn execution_context(&self) -> Result<Option<ExecutionContextId>> {
-        Ok(self.inner.execution_context().await?)
+        self.inner.execution_context().await
     }
 
     /// Returns the secondary execution context identifier of this page that
@@ -845,7 +845,7 @@ impl Page {
     ///
     /// See `Page::set_contents`
     pub async fn secondary_execution_context(&self) -> Result<Option<ExecutionContextId>> {
-        Ok(self.inner.secondary_execution_context().await?)
+        self.inner.secondary_execution_context().await
     }
 
     /// Evaluates given script in every frame upon creation (before loading
@@ -895,7 +895,7 @@ impl Page {
         self.evaluate_function(call).await?;
         // relying that document.open() will reset frame lifecycle with "init"
         // lifecycle event. @see https://crrev.com/608658
-        Ok(self.wait_for_navigation().await?)
+        self.wait_for_navigation().await
     }
 
     /// Returns the HTML content of the page

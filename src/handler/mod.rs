@@ -531,7 +531,7 @@ impl Stream for Handler {
                 done = false;
             }
 
-            if pin.evict_command_timeout.is_ready(cx) {
+            if pin.evict_command_timeout.poll_ready(cx) {
                 // evict all commands that timed out
                 pin.evict_timed_out_commands(now);
             }

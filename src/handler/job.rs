@@ -17,7 +17,7 @@ pub(crate) struct PeriodicJob {
 impl PeriodicJob {
     /// Returns `true` if the job is currently not running but ready
     /// to be run, `false` otherwise.
-    pub fn is_ready(&mut self, cx: &mut Context<'_>) -> bool {
+    pub fn poll_ready(&mut self, cx: &mut Context<'_>) -> bool {
         if !Future::poll(Pin::new(&mut self.delay), cx).is_pending() {
             self.delay.reset(self.interval);
             return true;
