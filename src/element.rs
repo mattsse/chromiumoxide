@@ -71,7 +71,7 @@ impl Element {
 
     /// Convert a slice of `NodeId`s into a `Vec` of `Element`s
     pub(crate) async fn from_nodes(tab: &Arc<PageInner>, node_ids: &[NodeId]) -> Result<Vec<Self>> {
-        Ok(future::join_all(
+        future::join_all(
             node_ids
                 .iter()
                 .copied()
@@ -79,23 +79,23 @@ impl Element {
         )
         .await
         .into_iter()
-        .collect::<Result<Vec<_>, _>>()?)
+        .collect::<Result<Vec<_>, _>>()
     }
 
     /// Returns the first element in the document which matches the given CSS
     /// selector.
     pub async fn find_element(&self, selector: impl Into<String>) -> Result<Self> {
         let node_id = self.tab.find_element(selector, self.node_id).await?;
-        Ok(Element::new(Arc::clone(&self.tab), node_id).await?)
+        Element::new(Arc::clone(&self.tab), node_id).await
     }
 
     /// Return all `Element`s in the document that match the given selector
     pub async fn find_elements(&self, selector: impl Into<String>) -> Result<Vec<Element>> {
-        Ok(Element::from_nodes(
+        Element::from_nodes(
             &self.tab,
             &self.tab.find_elements(selector, self.node_id).await?,
         )
-        .await?)
+        .await
     }
 
     async fn box_model(&self) -> Result<BoxModel> {
@@ -189,14 +189,13 @@ impl Element {
         function_declaration: impl Into<String>,
         await_promise: bool,
     ) -> Result<CallFunctionOnReturns> {
-        Ok(self
-            .tab
+        self.tab
             .call_js_fn(
                 function_declaration,
                 await_promise,
                 self.remote_object_id.clone(),
             )
-            .await?)
+            .await
     }
 
     /// Returns a JSON representation of this element.
@@ -204,7 +203,7 @@ impl Element {
         let element_json = self
             .call_js_fn("function() { return this; }", false)
             .await?;
-        Ok(element_json.result.value.ok_or(CdpError::NotFound)?)
+        element_json.result.value.ok_or(CdpError::NotFound)
     }
 
     /// Calls [focus](https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/focus) on the element.
@@ -359,17 +358,17 @@ impl Element {
 
     /// The inner text of this element.
     pub async fn inner_text(&self) -> Result<Option<String>> {
-        Ok(self.string_property("innerText").await?)
+        self.string_property("innerText").await
     }
 
     /// The inner HTML of this element.
     pub async fn inner_html(&self) -> Result<Option<String>> {
-        Ok(self.string_property("innerHTML").await?)
+        self.string_property("innerHTML").await
     }
 
     /// The outer HTML of this element.
     pub async fn outer_html(&self) -> Result<Option<String>> {
-        Ok(self.string_property("outerHTML").await?)
+        self.string_property("outerHTML").await
     }
 
     /// Returns the string property of the element.
@@ -428,15 +427,14 @@ impl Element {
             scale: 1.,
         };
 
-        Ok(self
-            .tab
+        self.tab
             .screenshot(
                 CaptureScreenshotParams::builder()
                     .format(format)
                     .clip(clip)
                     .build(),
             )
-            .await?)
+            .await
     }
 
     /// Save a screenshot of the element and write it to `output`

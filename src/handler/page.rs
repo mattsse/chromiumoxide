@@ -66,7 +66,7 @@ pub(crate) struct PageInner {
 impl PageInner {
     /// Execute a PDL command and return its response
     pub(crate) async fn execute<T: Command>(&self, cmd: T) -> Result<CommandResponse<T::Response>> {
-        Ok(execute(cmd, self.sender.clone(), Some(self.session_id.clone())).await?)
+        execute(cmd, self.sender.clone(), Some(self.session_id.clone())).await
     }
 
     /// This responds with the final http response when the page is loaded
@@ -282,13 +282,12 @@ impl PageInner {
     }
 
     pub async fn execution_context(&self) -> Result<Option<ExecutionContextId>> {
-        Ok(self.execution_context_for_world(DOMWorldKind::Main).await?)
+        self.execution_context_for_world(DOMWorldKind::Main).await
     }
 
     pub async fn secondary_execution_context(&self) -> Result<Option<ExecutionContextId>> {
-        Ok(self
-            .execution_context_for_world(DOMWorldKind::Secondary)
-            .await?)
+        self.execution_context_for_world(DOMWorldKind::Secondary)
+            .await
     }
 
     pub async fn execution_context_for_world(
