@@ -17,5 +17,5 @@ tempfile = "3.2.0"
 [dependencies]
 chromiumoxide_pdl = { path = "../chromiumoxide_pdl", version = "0.3" }
 chromiumoxide_types = { path = "../chromiumoxide_types", version = "0.3" }
-serde = { version = "1.0.130", features = ["derive"] }
-serde_json = "1.0.72"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
