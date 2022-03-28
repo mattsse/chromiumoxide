@@ -1,6 +1,6 @@
 [package]
 name = "chromiumoxide_cdp"
-version = "0.3.4"
+version = "0.3.5"
 authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
 edition = "2018"
 description = "Contains all the generated types for chromiumoxide"
