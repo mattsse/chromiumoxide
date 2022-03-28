@@ -13,29 +13,29 @@ categories = ["web-programming", "api-bindings", "development-tools::testing"]
 
 [dependencies]
 async-tungstenite = "0.17"
-serde = { version = "1.0", features = ["derive"] }
-async-std = { version = "1.11", features = ["attributes", "unstable"], optional = true }
+serde = { version = "1", features = ["derive"] }
+async-std = { version = "1.5", features = ["attributes", "unstable"], optional = true }
 futures = "0.3"
 chromiumoxide_types = { path = "chromiumoxide_types", version = "0.3" }
 chromiumoxide_cdp = { path = "chromiumoxide_cdp", version = "0.3" }
-serde_json = "1.0"
-which = "4.2"
-thiserror = "1.0"
-url = "2.2"
+serde_json = "1"
+which = "4"
+thiserror = "1"
+url = "2"
 log = "0.4"
 base64 = "0.13"
-fnv = "1.0"
-futures-timer = "3.0"
-cfg-if = "1.0"
-tokio = { version = "1.17", features = ["rt", "rt-multi-thread", "time", "fs", "macros"], optional = true }
+fnv = "1"
+futures-timer = "3"
+cfg-if = "1"
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "time", "fs", "macros"], optional = true }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.10"
 
 [dev-dependencies]
-quote = "1.0"
-proc-macro2 = "1.0"
-chrono = "0.4"
+quote = "1"
+proc-macro2 = "1"
+chrono = "0.4.1"
 pretty_env_logger = "0.4"
 
 [features]
