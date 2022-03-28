@@ -1,6 +1,6 @@
 use crate::build::SerdeSupport;
 use crate::pdl::{Command, DataType, Domain, Event, Item, Param, Type, TypeDef, Variant};
-use heck::CamelCase;
+use heck::ToUpperCamelCase;
 use proc_macro2::{Ident, TokenStream};
 use quote::{quote, ToTokens};
 use std::slice::Iter;
@@ -89,9 +89,9 @@ impl<'a> DomainDatatype<'a> {
 
     pub fn ident_name(&self) -> String {
         match self {
-            DomainDatatype::Type(_ty) => self.name().to_camel_case(),
-            DomainDatatype::Commnad(cmd) => format!("{}Params", cmd.name().to_camel_case()),
-            DomainDatatype::Event(event) => format!("Event{}", event.name().to_camel_case()),
+            DomainDatatype::Type(_ty) => self.name().to_upper_camel_case(),
+            DomainDatatype::Commnad(cmd) => format!("{}Params", cmd.name().to_upper_camel_case()),
+            DomainDatatype::Event(event) => format!("Event{}", event.name().to_upper_camel_case()),
         }
     }
 
