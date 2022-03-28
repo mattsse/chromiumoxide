@@ -1,4 +1,4 @@
-use heck::*;
+use heck::{ToSnakeCase, ToUpperCamelCase};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 
@@ -13,14 +13,14 @@ pub struct EventType<'a> {
 
 impl<'a> EventType<'a> {
     fn ty_ident(&self) -> Ident {
-        format_ident!("Event{}", self.inner.name().to_camel_case())
+        format_ident!("Event{}", self.inner.name().to_upper_camel_case())
     }
 
     fn var_ident(&self) -> Ident {
         format_ident!(
             "{}{}",
-            self.domain.name.to_camel_case(),
-            self.inner.name().to_camel_case()
+            self.domain.name.to_upper_camel_case(),
+            self.inner.name().to_upper_camel_case()
         )
     }
 }

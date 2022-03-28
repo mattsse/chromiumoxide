@@ -6,7 +6,7 @@ use std::ops::Deref;
 use std::path::{Path, PathBuf};
 
 use either::Either;
-use heck::*;
+use heck::{ToSnakeCase, ToUpperCamelCase};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 
@@ -484,7 +484,7 @@ impl Generator {
             }
 
             if let DomainDatatype::Commnad(cmd) = dt {
-                let returns_name = format!("{}Returns", cmd.name().to_camel_case());
+                let returns_name = format!("{}Returns", cmd.name().to_upper_camel_case());
                 let with_deprecated = self.with_deprecated;
                 let with_experimental = self.with_experimental;
 
@@ -501,7 +501,7 @@ impl Generator {
                 );
 
                 // impl `Command` trait
-                let response = format_ident!("{}Returns", dt.name().to_camel_case());
+                let response = format_ident!("{}Returns", dt.name().to_upper_camel_case());
                 stream.extend(quote! {
                     impl chromiumoxide_types::Command for #name {
                         type Response = #response;
@@ -736,7 +736,7 @@ impl Generator {
             .rsplit('.')
             .next()
             .unwrap()
-            .to_camel_case();
+            .to_upper_camel_case();
 
         let name = format_ident!("{}", enum_name);
 
@@ -768,7 +768,7 @@ impl Generator {
         // from str to string impl
         let vars: Vec<_> = variants
             .iter()
-            .map(|s| format_ident!("{}", s.name.to_camel_case()))
+            .map(|s| format_ident!("{}", s.name.to_upper_camel_case()))
             .collect();
 
         let str_values: Vec<_> = variants
@@ -776,7 +776,7 @@ impl Generator {
             .map(|s| {
                 let mut vars = vec![s.name.to_string()];
                 let lc = s.name.to_lowercase();
-                let cc = s.name.to_camel_case();
+                let cc = s.name.to_upper_camel_case();
                 if cc != lc && vars[0] != cc {
                     vars.push(cc);
                 }
@@ -854,7 +854,7 @@ impl Generator {
             Type::Ref(name) => {
                 // consider recursive types
                 if name == parent {
-                    let ident = format_ident!("{}", name.to_camel_case());
+                    let ident = format_ident!("{}", name.to_upper_camel_case());
                     (
                         FieldType::new_box(quote! {
                            #ident
@@ -864,7 +864,13 @@ impl Generator {
                 } else {
                     (
                         FieldType::new(self.projected_type(domain, name)),
-                        Either::Right(name.rsplit('.').next().unwrap().to_string().to_camel_case()),
+                        Either::Right(
+                            name.rsplit('.')
+                                .next()
+                                .unwrap()
+                                .to_string()
+                                .to_upper_camel_case(),
+                        ),
                     )
                 }
             }
@@ -881,7 +887,7 @@ impl Generator {
         let mut iter = name.rsplitn(2, '.');
         let ty_name = iter.next().unwrap();
         let path = iter.collect::<String>();
-        let ident = format_ident!("{}", ty_name.to_camel_case());
+        let ident = format_ident!("{}", ty_name.to_upper_camel_case());
         if path.is_empty() {
             quote! {
                 #ident
@@ -934,7 +940,7 @@ impl Generator {
                     .unwrap_or_else(|| panic!("No matching domain registered for {}", domain.name));
                 let protocol_mod = format_ident!("{}", self.protocol_mods[*domain_idx]);
 
-                let ev_name = format!("Event{}", event.name().to_camel_case());
+                let ev_name = format!("Event{}", event.name().to_upper_camel_case());
 
                 let size = *self
                     .type_size
@@ -1003,7 +1009,7 @@ pub(crate) fn generate_field_name(name: &str) -> String {
 
 /// Escapes reserved rust keywords
 pub(crate) fn generate_type_name(name: &str) -> String {
-    let name = name.to_camel_case();
+    let name = name.to_upper_camel_case();
     match name.as_str() {
         "type" => "r#type".to_string(),
         "mod" => "r#mod".to_string(),
@@ -1020,7 +1026,11 @@ pub(crate) fn generate_type_name(name: &str) -> String {
 /// ```
 /// to `ParentType`
 fn subenum_name(parent: &str, inner: &str) -> String {
-    format!("{}{}", parent.to_camel_case(), generate_type_name(inner))
+    format!(
+        "{}{}",
+        parent.to_upper_camel_case(),
+        generate_type_name(inner)
+    )
 }
 
 #[derive(Debug, Clone)]
@@ -1136,7 +1146,7 @@ impl SerdeSupport {
     }
 
     fn generate_variant(&self, var: &Variant) -> TokenStream {
-        let v = format_ident!("{}", var.name.to_camel_case());
+        let v = format_ident!("{}", var.name.to_upper_camel_case());
         let rename = self.generate_rename(var.name.as_ref());
         if let Some(desc) = var.description.as_ref() {
             quote! {
