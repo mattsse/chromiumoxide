@@ -349,7 +349,7 @@ impl Page {
     }
 
     /// Take a screenshot of the current page
-    pub async fn screenshot(&self, params: impl Into<CaptureScreenshotParams>) -> Result<Vec<u8>> {
+    pub async fn screenshot(&self, params: impl Into<ScreenshotParams>) -> Result<Vec<u8>> {
         self.inner.screenshot(params).await
     }
 
@@ -358,15 +358,17 @@ impl Page {
     /// # Example save a png file of a website
     ///
     /// ```no_run
-    /// # use chromiumoxide::page::Page;
+    /// # use chromiumoxide::page::{Page, ScreenshotParams};
     /// # use chromiumoxide::error::Result;
-    /// # use chromiumoxide_cdp::cdp::browser_protocol::page::{CaptureScreenshotParams, CaptureScreenshotFormat};
+    /// # use chromiumoxide_cdp::cdp::browser_protocol::page::CaptureScreenshotFormat;
     /// # async fn demo(page: Page) -> Result<()> {
     ///         page.goto("http://example.com")
     ///             .await?
     ///             .save_screenshot(
-    ///             CaptureScreenshotParams::builder()
+    ///             ScreenshotParams::builder()
     ///                 .format(CaptureScreenshotFormat::Png)
+    ///                 .full_page(true)
+    ///                 .omit_background(true)
     ///                 .build(),
     ///             "example.png",
     ///             )
@@ -376,7 +378,7 @@ impl Page {
     /// ```
     pub async fn save_screenshot(
         &self,
-        params: impl Into<CaptureScreenshotParams>,
+        params: impl Into<ScreenshotParams>,
         output: impl AsRef<Path>,
     ) -> Result<Vec<u8>> {
         let img = self.screenshot(params).await?;
@@ -943,5 +945,98 @@ fn validate_cookie_url(url: &str) -> Result<()> {
         Ok(())
     } else {
         Err(CdpError::msg("Blank page can not have cookie"))
+    }
+}
+
+/// Page screenshot parameters with extra options.
+#[derive(Debug, Default)]
+pub struct ScreenshotParams {
+    /// Chrome DevTools Protocol screenshot options.
+    pub cdp_params: CaptureScreenshotParams,
+    /// Take full page screenshot.
+    pub full_page: Option<bool>,
+    /// Make the background transparent (png only).
+    pub omit_background: Option<bool>,
+}
+
+impl ScreenshotParams {
+    pub fn builder() -> ScreenshotParamsBuilder {
+        Default::default()
+    }
+
+    pub(crate) fn full_page(&self) -> bool {
+        self.full_page.unwrap_or(false)
+    }
+
+    pub(crate) fn omit_background(&self) -> bool {
+        self.omit_background.unwrap_or(false)
+            && self
+                .cdp_params
+                .format
+                .as_ref()
+                .map_or(true, |f| f == &CaptureScreenshotFormat::Png)
+    }
+}
+
+/// Page screenshot parameters builder with extra options.
+#[derive(Debug, Default)]
+pub struct ScreenshotParamsBuilder {
+    cdp_params: CaptureScreenshotParams,
+    full_page: Option<bool>,
+    omit_background: Option<bool>,
+}
+
+impl ScreenshotParamsBuilder {
+    /// Image compression format (defaults to png).
+    pub fn format(mut self, format: impl Into<CaptureScreenshotFormat>) -> Self {
+        self.cdp_params.format = Some(format.into());
+        self
+    }
+
+    /// Compression quality from range [0..100] (jpeg only).
+    pub fn quality(mut self, quality: impl Into<i64>) -> Self {
+        self.cdp_params.quality = Some(quality.into());
+        self
+    }
+
+    /// Capture the screenshot of a given region only.
+    pub fn clip(mut self, clip: impl Into<Viewport>) -> Self {
+        self.cdp_params.clip = Some(clip.into());
+        self
+    }
+
+    /// Capture the screenshot from the surface, rather than the view (defaults to true).
+    pub fn from_surface(mut self, from_surface: impl Into<bool>) -> Self {
+        self.cdp_params.from_surface = Some(from_surface.into());
+        self
+    }
+
+    /// Full page screen capture.
+    pub fn full_page(mut self, full_page: impl Into<bool>) -> Self {
+        self.full_page = Some(full_page.into());
+        self
+    }
+
+    /// Make the background transparent (png only)
+    pub fn omit_background(mut self, omit_background: impl Into<bool>) -> Self {
+        self.omit_background = Some(omit_background.into());
+        self
+    }
+
+    pub fn build(self) -> ScreenshotParams {
+        ScreenshotParams {
+            cdp_params: self.cdp_params,
+            full_page: self.full_page,
+            omit_background: self.omit_background,
+        }
+    }
+}
+
+impl From<CaptureScreenshotParams> for ScreenshotParams {
+    fn from(cdp_params: CaptureScreenshotParams) -> Self {
+        Self {
+            cdp_params,
+            ..Default::default()
+        }
     }
 }

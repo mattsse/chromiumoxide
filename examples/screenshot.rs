@@ -1,9 +1,8 @@
 use futures::StreamExt;
 
 use chromiumoxide::browser::{Browser, BrowserConfig};
-use chromiumoxide_cdp::cdp::browser_protocol::page::{
-    CaptureScreenshotFormat, CaptureScreenshotParams,
-};
+use chromiumoxide::page::ScreenshotParams;
+use chromiumoxide_cdp::cdp::browser_protocol::page::CaptureScreenshotFormat;
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -19,8 +18,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // take a screenshot of the page
     page.save_screenshot(
-        CaptureScreenshotParams::builder()
+        ScreenshotParams::builder()
             .format(CaptureScreenshotFormat::Png)
+            .full_page(true)
+            .omit_background(true)
             .build(),
         "hn-page.png",
     )

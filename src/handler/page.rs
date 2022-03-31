@@ -7,14 +7,18 @@ use futures::{SinkExt, StreamExt};
 
 use chromiumoxide_cdp::cdp::browser_protocol::browser::{GetVersionParams, GetVersionReturns};
 use chromiumoxide_cdp::cdp::browser_protocol::dom::{
-    NodeId, QuerySelectorAllParams, QuerySelectorParams,
+    NodeId, QuerySelectorAllParams, QuerySelectorParams, Rgba,
+};
+use chromiumoxide_cdp::cdp::browser_protocol::emulation::{
+    ClearDeviceMetricsOverrideParams, SetDefaultBackgroundColorOverrideParams,
+    SetDeviceMetricsOverrideParams,
 };
 use chromiumoxide_cdp::cdp::browser_protocol::input::{
     DispatchKeyEventParams, DispatchKeyEventType, DispatchMouseEventParams, DispatchMouseEventType,
     MouseButton,
 };
 use chromiumoxide_cdp::cdp::browser_protocol::page::{
-    CaptureScreenshotParams, GetLayoutMetricsParams, GetLayoutMetricsReturns,
+    GetLayoutMetricsParams, GetLayoutMetricsReturns, Viewport,
 };
 use chromiumoxide_cdp::cdp::browser_protocol::target::{ActivateTargetParams, SessionId, TargetId};
 use chromiumoxide_cdp::cdp::js_protocol::runtime::{
@@ -30,6 +34,7 @@ use crate::handler::target::{GetExecutionContext, TargetMessage};
 use crate::js::EvaluationResult;
 use crate::keys;
 use crate::layout::Point;
+use crate::page::ScreenshotParams;
 
 #[derive(Debug)]
 pub struct PageHandle {
@@ -314,10 +319,59 @@ impl PageInner {
             .result)
     }
 
-    pub async fn screenshot(&self, params: impl Into<CaptureScreenshotParams>) -> Result<Vec<u8>> {
+    pub async fn screenshot(&self, params: impl Into<ScreenshotParams>) -> Result<Vec<u8>> {
         self.activate().await?;
         let params = params.into();
-        let res = self.execute(params).await?.result;
+        let full_page = params.full_page();
+        let omit_background = params.omit_background();
+
+        let mut cdp_params = params.cdp_params;
+
+        if full_page {
+            let metrics = self.layout_metrics().await?;
+            let width = metrics.content_size.width;
+            let height = metrics.content_size.height;
+
+            cdp_params.clip = Some(Viewport {
+                x: 0.,
+                y: 0.,
+                width,
+                height,
+                scale: 1.,
+            });
+
+            self.execute(SetDeviceMetricsOverrideParams::new(
+                width as i64,
+                height as i64,
+                1.,
+                false,
+            ))
+            .await?;
+        }
+
+        if omit_background {
+            self.execute(SetDefaultBackgroundColorOverrideParams {
+                color: Some(Rgba {
+                    r: 0,
+                    g: 0,
+                    b: 0,
+                    a: Some(0.),
+                }),
+            })
+            .await?;
+        }
+
+        let res = self.execute(cdp_params).await?.result;
+
+        if omit_background {
+            self.execute(SetDefaultBackgroundColorOverrideParams { color: None })
+                .await?;
+        }
+
+        if full_page {
+            self.execute(ClearDeviceMetricsOverrideParams {}).await?;
+        }
+
         Ok(base64::decode(&res.data)?)
     }
 }
