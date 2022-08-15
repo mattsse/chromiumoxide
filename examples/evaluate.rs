@@ -7,7 +7,7 @@ use chromiumoxide_cdp::cdp::js_protocol::runtime::{
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    pretty_env_logger::init();
+    tracing_subscriber::fmt::init();
 
     let (browser, mut handler) = Browser::launch(BrowserConfig::builder().build()?).await?;
 

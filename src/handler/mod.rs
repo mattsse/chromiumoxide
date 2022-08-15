@@ -524,7 +524,7 @@ impl Stream for Handler {
                         pin.on_event(ev);
                     }
                     Err(err) => {
-                        log::error!("WS Connection error: {:?}", err);
+                        tracing::error!("WS Connection error: {:?}", err);
                         return Poll::Ready(Some(Err(err)));
                     }
                 }
