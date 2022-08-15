@@ -27,8 +27,10 @@ use chromiumoxide_types::*;
 
 use crate::element::Element;
 use crate::error::{CdpError, Result};
+use crate::handler::commandfuture::CommandFuture;
 use crate::handler::domworld::DOMWorldKind;
 use crate::handler::http::HttpRequest;
+use crate::handler::httpfuture::HttpFuture;
 use crate::handler::target::TargetMessage;
 use crate::handler::PageInner;
 use crate::js::{Evaluation, EvaluationResult};
@@ -44,7 +46,17 @@ pub struct Page {
 impl Page {
     /// Execute a command and return the `Command::Response`
     pub async fn execute<T: Command>(&self, cmd: T) -> Result<CommandResponse<T::Response>> {
-        self.inner.execute(cmd).await
+        self.command_future(cmd)?.await
+    }
+
+    /// Execute a command and return the `Command::Response`
+    pub fn command_future<T: Command>(&self, cmd: T) -> Result<CommandFuture<T>> {
+        self.inner.command_future(cmd)
+    }
+
+    /// Execute a command and return the `Command::Response`
+    pub fn http_future<T: Command>(&self, cmd: T) -> Result<HttpFuture<T>> {
+        self.inner.http_future(cmd)
     }
 
     /// Adds an event listener to the `Target` and returns the receiver part as

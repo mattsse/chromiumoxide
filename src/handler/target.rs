@@ -686,7 +686,7 @@ impl GetExecutionContext {
 }
 
 #[derive(Debug)]
-pub(crate) enum TargetMessage {
+pub enum TargetMessage {
     /// Execute a command within the session of this target
     Command(CommandMessage),
     /// Return the main frame of this target's page
