@@ -5,6 +5,8 @@ use chromiumoxide_cdp::cdp::browser_protocol::page::PrintToPdfParams;
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::fmt::init();
+
     let (browser, mut handler) = Browser::launch(BrowserConfig::builder().build()?).await?;
 
     let handle = async_std::task::spawn(async move {

@@ -138,7 +138,7 @@ impl CommandChain {
     pub fn poll(&mut self, now: Instant) -> NextCommand {
         if let Some((cmd, deadline)) = self.waiting.as_ref() {
             if now > *deadline {
-                log::error!(
+                tracing::error!(
                     "Command {:?} exceeded deadline by {:?}",
                     cmd,
                     now - *deadline

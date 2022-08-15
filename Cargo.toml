@@ -22,12 +22,12 @@ serde_json = "1"
 which = "4"
 thiserror = "1"
 url = "2"
-log = "0.4"
 base64 = "0.13"
 fnv = "1"
 futures-timer = "3"
 cfg-if = "1"
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "time", "fs", "macros"], optional = true }
+tracing = "0.1"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.10"
@@ -36,7 +36,7 @@ winreg = "0.10"
 quote = "1"
 proc-macro2 = "1"
 chrono = "0.4.1"
-pretty_env_logger = "0.4"
+tracing-subscriber = "0.2"
 
 [features]
 default = ["async-std-runtime"]

@@ -97,7 +97,7 @@ impl<T: EventMessage> Connection<T> {
                 //     log::error!("CMD {:?}", cmd);
                 //     return Ok(())
                 // }
-                log::trace!("Sending {:?}", cmd);
+                tracing::trace!("Sending {:?}", cmd);
                 let msg = serde_json::to_string(&cmd)?;
                 Sink::start_send(Pin::new(&mut self.ws), msg.into())?;
                 self.pending_flush = Some(cmd);
@@ -131,11 +131,11 @@ impl<T: EventMessage + Unpin> Stream for Connection<T> {
             Poll::Ready(Some(Ok(msg))) => {
                 return match serde_json::from_slice::<Message<T>>(&msg.into_data()) {
                     Ok(msg) => {
-                        log::trace!("Received {:?}", msg);
+                        tracing::trace!("Received {:?}", msg);
                         Poll::Ready(Some(Ok(msg)))
                     }
                     Err(err) => {
-                        log::error!("Failed to deserialize WS response {}", err);
+                        tracing::error!("Failed to deserialize WS response {}", err);
                         Poll::Ready(Some(Err(err.into())))
                     }
                 };
