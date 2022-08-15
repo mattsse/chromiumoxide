@@ -97,7 +97,11 @@ impl Target {
     pub fn new(info: TargetInfo, config: TargetConfig, browser_context: BrowserContext) -> Self {
         let ty = TargetType::new(&info.r#type);
         let request_timeout = config.request_timeout;
-        let network_manager = NetworkManager::new(config.ignore_https_errors, request_timeout);
+        let mut network_manager = NetworkManager::new(config.ignore_https_errors, request_timeout);
+
+        network_manager.set_cache_enabled(config.cache_enabled);
+        network_manager.set_request_interception(config.request_intercept);
+
         Self {
             info,
             r#type: ty,
@@ -546,6 +550,8 @@ pub struct TargetConfig {
     ///  Request timeout to use
     pub request_timeout: Duration,
     pub viewport: Option<Viewport>,
+    pub request_intercept: bool,
+    pub cache_enabled: bool,
 }
 
 impl TargetConfig {
@@ -553,11 +559,15 @@ impl TargetConfig {
         ignore_https_errors: bool,
         request_timeout: Duration,
         viewport: Option<Viewport>,
+        request_intercept: bool,
+        cache_enabled: bool,
     ) -> Self {
         Self {
             ignore_https_errors,
             request_timeout,
             viewport,
+            request_intercept,
+            cache_enabled,
         }
     }
 }
@@ -568,6 +578,8 @@ impl Default for TargetConfig {
             ignore_https_errors: true,
             request_timeout: Duration::from_secs(REQUEST_TIMEOUT),
             viewport: Default::default(),
+            request_intercept: false,
+            cache_enabled: true,
         }
     }
 }

@@ -98,6 +98,8 @@ impl Browser {
             viewport: Some(config.viewport.clone()),
             context_ids: Vec::new(),
             request_timeout: config.request_timeout,
+            request_intercept: config.request_intercept,
+            cache_enabled: config.cache_enabled,
         };
 
         let fut = Handler::new(conn, rx, handler_config);
@@ -321,6 +323,12 @@ pub struct BrowserConfig {
 
     /// Whether to disable DEFAULT_ARGS or not, default is false
     disable_default_args: bool,
+
+    /// Whether to enable request interception
+    pub request_intercept: bool,
+
+    /// Whether to enable cache
+    pub cache_enabled: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -339,6 +347,8 @@ pub struct BrowserConfigBuilder {
     request_timeout: Duration,
     args: Vec<String>,
     disable_default_args: bool,
+    request_intercept: bool,
+    cache_enabled: bool,
 }
 
 impl BrowserConfig {
@@ -368,6 +378,8 @@ impl Default for BrowserConfigBuilder {
             request_timeout: Duration::from_millis(REQUEST_TIMEOUT),
             args: Vec::new(),
             disable_default_args: false,
+            request_intercept: false,
+            cache_enabled: true,
         }
     }
 }
@@ -479,6 +491,16 @@ impl BrowserConfigBuilder {
         self
     }
 
+    pub fn enable_request_intercept(mut self) -> Self {
+        self.request_intercept = true;
+        self
+    }
+
+    pub fn enable_cache(mut self) -> Self {
+        self.cache_enabled = true;
+        self
+    }
+
     pub fn build(self) -> std::result::Result<BrowserConfig, String> {
         let executable = if let Some(e) = self.executable {
             e
@@ -501,6 +523,8 @@ impl BrowserConfigBuilder {
             request_timeout: self.request_timeout,
             args: self.args,
             disable_default_args: self.disable_default_args,
+            request_intercept: self.request_intercept,
+            cache_enabled: self.cache_enabled,
         })
     }
 }
