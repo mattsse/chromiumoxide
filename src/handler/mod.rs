@@ -40,11 +40,11 @@ pub mod frame;
 pub mod http;
 pub mod httpfuture;
 mod job;
-pub mod navigationfuture;
 pub mod network;
 mod page;
 mod session;
 pub mod target;
+pub mod target_message_future;
 pub mod viewport;
 
 /// The handler that monitors the state of the chromium browser and drives all

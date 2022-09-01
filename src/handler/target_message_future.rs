@@ -5,42 +5,48 @@ use futures::channel::{
 use pin_project_lite::pin_project;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use crate::error::Result;
-use crate::handler::http::HttpRequest;
 use crate::handler::target::TargetMessage;
+use crate::{error::Result, ArcHttpRequest};
 
-type ArcRequest = Option<Arc<HttpRequest>>;
+type TargetSender = mpsc::Sender<TargetMessage>;
 
 pin_project! {
-pub struct NavigationFuture {
-    #[pin]
-    rx_request: oneshot::Receiver<ArcRequest>,
-    #[pin]
-    target_sender: mpsc::Sender<TargetMessage>,
+    pub struct TargetMessageFuture<T> {
+        #[pin]
+        rx_request: oneshot::Receiver<T>,
+        #[pin]
+        target_sender: mpsc::Sender<TargetMessage>,
 
-    message: Option<TargetMessage>,
-}
-}
-
-impl NavigationFuture {
-    pub fn new(target_sender: mpsc::Sender<TargetMessage>) -> Self {
-        let (tx, rx_request) = oneshot_channel();
-
-        let message = Some(TargetMessage::WaitForNavigation(tx));
-
-        Self {
-            target_sender,
-            rx_request,
-            message,
-        }
+        message: Option<TargetMessage>,
     }
 }
 
-impl Future for NavigationFuture {
-    type Output = Result<ArcRequest>;
+impl<T> TargetMessageFuture<T> {
+    pub fn new(
+        target_sender: TargetSender,
+        message: TargetMessage,
+        rx_request: oneshot::Receiver<T>,
+    ) -> Self {
+        Self {
+            target_sender,
+            rx_request,
+            message: Some(message),
+        }
+    }
+
+    pub fn wait_for_navigation(target_sender: TargetSender) -> TargetMessageFuture<ArcHttpRequest> {
+        let (tx, rx_request) = oneshot_channel();
+
+        let message = TargetMessage::WaitForNavigation(tx);
+
+        TargetMessageFuture::new(target_sender, message, rx_request)
+    }
+}
+
+impl<T> Future for TargetMessageFuture<T> {
+    type Output = Result<T>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut this = self.project();

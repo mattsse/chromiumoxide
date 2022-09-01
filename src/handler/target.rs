@@ -28,13 +28,12 @@ use crate::handler::frame::{
     FrameEvent, FrameManager, NavigationError, NavigationId, NavigationOk,
 };
 use crate::handler::frame::{FrameNavigationRequest, UTILITY_WORLD_NAME};
-use crate::handler::http::HttpRequest;
 use crate::handler::network::{NetworkEvent, NetworkManager};
 use crate::handler::page::PageHandle;
 use crate::handler::viewport::Viewport;
 use crate::handler::{PageInner, REQUEST_TIMEOUT};
 use crate::listeners::{EventListenerRequest, EventListeners};
-use crate::page::Page;
+use crate::{page::Page, ArcHttpRequest};
 use chromiumoxide_cdp::cdp::js_protocol::runtime::ExecutionContextId;
 use std::time::Duration;
 
@@ -86,7 +85,7 @@ pub struct Target {
     /// All registered event subscriptions
     event_listeners: EventListeners,
     /// Senders that need to be notified once the main frame has loaded
-    wait_for_frame_navigation: Vec<Sender<Option<Arc<HttpRequest>>>>,
+    wait_for_frame_navigation: Vec<Sender<ArcHttpRequest>>,
     /// The sender who requested the page.
     initiator: Option<Sender<Result<Page>>>,
 }
@@ -696,7 +695,7 @@ pub enum TargetMessage {
     /// Return the url of this target's page
     Url(Sender<Option<String>>),
     /// A Message that resolves when the frame finished loading a new url
-    WaitForNavigation(Sender<Option<Arc<HttpRequest>>>),
+    WaitForNavigation(Sender<ArcHttpRequest>),
     /// A request to submit a new listener that gets notified with every
     /// received event
     AddEventListener(EventListenerRequest),

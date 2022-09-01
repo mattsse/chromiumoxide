@@ -4,24 +4,22 @@ use futures::FutureExt;
 use pin_project_lite::pin_project;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use crate::error::Result;
 use crate::handler::commandfuture::CommandFuture;
-use crate::handler::http::HttpRequest;
-use crate::handler::navigationfuture::NavigationFuture;
 use crate::handler::target::TargetMessage;
+use crate::handler::target_message_future::TargetMessageFuture;
+use crate::{ArcHttpRequest, Result};
 use chromiumoxide_types::Command;
 
-type ArcRequest = Option<Arc<HttpRequest>>;
+type ArcRequest = ArcHttpRequest;
 
 pin_project! {
     pub struct HttpFuture<T: Command> {
         #[pin]
         command: Fuse<CommandFuture<T>>,
         #[pin]
-        navigation: NavigationFuture,
+        navigation: TargetMessageFuture<ArcHttpRequest>,
     }
 }
 
@@ -29,7 +27,7 @@ impl<T: Command> HttpFuture<T> {
     pub fn new(sender: mpsc::Sender<TargetMessage>, command: CommandFuture<T>) -> Self {
         Self {
             command: command.fuse(),
-            navigation: NavigationFuture::new(sender),
+            navigation: TargetMessageFuture::<T>::wait_for_navigation(sender),
         }
     }
 }

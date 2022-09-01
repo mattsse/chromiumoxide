@@ -61,6 +61,9 @@
 
 #![warn(missing_debug_implementations, rust_2018_idioms)]
 
+use crate::handler::http::HttpRequest;
+use std::sync::Arc;
+
 /// reexport the generated cdp types
 pub use chromiumoxide_cdp::cdp;
 pub use chromiumoxide_types::{self as types, Binary, Command, Method, MethodType};
@@ -86,3 +89,5 @@ pub mod layout;
 pub mod listeners;
 pub mod page;
 pub(crate) mod utils;
+
+pub type ArcHttpRequest = Option<Arc<HttpRequest>>;

@@ -31,12 +31,12 @@ use crate::error::{CdpError, Result};
 use crate::handler::commandfuture::CommandFuture;
 use crate::handler::domworld::DOMWorldKind;
 use crate::handler::httpfuture::HttpFuture;
-use crate::handler::navigationfuture::NavigationFuture;
 use crate::handler::target::{GetExecutionContext, TargetMessage};
+use crate::handler::target_message_future::TargetMessageFuture;
 use crate::js::EvaluationResult;
-use crate::keys;
 use crate::layout::Point;
 use crate::page::ScreenshotParams;
+use crate::{keys, ArcHttpRequest};
 
 #[derive(Debug)]
 pub struct PageHandle {
@@ -82,8 +82,8 @@ impl PageInner {
     }
 
     /// This creates navigation future with the final http response when the page is loaded
-    pub(crate) fn wait_for_navigation(&self) -> NavigationFuture {
-        NavigationFuture::new(self.sender.clone())
+    pub(crate) fn wait_for_navigation(&self) -> TargetMessageFuture<ArcHttpRequest> {
+        TargetMessageFuture::<ArcHttpRequest>::wait_for_navigation(self.sender.clone())
     }
 
     /// This creates HTTP future with navigation and responds with the final
