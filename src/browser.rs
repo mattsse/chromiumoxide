@@ -536,7 +536,7 @@ impl BrowserConfig {
         if self.disable_default_args {
             cmd.args(&self.args);
         } else {
-            cmd.args(&DEFAULT_ARGS).args(&self.args);
+            cmd.args(DEFAULT_ARGS).args(&self.args);
         }
 
         if !self
@@ -570,11 +570,11 @@ impl BrowserConfig {
         }
 
         if !self.sandbox {
-            cmd.args(&["--no-sandbox", "--disable-setuid-sandbox"]);
+            cmd.args(["--no-sandbox", "--disable-setuid-sandbox"]);
         }
 
         if self.headless {
-            cmd.args(&["--headless", "--hide-scrollbars", "--mute-audio"]);
+            cmd.args(["--headless", "--hide-scrollbars", "--mute-audio"]);
         }
 
         if self.incognito {

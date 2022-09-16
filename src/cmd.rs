@@ -125,12 +125,12 @@ impl CommandChain {
     /// Removes the waiting state if the identifier matches that of the last
     /// issued command
     pub fn received_response(&mut self, identifier: &str) -> bool {
-        return if self.waiting.as_ref().map(|(c, _)| c.as_ref()) == Some(identifier) {
+        if self.waiting.as_ref().map(|(c, _)| c.as_ref()) == Some(identifier) {
             self.waiting.take();
             true
         } else {
             false
-        };
+        }
     }
 
     /// Return the next command to process or `None` if done.

@@ -56,7 +56,7 @@ impl<T> Future for TargetMessageFuture<T> {
                 Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
                 Poll::Ready(Ok(_)) => {
                     let message = this.message.take().expect("existence checked above");
-                    let _ = this.target_sender.start_send(message)?;
+                    this.target_sender.start_send(message)?;
 
                     cx.waker().wake_by_ref();
                     Poll::Pending

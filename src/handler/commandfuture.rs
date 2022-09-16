@@ -66,7 +66,7 @@ where
                 Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
                 Poll::Ready(Ok(_)) => {
                     let message = this.message.take().expect("existence checked above");
-                    let _ = this.target_sender.start_send(message)?;
+                    this.target_sender.start_send(message)?;
 
                     cx.waker().wake_by_ref();
                     Poll::Pending
@@ -78,7 +78,7 @@ where
                 Poll::Ready(Ok(Ok(response))) => {
                     Poll::Ready(to_command_response::<T>(response, this.method.clone()))
                 }
-                Poll::Ready(Ok(Err(e))) => Poll::Ready(Err(e.into())),
+                Poll::Ready(Ok(Err(e))) => Poll::Ready(Err(e)),
                 Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
                 Poll::Pending => Poll::Pending,
             }
