@@ -33,15 +33,18 @@ use crate::page::Page;
 pub const REQUEST_TIMEOUT: u64 = 30_000;
 
 pub mod browser;
+pub mod commandfuture;
 pub mod domworld;
 pub mod emulation;
 pub mod frame;
 pub mod http;
+pub mod httpfuture;
 mod job;
 pub mod network;
 mod page;
 mod session;
 pub mod target;
+pub mod target_message_future;
 pub mod viewport;
 
 /// The handler that monitors the state of the chromium browser and drives all
@@ -451,7 +454,7 @@ impl Stream for Handler {
             while let Poll::Ready(Some(msg)) = Pin::new(&mut pin.from_browser).poll_next(cx) {
                 match msg {
                     HandlerMessage::Command(cmd) => {
-                        pin.submit_external_command(cmd, now).unwrap();
+                        pin.submit_external_command(cmd, now)?;
                     }
                     HandlerMessage::CreatePage(params, tx) => {
                         pin.create_page(params, tx);

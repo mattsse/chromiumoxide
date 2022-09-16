@@ -19,11 +19,11 @@ use chromiumoxide_cdp::cdp::{
 };
 use chromiumoxide_types::{Method, MethodId, Request};
 
-use crate::cmd::CommandChain;
 use crate::error::DeadlineExceeded;
 use crate::handler::domworld::DOMWorld;
 use crate::handler::http::HttpRequest;
 use crate::handler::REQUEST_TIMEOUT;
+use crate::{cmd::CommandChain, ArcHttpRequest};
 
 pub const UTILITY_WORLD_NAME: &str = "__chromiumoxide_utility_world__";
 const EVALUATION_SCRIPT_URL: &str = "____chromiumoxide_utility_world___evaluation_script__";
@@ -40,7 +40,7 @@ pub struct Frame {
     /// Current url of this frame
     url: Option<String>,
     /// The http request that loaded this with this frame
-    http_request: Option<Arc<HttpRequest>>,
+    http_request: ArcHttpRequest,
     /// The frames contained in this frame
     child_frames: HashSet<FrameId>,
     name: Option<String>,

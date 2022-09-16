@@ -28,13 +28,15 @@ use chromiumoxide_types::{Command, CommandResponse};
 
 use crate::cmd::{to_command_response, CommandMessage};
 use crate::error::{CdpError, Result};
+use crate::handler::commandfuture::CommandFuture;
 use crate::handler::domworld::DOMWorldKind;
-use crate::handler::http::HttpRequest;
+use crate::handler::httpfuture::HttpFuture;
 use crate::handler::target::{GetExecutionContext, TargetMessage};
+use crate::handler::target_message_future::TargetMessageFuture;
 use crate::js::EvaluationResult;
-use crate::keys;
 use crate::layout::Point;
 use crate::page::ScreenshotParams;
+use crate::{keys, ArcHttpRequest};
 
 #[derive(Debug)]
 pub struct PageHandle {
@@ -74,14 +76,23 @@ impl PageInner {
         execute(cmd, self.sender.clone(), Some(self.session_id.clone())).await
     }
 
-    /// This responds with the final http response when the page is loaded
-    pub(crate) async fn wait_for_navigation(&self) -> Result<Option<Arc<HttpRequest>>> {
-        let (tx, rx) = oneshot_channel();
-        self.sender
-            .clone()
-            .send(TargetMessage::WaitForNavigation(tx))
-            .await?;
-        Ok(rx.await?)
+    /// Create a PDL command future
+    pub(crate) fn command_future<T: Command>(&self, cmd: T) -> Result<CommandFuture<T>> {
+        CommandFuture::new(cmd, self.sender.clone(), Some(self.session_id.clone()))
+    }
+
+    /// This creates navigation future with the final http response when the page is loaded
+    pub(crate) fn wait_for_navigation(&self) -> TargetMessageFuture<ArcHttpRequest> {
+        TargetMessageFuture::<ArcHttpRequest>::wait_for_navigation(self.sender.clone())
+    }
+
+    /// This creates HTTP future with navigation and responds with the final
+    /// http response when the page is loaded
+    pub(crate) fn http_future<T: Command>(&self, cmd: T) -> Result<HttpFuture<T>> {
+        Ok(HttpFuture::new(
+            self.sender.clone(),
+            self.command_future(cmd)?,
+        ))
     }
 
     /// The identifier of this page's target

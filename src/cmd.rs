@@ -35,7 +35,7 @@ pub(crate) fn to_command_response<T: Command>(
 /// Messages used internally to communicate with the connection, which is
 /// executed in the the background task.
 #[derive(Debug, Serialize)]
-pub(crate) struct CommandMessage<T = Result<Response>> {
+pub struct CommandMessage<T = Result<Response>> {
     pub method: MethodId,
     #[serde(rename = "sessionId", skip_serializing_if = "Option::is_none")]
     pub session_id: Option<SessionId>,
