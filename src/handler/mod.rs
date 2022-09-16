@@ -366,6 +366,8 @@ impl Handler {
                 self.config.ignore_https_errors,
                 self.config.request_timeout,
                 self.config.viewport.clone(),
+                self.config.request_intercept,
+                self.config.cache_enabled,
             ),
             browser_ctx,
         );
@@ -558,6 +560,10 @@ pub struct HandlerConfig {
     pub context_ids: Vec<BrowserContextId>,
     /// default request timeout to use
     pub request_timeout: Duration,
+    /// Whether to enable request interception
+    pub request_intercept: bool,
+    /// Whether to enable cache
+    pub cache_enabled: bool,
 }
 
 impl Default for HandlerConfig {
@@ -567,6 +573,8 @@ impl Default for HandlerConfig {
             viewport: Default::default(),
             context_ids: Vec::new(),
             request_timeout: Duration::from_millis(REQUEST_TIMEOUT),
+            request_intercept: false,
+            cache_enabled: true,
         }
     }
 }
