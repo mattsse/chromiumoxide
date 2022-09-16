@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::pin::Pin;
 
-use async_tungstenite::{WebSocketStream, tungstenite::protocol::WebSocketConfig};
+use async_tungstenite::{tungstenite::protocol::WebSocketConfig, WebSocketStream};
 use futures::stream::Stream;
 use futures::task::{Context, Poll};
 use futures::Sink;
