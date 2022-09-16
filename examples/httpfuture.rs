@@ -19,7 +19,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let page = browser.new_page("https://en.wikipedia.org").await?;
 
-    let response1 = page
+    let _response1 = page
         .http_future(NavigateParams {
             url: "https://en.wikipedia.org".to_string(),
             transition_type: None,

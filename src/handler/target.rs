@@ -247,17 +247,15 @@ impl Target {
             }
 
             // `NetworkManager` events
-            CdpEvent::FetchRequestPaused(ev) => self.network_manager.on_fetch_request_paused(&*ev),
-            CdpEvent::FetchAuthRequired(ev) => self.network_manager.on_fetch_auth_required(&*ev),
+            CdpEvent::FetchRequestPaused(ev) => self.network_manager.on_fetch_request_paused(ev),
+            CdpEvent::FetchAuthRequired(ev) => self.network_manager.on_fetch_auth_required(ev),
             CdpEvent::NetworkRequestWillBeSent(ev) => {
-                self.network_manager.on_request_will_be_sent(&*ev)
+                self.network_manager.on_request_will_be_sent(ev)
             }
             CdpEvent::NetworkRequestServedFromCache(ev) => {
                 self.network_manager.on_request_served_from_cache(ev)
             }
-            CdpEvent::NetworkResponseReceived(ev) => {
-                self.network_manager.on_response_received(&*ev)
-            }
+            CdpEvent::NetworkResponseReceived(ev) => self.network_manager.on_response_received(ev),
             CdpEvent::NetworkLoadingFinished(ev) => {
                 self.network_manager.on_network_loading_finished(ev)
             }
