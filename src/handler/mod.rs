@@ -471,6 +471,18 @@ impl Stream for Handler {
                     HandlerMessage::Command(cmd) => {
                         pin.submit_external_command(cmd, now)?;
                     }
+                    HandlerMessage::CloseBrowser(tx) => {
+                        let close_msg = CloseParams::default();
+
+                        pin.conn.submit_command(
+                            close_msg.identifier(),
+                            None,
+                            serde_json::to_value(close_msg).unwrap(),
+                        )?;
+                        tx.send(Ok(CloseReturns {})).ok();
+
+                        return Poll::Ready(None);
+                    }
                     HandlerMessage::CreatePage(params, tx) => {
                         pin.create_page(params, tx);
                     }
@@ -669,4 +681,5 @@ pub(crate) enum HandlerMessage {
     Command(CommandMessage),
     GetPage(TargetId, OneshotSender<Option<Page>>),
     AddEventListener(EventListenerRequest),
+    CloseBrowser(OneshotSender<Result<CloseReturns>>),
 }

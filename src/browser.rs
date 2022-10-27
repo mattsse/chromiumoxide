@@ -24,7 +24,9 @@ use crate::handler::viewport::Viewport;
 use crate::handler::{Handler, HandlerConfig, HandlerMessage, REQUEST_TIMEOUT};
 use crate::listeners::{EventListenerRequest, EventStream};
 use crate::page::Page;
-use chromiumoxide_cdp::cdp::browser_protocol::browser::{GetVersionParams, GetVersionReturns};
+use chromiumoxide_cdp::cdp::browser_protocol::browser::{
+    CloseReturns, GetVersionParams, GetVersionReturns,
+};
 
 /// A [`Browser`] is created when chromiumoxide connects to a Chromium instance.
 #[derive(Debug)]
@@ -115,6 +117,17 @@ impl Browser {
         };
 
         Ok((browser, fut))
+    }
+
+    pub async fn close(&mut self) -> Result<CloseReturns> {
+        let (tx, rx) = oneshot_channel();
+
+        self.sender
+            .clone()
+            .send(HandlerMessage::CloseBrowser(tx))
+            .await?;
+
+        rx.await?
     }
 
     /// If not launched as incognito this creates a new incognito browser
