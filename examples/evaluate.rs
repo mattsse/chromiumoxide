@@ -7,17 +7,21 @@ use chromiumoxide_cdp::cdp::js_protocol::runtime::{
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt::init();
-
-    let (browser, mut handler) = Browser::launch(BrowserConfig::builder().build()?).await?;
+    let (mut browser, mut handler) = Browser::launch(BrowserConfig::builder().build()?).await?;
 
     let handle = async_std::task::spawn(async move {
         loop {
-            let _ = handler.next().await.unwrap();
+            match handler.next().await {
+                Some(h) => match h {
+                    Ok(_) => continue,
+                    Err(_) => break,
+                },
+                None => break,
+            }
         }
     });
 
-    let page = browser.new_page("https://en.wikipedia.org").await?;
+    let page = browser.new_page("about:blank").await?;
 
     let sum: usize = page.evaluate("1 + 2").await?.into_value()?;
     assert_eq!(sum, 3);
@@ -75,6 +79,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?
         .into_value()?;
     assert_eq!(val, 42);
+
+    browser.close().await?;
     handle.await;
     Ok(())
 }
