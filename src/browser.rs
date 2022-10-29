@@ -577,7 +577,7 @@ impl BrowserConfig {
         cmd.args(
             self.extensions
                 .iter()
-                .map(|e| format!("--load-extension={}", e)),
+                .map(|e| format!("--load-extension={e}")),
         );
 
         if let Some(ref user_data) = self.user_data_dir {
@@ -593,7 +593,7 @@ impl BrowserConfig {
         }
 
         if let Some((width, height)) = self.window_size {
-            cmd.arg(format!("--window-size={},{}", width, height));
+            cmd.arg(format!("--window-size={width},{height}"));
         }
 
         if !self.sandbox {

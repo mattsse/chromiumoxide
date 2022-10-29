@@ -111,7 +111,7 @@ impl Frame {
     fn navigated(&mut self, frame: &CdpFrame) {
         self.name = frame.name.clone();
         let url = if let Some(ref fragment) = frame.url_fragment {
-            format!("{}{}", frame.url, fragment)
+            format!("{}{fragment}", frame.url)
         } else {
             frame.url.clone()
         };
@@ -528,7 +528,7 @@ impl FrameManager {
         }
         self.isolated_worlds.insert(world_name.to_string());
         let cmd = AddScriptToEvaluateOnNewDocumentParams::builder()
-            .source(format!("//# sourceURL={}", EVALUATION_SCRIPT_URL))
+            .source(format!("//# sourceURL={EVALUATION_SCRIPT_URL}"))
             .world_name(world_name)
             .build()
             .unwrap();
