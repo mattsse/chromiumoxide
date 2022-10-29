@@ -201,7 +201,7 @@ impl PageInner {
     pub async fn press_key(&self, key: impl AsRef<str>) -> Result<&Self> {
         let key = key.as_ref();
         let key_definition = keys::get_key_definition(key)
-            .ok_or_else(|| CdpError::msg(format!("Key not found: {}", key)))?;
+            .ok_or_else(|| CdpError::msg(format!("Key not found: {key}")))?;
         let mut cmd = DispatchKeyEventParams::builder();
 
         // See https://github.com/GoogleChrome/puppeteer/blob/62da2366c65b335751896afbb0206f23c61436f1/lib/Input.js#L114-L115

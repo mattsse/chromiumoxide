@@ -25,21 +25,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let sum: usize = page.evaluate("1 + 2").await?.into_value()?;
     assert_eq!(sum, 3);
-    println!("1 + 2 = {}", sum);
+    println!("1 + 2 = {sum}");
 
     let mult: usize = page
         .evaluate("() => { return 21 * 2; }")
         .await?
         .into_value()?;
     assert_eq!(mult, 42);
-    println!("21 * 2 = {}", mult);
+    println!("21 * 2 = {mult}");
 
     let promise_div: usize = page
         .evaluate("() => Promise.resolve(100 / 25)")
         .await?
         .into_value()?;
     assert_eq!(promise_div, 4);
-    println!("100 / 25 = {}", promise_div);
+    println!("100 / 25 = {promise_div}");
 
     let call = CallFunctionOnParams::builder()
         .function_declaration("(a,b) => { return a + b;}")
@@ -49,21 +49,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap();
     let sum: usize = page.evaluate_function(call).await?.into_value()?;
     assert_eq!(sum, 3);
-    println!("1 + 2 = {}", sum);
+    println!("1 + 2 = {sum}");
 
     let sum: usize = page
         .evaluate_expression("((a,b) => {return a + b;})(1,2)")
         .await?
         .into_value()?;
     assert_eq!(sum, 3);
-    println!("1 + 2 = {}", sum);
+    println!("1 + 2 = {sum}");
 
     let val: usize = page
         .evaluate_function("async function() {return 42;}")
         .await?
         .into_value()?;
     assert_eq!(val, 42);
-    println!("42 = {}", val);
+    println!("42 = {val}");
 
     let eval = EvaluateParams::builder().expression("() => {return 42;}");
     // this will fail because the `EvaluationResult` returned by the browser will be

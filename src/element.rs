@@ -60,7 +60,7 @@ impl Element {
             .result
             .object
             .object_id
-            .ok_or_else(|| CdpError::msg(format!("No object Id found for {:?}", node_id)))?;
+            .ok_or_else(|| CdpError::msg(format!("No object Id found for {node_id:?}")))?;
         Ok(Self {
             remote_object_id,
             backend_node_id,

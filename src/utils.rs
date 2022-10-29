@@ -22,7 +22,7 @@ pub fn evaluation_string(function: impl AsRef<str>, params: &[impl AsRef<str>]) 
         .map(|s| format!("\"{}\"", s.as_ref()))
         .collect::<Vec<_>>()
         .join(",");
-    format!("({})({})", function.as_ref(), params)
+    format!("({})({params})", function.as_ref())
 }
 
 /// Tries to identify whether this a javascript function
