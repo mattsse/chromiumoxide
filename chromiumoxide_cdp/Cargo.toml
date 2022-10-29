@@ -2,7 +2,7 @@
 name = "chromiumoxide_cdp"
 version = "0.4.0"
 authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
-edition = "2018"
+edition = "2021"
 description = "Contains all the generated types for chromiumoxide"
 license = "MIT OR Apache-2.0"
 homepage = "https://github.com/mattsse/chromiumoxide"
