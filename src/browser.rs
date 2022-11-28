@@ -668,6 +668,8 @@ pub fn default_executable() -> Result<std::path::PathBuf, String> {
 pub(crate) fn get_chrome_path_from_windows_registry() -> Option<std::path::PathBuf> {
     winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE)
         .open_subkey("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\chrome.exe")
+        .or(winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
+            .open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\chrome.exe"))
         .and_then(|key| key.get_value::<String, _>(""))
         .map(std::path::PathBuf::from)
         .ok()
