@@ -3,7 +3,7 @@ use std::{
     collections::HashMap,
     io::{self, BufRead, BufReader},
     path::{Path, PathBuf},
-    process::{self, Child, Stdio, ExitStatus},
+    process::{self, Child, ExitStatus, Stdio},
 };
 
 use futures::channel::mpsc::{channel, unbounded, Sender};
@@ -131,10 +131,10 @@ impl Browser {
     }
 
     /// Wait for the spawned chromium instance (by method launch) to exit completely, usually called after the method close.
-    pub fn wait(&mut self)-> io::Result<Option<ExitStatus>>{
-        if let Some( child) = self.child.as_mut(){
+    pub fn wait(&mut self) -> io::Result<Option<ExitStatus>> {
+        if let Some(child) = self.child.as_mut() {
             Ok(Some(child.wait()?))
-        }else{
+        } else {
             Ok(None)
         }
     }
@@ -279,10 +279,10 @@ impl Browser {
 impl Drop for Browser {
     fn drop(&mut self) {
         if let Some(child) = self.child.as_mut() {
-            if let Ok(Some(s)) = child.try_wait(){
+            if let Ok(Some(s)) = child.try_wait() {
                 // already exited, do nothing. Usually occurs after using the method close.
                 // If there is a method to detect whether the child handle is still available, it should be used instead of try_wait.
-            }else{
+            } else {
                 child.kill().expect("!kill");
             }
         }
