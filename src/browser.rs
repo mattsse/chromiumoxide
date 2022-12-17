@@ -279,7 +279,7 @@ impl Browser {
 impl Drop for Browser {
     fn drop(&mut self) {
         if let Some(child) = self.child.as_mut() {
-            if let Ok(Some(s)) = child.try_wait() {
+            if let Ok(Some(_)) = child.try_wait() {
                 // already exited, do nothing. Usually occurs after using the method close.
                 // If there is a method to detect whether the child handle is still available, it should be used instead of try_wait.
             } else {
