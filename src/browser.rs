@@ -18,6 +18,7 @@ use chromiumoxide_types::*;
 
 use crate::cmd::{to_command_response, CommandMessage};
 use crate::conn::Connection;
+use crate::detection::{self, DetectionOptions};
 use crate::error::{CdpError, Result};
 use crate::handler::browser::BrowserContext;
 use crate::handler::viewport::Viewport;
@@ -379,6 +380,7 @@ pub struct BrowserConfigBuilder {
     window_size: Option<(u32, u32)>,
     port: u16,
     executable: Option<PathBuf>,
+    executation_detection: DetectionOptions,
     extensions: Vec<String>,
     process_envs: Option<HashMap<String, String>>,
     user_data_dir: Option<PathBuf>,
@@ -410,6 +412,7 @@ impl Default for BrowserConfigBuilder {
             window_size: None,
             port: 0,
             executable: None,
+            executation_detection: DetectionOptions::default(),
             extensions: Vec::new(),
             process_envs: None,
             user_data_dir: None,
@@ -473,6 +476,11 @@ impl BrowserConfigBuilder {
 
     pub fn chrome_executable(mut self, path: impl AsRef<Path>) -> Self {
         self.executable = Some(path.as_ref().to_path_buf());
+        self
+    }
+
+    pub fn chrome_detection(mut self, options: DetectionOptions) -> Self {
+        self.executation_detection = options;
         self
     }
 
@@ -546,7 +554,7 @@ impl BrowserConfigBuilder {
         let executable = if let Some(e) = self.executable {
             e
         } else {
-            default_executable()?
+            detection::default_executable(self.executation_detection)?
         };
 
         Ok(BrowserConfig {
@@ -637,58 +645,13 @@ impl BrowserConfig {
 /// searched for in standard places. If that fails,
 /// `/Applications/Google Chrome.app/...` (on MacOS) or the registry (on
 /// Windows) is consulted. If all of the above fail, an error is returned.
+#[deprecated(note = "Use detection::default_executable instead")]
 pub fn default_executable() -> Result<std::path::PathBuf, String> {
-    if let Ok(path) = std::env::var("CHROME") {
-        if std::path::Path::new(&path).exists() {
-            return Ok(path.into());
-        }
-    }
-
-    for app in &[
-        "google-chrome-stable",
-        "chromium",
-        "chromium-browser",
-        "chrome",
-        "chrome-browser",
-    ] {
-        if let Ok(path) = which::which(app) {
-            return Ok(path);
-        }
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        let default_paths = &["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"][..];
-        for path in default_paths {
-            if std::path::Path::new(path).exists() {
-                return Ok(path.into());
-            }
-        }
-    }
-
-    #[cfg(windows)]
-    {
-        if let Some(path) = get_chrome_path_from_windows_registry() {
-            if path.exists() {
-                return Ok(path);
-            }
-        }
-    }
-
-    Err("Could not auto detect a chrome executable".to_string())
-}
-
-#[cfg(windows)]
-pub(crate) fn get_chrome_path_from_windows_registry() -> Option<std::path::PathBuf> {
-    winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE)
-        .open_subkey("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\chrome.exe")
-        .or_else(|_| {
-            winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
-                .open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\chrome.exe")
-        })
-        .and_then(|key| key.get_value::<String, _>(""))
-        .map(std::path::PathBuf::from)
-        .ok()
+    let options = DetectionOptions {
+        msedge: false,
+        unstable: false,
+    };
+    detection::default_executable(options)
 }
 
 /// These are passed to the Chrome binary by default.
