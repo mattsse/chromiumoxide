@@ -59,22 +59,22 @@ fn get_by_env_var() -> Option<PathBuf> {
 }
 
 fn get_by_name(options: &DetectionOptions) -> Option<PathBuf> {
-    let default_programs = [
+    let default_apps = [
+        ("chrome", true),
+        ("chrome-browser", true),
         ("google-chrome-stable", true),
         ("google-chrome-beta", options.unstable),
         ("google-chrome-dev", options.unstable),
         ("google-chrome-unstable", options.unstable),
         ("chromium", true),
         ("chromium-browser", true),
-        ("chrome", true),
-        ("chrome-browser", true),
         ("msedge", options.msedge),
         ("microsoft-edge", options.msedge),
-        ("microsoft-edge-stable", options.msedge && options.unstable),
+        ("microsoft-edge-stable", options.msedge),
         ("microsoft-edge-beta", options.msedge && options.unstable),
         ("microsoft-edge-dev", options.msedge && options.unstable),
     ];
-    for (app, allowed) in default_programs {
+    for (app, allowed) in default_apps {
         if !allowed {
             continue;
         }
