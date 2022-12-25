@@ -846,7 +846,7 @@ impl Generator {
                 let ty = if let Type::Ref(name) = ty.deref() {
                     self.projected_type(domain, name)
                 } else {
-                    let (ty, _) = self.generate_field_type(domain, parent, param_name, &*ty);
+                    let (ty, _) = self.generate_field_type(domain, parent, param_name, ty);
                     quote! {#ty}
                 };
                 (FieldType::new_vec(ty), Either::Left(size_of::<Vec<()>>()))
