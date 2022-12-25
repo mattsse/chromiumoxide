@@ -18,6 +18,7 @@ async-std = { version = "1.5", features = ["attributes", "unstable"], optional =
 futures = "0.3"
 chromiumoxide_types = { path = "chromiumoxide_types", version = "0.4"}
 chromiumoxide_cdp = { path = "chromiumoxide_cdp", version = "0.4"}
+chromiumoxide_fetcher = { path = "chromiumoxide_fetcher", version = "0.4", optional = true }
 serde_json = "1"
 which = "4"
 thiserror = "1"
@@ -40,9 +41,12 @@ chrono = "0.4.1"
 tracing-subscriber = "0.2"
 
 [features]
-default = ["async-std-runtime"]
-async-std-runtime = ["async-std", "async-tungstenite/async-std-runtime"]
-tokio-runtime = ["tokio", "async-tungstenite/tokio-runtime"]
+default = ["async-std-runtime", "native-tls", "fetcher"]
+async-std-runtime = ["async-std", "async-tungstenite/async-std-runtime", "chromiumoxide_fetcher?/async-std-runtime"]
+tokio-runtime = ["tokio", "async-tungstenite/tokio-runtime", "chromiumoxide_fetcher?/tokio-runtime"]
+rustls-tls = ["chromiumoxide_fetcher?/rustls-tls"]
+native-tls = ["chromiumoxide_fetcher?/native-tls"]
+fetcher = ["chromiumoxide_fetcher"]
 
 [[example]]
 name = "wiki-tokio"
@@ -56,5 +60,6 @@ required-features = ["tokio-runtime"]
 members = [
     "chromiumoxide_pdl",
     "chromiumoxide_types",
-    "chromiumoxide_cdp"
+    "chromiumoxide_cdp",
+    "chromiumoxide_fetcher",
 ]

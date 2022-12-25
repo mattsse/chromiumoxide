@@ -1,0 +1,23 @@
+[package]
+name = "chromiumoxide_fetcher"
+version = "0.4.0"
+authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Contains a chromium fetcher"
+homepage = "https://github.com/mattsse/chromiumoxide"
+repository = "https://github.com/mattsse/chromiumoxide"
+readme = "../README.md"
+include = ["src/**/*", "LICENSE-*"]
+
+[dependencies]
+zip = { version = "0.6" }
+reqwest = { version = "0.11", default-features = false, optional = true }
+surf = { version = "2.3", default-features = false, optional = true }
+
+[features]
+default = ["async-std-runtime"]
+async-std-runtime = ["surf"]
+tokio-runtime = ["reqwest"]
+rustls-tls = ["reqwest?/rustls-tls", "surf?/h1-client-rustls"]
+native-tls = ["reqwest?/native-tls", "surf?/h1-client"]
