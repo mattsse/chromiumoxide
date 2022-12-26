@@ -79,6 +79,7 @@ pub mod auth;
 pub mod browser;
 pub(crate) mod cmd;
 pub mod conn;
+pub mod detection;
 pub mod element;
 pub mod error;
 pub mod fetcher;
