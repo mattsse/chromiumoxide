@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 pub type MethodId = Cow<'static, str>;
 
 /// A Request sent by the client, identified by the `id`
-#[derive(Serialize, Debug, PartialEq)]
+#[derive(Serialize, Debug, PartialEq, Eq)]
 pub struct MethodCall {
     /// Identifier for this method call
     ///
@@ -81,7 +81,7 @@ impl<T: fmt::Debug> Deref for CommandResponse<T> {
 
 /// A received `Event` from the websocket where the `params` is deserialized as
 /// json
-#[derive(Deserialize, Debug, PartialEq, Clone)]
+#[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct CdpJsonEventMessage {
     /// Name of the method
     pub method: MethodId,
@@ -152,7 +152,7 @@ pub trait MethodType {
 }
 
 /// A Wrapper for json serialized requests
-#[derive(Deserialize, Debug, PartialEq, Clone)]
+#[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Request {
     /// The identifier for the type of this request.
     pub method: MethodId,
@@ -186,7 +186,7 @@ impl Request {
 }
 
 /// A response to a [`MethodCall`] from the chromium instance
-#[derive(Deserialize, Debug, PartialEq, Clone)]
+#[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Response {
     /// Numeric identifier for the exact request
     pub id: CallId,
@@ -212,7 +212,7 @@ pub enum Message<T = CdpJsonEventMessage> {
 /// A response can either contain the `Command::Response` type in the `result`
 /// field of the payload or an `Error` in the `error` field if the request
 /// resulted in an error.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResponseError {
     pub id: CallId,
     /// Error code
@@ -223,7 +223,7 @@ pub struct ResponseError {
 
 /// Represents the error type emitted by the chromium server for failed
 /// requests.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Error {
     /// Error code
     pub code: i64,

@@ -7,6 +7,7 @@ use crate::cdp::js_protocol::runtime::{
     CallFunctionOnParams, EvaluateParams, ExceptionDetails, StackTrace,
 };
 
+#[allow(clippy::derive_partial_eq_without_eq)]
 pub mod cdp;
 
 /// convenience fixups
