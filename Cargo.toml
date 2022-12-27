@@ -45,13 +45,14 @@ tracing-subscriber = "0.2"
 default = ["async-std-runtime"]
 async-std-runtime = ["async-std", "async-tungstenite/async-std-runtime"]
 tokio-runtime = ["tokio", "async-tungstenite/tokio-runtime"]
+fetcher = []
 
 # Temporary features until cargo weak dependencies bug is fixed
 # See https://github.com/rust-lang/cargo/issues/10801
-_fetcher-rustls-async-std = ["chromiumoxide_fetcher/_rustls-async-std"]
-_fetcher-rusttls-tokio = ["chromiumoxide_fetcher/_rustls-tokio"]
-_fetcher-native-async-std = ["chromiumoxide_fetcher/_native-async-std"]
-_fetcher-native-tokio = ["chromiumoxide_fetcher/_native-tokio"]
+_fetcher-rustls-async-std = ["fetcher", "chromiumoxide_fetcher/_rustls-async-std"]
+_fetcher-rusttls-tokio = ["fetcher", "chromiumoxide_fetcher/_rustls-tokio"]
+_fetcher-native-async-std = ["fetcher", "chromiumoxide_fetcher/_native-async-std"]
+_fetcher-native-tokio = ["fetcher", "chromiumoxide_fetcher/_native-tokio"]
 
 [[example]]
 name = "wiki-tokio"
