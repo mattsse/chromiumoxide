@@ -62,6 +62,14 @@ required-features = ["tokio-runtime"]
 name = "httpfuture"
 required-features = ["tokio-runtime"]
 
+[[example]]
+name = "fetcher"
+required-features = ["_fetcher-native-async-std"]
+
+[[example]]
+name = "fetcher-tokio"
+required-features = ["tokio-runtime", "_fetcher-native-tokio"]
+
 [workspace]
 members = [
     "chromiumoxide_pdl",
