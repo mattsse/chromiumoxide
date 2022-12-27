@@ -41,8 +41,19 @@ impl Platform {
         }
     }
 
-    pub(crate) fn executable(&self, folder: &Path, revision: &Revision) -> PathBuf {
-        let mut path = folder.to_path_buf();
+    pub(crate) fn folder_name(&self, revision: &Revision) -> String {
+        let platform = match self {
+            Self::Linux => "linux",
+            Self::Mac => "mac",
+            Self::MacArm => "mac_arm",
+            Self::Win32 => "win32",
+            Self::Win64 => "win64",
+        };
+        format!("{platform}-{revision}")
+    }
+
+    pub(crate) fn executable(&self, folder_path: &Path, revision: &Revision) -> PathBuf {
+        let mut path = folder_path.to_path_buf();
         path.push(self.archive_name(revision));
         match self {
             Self::Linux => path.push("chrome"),

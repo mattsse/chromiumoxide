@@ -12,15 +12,21 @@ include = ["src/**/*", "LICENSE-*"]
 
 [dependencies]
 thiserror = "1"
+anyhow = "1"
 directories = "4"
 os_info = { version = "3", default-features = false }
 zip = { version = "0.6" }
+async-std = { version = "1.5", optional = true }
+tokio = { version = "1", features = ["fs"], optional = true }
 reqwest = { version = "0.11", default-features = false, optional = true }
 surf = { version = "2.3", default-features = false, optional = true }
 
 [features]
 default = ["async-std-runtime"]
-async-std-runtime = ["surf"]
-tokio-runtime = ["reqwest"]
-rustls-tls = ["reqwest?/rustls-tls", "surf?/h1-client-rustls"]
-native-tls = ["reqwest?/native-tls", "surf?/h1-client"]
+async-std-runtime = ["_native-async-std"]
+tokio-runtime = ["_native-tokio"]
+
+_rustls-async-std = ["surf/h1-client-rustls", "async-std"]
+_rustls-tokio = ["reqwest/rustls-tls", "tokio"]
+_native-async-std = ["surf/h1-client", "async-std"]
+_native-tokio = ["reqwest/native-tls", "tokio"]

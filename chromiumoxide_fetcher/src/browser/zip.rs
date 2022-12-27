@@ -25,6 +25,10 @@ impl<R: Read + Seek> DerefMut for ZipArchive<R> {
 }
 
 impl<R: Read + Seek> ZipArchive<R> {
+    pub fn new(reader: R) -> ZipResult<Self> {
+        zip::ZipArchive::new(reader).map(|z| Self(z))
+    }
+
     /// We need this custom extract function to support symlinks.
     /// This is based on https://github.com/zip-rs/zip/pull/213.
     ///

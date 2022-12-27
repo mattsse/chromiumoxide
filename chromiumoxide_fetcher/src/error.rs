@@ -12,6 +12,12 @@ pub enum FetcherError {
     #[error("No path available to download browsers to")]
     NoPathAvailable,
 
+    #[error("Download of browser failed")]
+    DownloadFailed(#[source] anyhow::Error),
+
+    #[error("Installation of browser failed")]
+    InstallFailed(#[source] anyhow::Error),
+
     #[error("OS {0} {1} is not supported")]
     UnsupportedOs(&'static str, &'static str),
 }
