@@ -85,9 +85,7 @@ pub mod element;
 pub mod error;
 #[cfg(feature = "fetcher")]
 pub mod fetcher {
-    pub use chromiumoxide_fetcher::{
-        BrowserFetcher, BrowserFetcherOptions, FetcherError, Platform, Revision,
-    };
+    pub use chromiumoxide_fetcher::*;
 }
 pub mod handler;
 pub mod js;
