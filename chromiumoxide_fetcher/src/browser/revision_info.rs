@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use crate::Revision;
 
+/// Details of an installed version of chromium
 #[derive(Clone, Debug)]
 pub struct BrowserFetcherRevisionInfo {
     pub folder_path: PathBuf,

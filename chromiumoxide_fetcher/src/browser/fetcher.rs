@@ -4,6 +4,7 @@ use super::{BrowserFetcherOptions, BrowserFetcherRevisionInfo, BrowserFetcherRun
 use crate::error::{FetcherError, Result};
 use crate::{Platform, Revision};
 
+/// A [`BrowserFetcher`] used to download and install a version of chromium.
 pub struct BrowserFetcher {
     revision: Revision,
     host: String,
@@ -21,6 +22,17 @@ impl BrowserFetcher {
         }
     }
 
+    /// Fetches the browser revision, either locally if it was previously
+    /// installed or remotely. If fetching remotely, the method can take a long
+    /// time to resolve.
+    ///
+    /// This fails if the download or installation fails. The fetcher doesn't
+    /// retry on network errors during download. If the installation fails,
+    /// it might leave the cache in a bad state and it is advised to wipe it.
+    ///
+    /// If providing a custom host, make sure files are in the same places as
+    /// the official builds otherwise the installation will succeed but the runtime
+    /// will fail.
     pub async fn fetch(&self) -> Result<BrowserFetcherRevisionInfo> {
         if !self.local().await {
             self.download().await?;

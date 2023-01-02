@@ -2,6 +2,11 @@ use std::fmt;
 
 use crate::FetcherError;
 
+/// A [`Revision`] represents a version of chromium.
+///
+/// The revision must be compatible with the Chrome DevTools Protocol (CDP)
+/// shipped with chromiumoxide otherwise it will fail to communicate with
+/// the browser.
 #[derive(Clone, Debug, PartialOrd, Ord, PartialEq, Eq)]
 pub struct Revision(pub(crate) u32);
 

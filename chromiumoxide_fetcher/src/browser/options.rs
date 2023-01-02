@@ -8,6 +8,7 @@ use crate::{Platform, Revision, CURRENT_REVISION};
 const CACHE_NAME: &str = "chromiumoxide";
 const DEFAULT_HOST: &str = "https://storage.googleapis.com";
 
+/// Options for the fetcher
 pub struct BrowserFetcherOptions {
     /// The desired browser revision.
     ///
@@ -32,12 +33,7 @@ pub struct BrowserFetcherOptions {
 
 impl BrowserFetcherOptions {
     pub fn builder() -> BrowserFetcherOptionsBuilder {
-        BrowserFetcherOptionsBuilder {
-            revision: None,
-            host: None,
-            path: None,
-            platform: None,
-        }
+        BrowserFetcherOptionsBuilder::default()
     }
 
     pub fn default() -> Result<Self> {
@@ -45,6 +41,7 @@ impl BrowserFetcherOptions {
     }
 }
 
+#[derive(Default)]
 pub struct BrowserFetcherOptionsBuilder {
     revision: Option<Revision>,
     host: Option<String>,

@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use crate::Revision;
 
+/// List of platforms with pre-built chromium binaries
 #[derive(Clone, Copy, Debug)]
 pub enum Platform {
     Linux,
