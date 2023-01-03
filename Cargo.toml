@@ -1,6 +1,7 @@
 [package]
 name = "chromiumoxide"
 version = "0.4.0"
+rust-version = "1.60"
 authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
@@ -18,6 +19,7 @@ async-std = { version = "1.5", features = ["attributes", "unstable"], optional =
 futures = "0.3"
 chromiumoxide_types = { path = "chromiumoxide_types", version = "0.4"}
 chromiumoxide_cdp = { path = "chromiumoxide_cdp", version = "0.4"}
+chromiumoxide_fetcher = { path = "chromiumoxide_fetcher", version = "0.4", default-features = false, optional = true }
 serde_json = "1"
 which = "4"
 thiserror = "1"
@@ -43,6 +45,14 @@ tracing-subscriber = "0.2"
 default = ["async-std-runtime"]
 async-std-runtime = ["async-std", "async-tungstenite/async-std-runtime"]
 tokio-runtime = ["tokio", "async-tungstenite/tokio-runtime"]
+fetcher = []
+
+# Temporary features until cargo weak dependencies bug is fixed
+# See https://github.com/rust-lang/cargo/issues/10801
+_fetcher-rustls-async-std = ["fetcher", "chromiumoxide_fetcher/_rustls-async-std"]
+_fetcher-rusttls-tokio = ["fetcher", "chromiumoxide_fetcher/_rustls-tokio"]
+_fetcher-native-async-std = ["fetcher", "chromiumoxide_fetcher/_native-async-std"]
+_fetcher-native-tokio = ["fetcher", "chromiumoxide_fetcher/_native-tokio"]
 
 [[example]]
 name = "wiki-tokio"
@@ -52,9 +62,18 @@ required-features = ["tokio-runtime"]
 name = "httpfuture"
 required-features = ["tokio-runtime"]
 
+[[example]]
+name = "fetcher"
+required-features = ["_fetcher-native-async-std"]
+
+[[example]]
+name = "fetcher-tokio"
+required-features = ["tokio-runtime", "_fetcher-native-tokio"]
+
 [workspace]
 members = [
     "chromiumoxide_pdl",
     "chromiumoxide_types",
-    "chromiumoxide_cdp"
+    "chromiumoxide_cdp",
+    "chromiumoxide_fetcher",
 ]

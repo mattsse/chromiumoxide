@@ -86,6 +86,7 @@ fn get_by_name(options: &DetectionOptions) -> Option<PathBuf> {
     None
 }
 
+#[allow(unused_variables)]
 fn get_by_path(options: &DetectionOptions) -> Option<PathBuf> {
     #[cfg(all(unix, not(target_os = "macos")))]
     let default_paths: [(&str, bool); 0] = [];
