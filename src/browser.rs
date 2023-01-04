@@ -545,8 +545,18 @@ impl BrowserConfigBuilder {
         self
     }
 
+    pub fn disable_request_intercept(mut self) -> Self {
+        self.request_intercept = false;
+        self
+    }
+
     pub fn enable_cache(mut self) -> Self {
         self.cache_enabled = true;
+        self
+    }
+
+    pub fn disable_cache(mut self) -> Self {
+        self.cache_enabled = false;
         self
     }
 
