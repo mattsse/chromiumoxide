@@ -953,9 +953,9 @@ fn validate_cookie_url(url: &str) -> Result<()> {
     if url.starts_with("data:") {
         Err(CdpError::msg("Data URL page can not have cookie"))
     } else if url == "about:blank" {
-        Ok(())
-    } else {
         Err(CdpError::msg("Blank page can not have cookie"))
+    } else {
+        Ok(())
     }
 }
 
