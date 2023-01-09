@@ -131,13 +131,33 @@ impl Browser {
         rx.await?
     }
 
-    /// Wait for the spawned chromium instance (by method launch) to exit completely, usually called after the method close.
+    /// Wait for the spawned chromium instance (by method launch) to exit completely usually called after the method close. this method is blocking
     pub fn wait(&mut self) -> io::Result<Option<ExitStatus>> {
         if let Some(child) = self.child.as_mut() {
             Ok(Some(child.wait()?))
         } else {
             Ok(None)
         }
+    }
+
+    /// Try Wait for the spawned chromium instance (by method launch) to exit completely usually called after the method close. this method is non blocking
+    pub fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
+        if let Some(child) = self.child.as_mut() {
+            child.try_wait()
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// get child instance
+    pub fn get_mut_child(&mut self) -> Option<&mut Child> {
+        self.child.as_mut()
+    }
+
+    /// force kill browser process if it doesn't close after calling close,
+    /// which is almost always the case, you'll also need to call wait [blocking] or try_wait()
+    pub fn kill(&mut self) -> Option<io::Result<()>> {
+        self.child.as_mut().map(|child| child.kill())
     }
 
     /// If not launched as incognito this creates a new incognito browser
@@ -285,6 +305,17 @@ impl Drop for Browser {
                 // If there is a method to detect whether the child handle is still available, it should be used instead of try_wait.
             } else {
                 child.kill().expect("!kill");
+                // important to wait other wise kill will leave zombie process in system
+                // this is blocking call and we dont have any choice in the drop function
+                // one way is to do something like
+                // tokio::task::spawn_blocking(move || {
+                //   drop(browser);
+                // });
+                // otherwise the end developer will have to make sure
+                // child process is killed either by manually calling kill() and wait()
+                // or call kill() and then repeatedly calling try_wait() until it return true
+                // if developer wants true asynchronous version
+                child.wait().expect("!wait");
             }
         }
     }
