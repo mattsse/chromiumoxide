@@ -1,0 +1,32 @@
+[package]
+name = "chromiumoxide_fetcher"
+version = "0.4.0"
+authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Contains a chromium fetcher"
+homepage = "https://github.com/mattsse/chromiumoxide"
+repository = "https://github.com/mattsse/chromiumoxide"
+readme = "../README.md"
+include = ["src/**/*", "LICENSE-*"]
+
+[dependencies]
+thiserror = "1"
+anyhow = "1"
+directories = "4"
+os_info = { version = "3", default-features = false }
+zip = { version = "0.6", default-features = false, features = ["deflate"] }
+async-std = { version = "1.5", optional = true }
+tokio = { version = "1", features = ["fs"], optional = true }
+reqwest = { version = "0.11", default-features = false, optional = true }
+surf = { version = "2.3", default-features = false, optional = true }
+
+[features]
+default = ["_native-async-std"]
+async-std-runtime = ["async-std", "surf"]
+tokio-runtime = ["tokio", "reqwest"]
+
+_rustls-async-std = ["surf/h1-client-rustls", "async-std-runtime"]
+_rustls-tokio = ["reqwest/rustls-tls", "tokio-runtime"]
+_native-async-std = ["surf/h1-client", "async-std-runtime"]
+_native-tokio = ["reqwest/native-tls", "tokio-runtime"]
