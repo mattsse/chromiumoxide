@@ -29,6 +29,9 @@ use chromiumoxide_cdp::cdp::browser_protocol::browser::{
     CloseReturns, GetVersionParams, GetVersionReturns,
 };
 
+/// Default `Browser::launch` timeout in MS
+pub const LAUNCH_TIMEOUT: u64 = 20_000;
+
 /// A [`Browser`] is created when chromiumoxide connects to a Chromium instance.
 #[derive(Debug)]
 pub struct Browser {
@@ -72,7 +75,8 @@ impl Browser {
     /// This fails when no chromium executable could be detected.
     ///
     /// This fails if no web socket url could be detected from the child
-    /// processes stderr for more than 20 seconds.
+    /// processes stderr for more than the configured `launch_timeout`
+    /// (20 seconds by default).
     pub async fn launch(config: BrowserConfig) -> Result<(Self, Handler)> {
         // launch a new chromium instance
         let mut child = config.launch()?;
@@ -80,7 +84,7 @@ impl Browser {
         // extract the ws:
         let get_ws_url = ws_url_from_output(&mut child);
 
-        let dur = Duration::from_secs(20);
+        let dur = config.launch_timeout;
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "async-std-runtime")] {
@@ -385,6 +389,9 @@ pub struct BrowserConfig {
     /// Whether to launch the `Browser` in incognito mode
     incognito: bool,
 
+    /// Timeout duration for `Browser::launch`.
+    launch_timeout: Duration,
+
     /// Ignore https errors, default is true
     ignore_https_errors: bool,
     viewport: Viewport,
@@ -416,6 +423,7 @@ pub struct BrowserConfigBuilder {
     process_envs: Option<HashMap<String, String>>,
     user_data_dir: Option<PathBuf>,
     incognito: bool,
+    launch_timeout: Duration,
     ignore_https_errors: bool,
     viewport: Viewport,
     request_timeout: Duration,
@@ -448,6 +456,7 @@ impl Default for BrowserConfigBuilder {
             process_envs: None,
             user_data_dir: None,
             incognito: false,
+            launch_timeout: Duration::from_millis(LAUNCH_TIMEOUT),
             ignore_https_errors: true,
             viewport: Default::default(),
             request_timeout: Duration::from_millis(REQUEST_TIMEOUT),
@@ -487,6 +496,11 @@ impl BrowserConfigBuilder {
 
     pub fn port(mut self, port: u16) -> Self {
         self.port = port;
+        self
+    }
+
+    pub fn launch_timeout(mut self, timeout: Duration) -> Self {
+        self.launch_timeout = timeout;
         self
     }
 
@@ -608,6 +622,7 @@ impl BrowserConfigBuilder {
             process_envs: self.process_envs,
             user_data_dir: self.user_data_dir,
             incognito: self.incognito,
+            launch_timeout: self.launch_timeout,
             ignore_https_errors: self.ignore_https_errors,
             viewport: self.viewport,
             request_timeout: self.request_timeout,
