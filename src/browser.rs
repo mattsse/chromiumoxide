@@ -1,9 +1,8 @@
 use std::time::Duration;
 use std::{
     collections::HashMap,
-    io::{self, BufRead, BufReader},
+    io,
     path::{Path, PathBuf},
-    process::{self, Child, ExitStatus, Stdio},
 };
 
 use futures::channel::mpsc::{channel, unbounded, Sender};
@@ -16,6 +15,7 @@ use chromiumoxide_cdp::cdp::browser_protocol::target::{
 use chromiumoxide_cdp::cdp::{CdpEventMessage, IntoEventKind};
 use chromiumoxide_types::*;
 
+use crate::async_process::{self, Child, ExitStatus, Stdio};
 use crate::cmd::{to_command_response, CommandMessage};
 use crate::conn::Connection;
 use crate::detection::{self, DetectionOptions};
@@ -326,13 +326,17 @@ impl Drop for Browser {
 }
 
 async fn ws_url_from_output(child_process: &mut Child) -> String {
-    let stdout = child_process.stderr.take().expect("no stderror");
+    let stderr = child_process.stderr.take().expect("no stderror");
 
-    fn read_debug_url(stdout: std::process::ChildStderr) -> String {
-        let mut buf = BufReader::new(stdout);
+    async fn read_debug_url<S>(stream: S) -> String
+    where
+        S: futures::AsyncRead + Unpin,
+    {
+        use futures::AsyncBufReadExt;
+        let mut buf = futures::io::BufReader::new(stream);
         let mut line = String::new();
         loop {
-            if buf.read_line(&mut line).is_ok() {
+            if buf.read_line(&mut line).await.is_ok() {
                 // check for ws in line
                 if let Some(ws) = line.rsplit("listening on ").next() {
                     if ws.starts_with("ws") && ws.contains("devtools/browser") {
@@ -344,13 +348,7 @@ async fn ws_url_from_output(child_process: &mut Child) -> String {
             }
         }
     }
-    cfg_if::cfg_if! {
-        if #[cfg(feature = "async-std-runtime")] {
-            async_std::task::spawn_blocking(|| read_debug_url(stdout)).await
-        } else if #[cfg(feature = "tokio-runtime")] {
-            tokio::task::spawn_blocking(move || read_debug_url(stdout)).await.expect("Failed to read debug url from process output")
-        }
-    }
+    read_debug_url(stderr).await
 }
 
 #[derive(Debug, Clone)]
@@ -636,7 +634,7 @@ impl BrowserConfigBuilder {
 
 impl BrowserConfig {
     pub fn launch(&self) -> io::Result<Child> {
-        let mut cmd = process::Command::new(&self.executable);
+        let mut cmd = async_process::Command::new(&self.executable);
 
         if self.disable_default_args {
             cmd.args(&self.args);
