@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::time::Duration;
 use std::{
     collections::HashMap,
@@ -7,6 +8,7 @@ use std::{
 
 use futures::channel::mpsc::{channel, unbounded, Sender};
 use futures::channel::oneshot::channel as oneshot_channel;
+use futures::select;
 use futures::SinkExt;
 
 use chromiumoxide_cdp::cdp::browser_protocol::target::{
@@ -19,7 +21,7 @@ use crate::async_process::{self, Child, ExitStatus, Stdio};
 use crate::cmd::{to_command_response, CommandMessage};
 use crate::conn::Connection;
 use crate::detection::{self, DetectionOptions};
-use crate::error::{CdpError, Result};
+use crate::error::{BrowserStderr, CdpError, Result};
 use crate::handler::browser::BrowserContext;
 use crate::handler::viewport::Viewport;
 use crate::handler::{Handler, HandlerConfig, HandlerMessage, REQUEST_TIMEOUT};
@@ -81,21 +83,19 @@ impl Browser {
         // launch a new chromium instance
         let mut child = config.launch()?;
 
-        // extract the ws:
-        let get_ws_url = ws_url_from_output(&mut child);
-
         let dur = config.launch_timeout;
-
         cfg_if::cfg_if! {
             if #[cfg(feature = "async-std-runtime")] {
-                let debug_ws_url = async_std::future::timeout(dur, get_ws_url)
-            .await
-            .map_err(|_| CdpError::Timeout)?;
+                let timeout_fut = Box::pin(async_std::task::sleep(dur));
             } else if #[cfg(feature = "tokio-runtime")] {
-                let debug_ws_url = tokio::time::timeout(dur, get_ws_url).await
-            .map_err(|_| CdpError::Timeout)?;
+                let timeout_fut = tokio::time::sleep(dur);
+            } else {
+                panic!("missing chromiumoxide runtime: enable `async-std-runtime` or `tokio-runtime`")
             }
-        }
+        };
+
+        // extract the ws:
+        let debug_ws_url = ws_url_from_output(&mut child, timeout_fut).await?;
 
         let conn = Connection::<CdpEventMessage>::connect(&debug_ws_url).await?;
 
@@ -325,30 +325,62 @@ impl Drop for Browser {
     }
 }
 
-async fn ws_url_from_output(child_process: &mut Child) -> String {
+/// Resolve devtools WebSocket URL from the provided browser process
+///
+/// If an error occurs, it returns the browser's stderr output.
+///
+/// The URL resolution fails if:
+/// - [`CdpError::LaunchTimeout`]: `timeout_fut` completes, this corresponds to a timeout
+/// - [`CdpError::LaunchExit`]: the browser process exits (or is killed)
+/// - [`CdpError::LaunchIo`]: an input/output error occurs when await the process exit or reading
+///   the browser's stderr: end of stream, invalid UTF-8, other
+async fn ws_url_from_output(
+    child_process: &mut Child,
+    timeout_fut: impl Future<Output = ()> + Unpin,
+) -> Result<String> {
+    use futures::{AsyncBufReadExt, FutureExt};
+    let mut timeout_fut = timeout_fut.fuse();
     let stderr = child_process.stderr.take().expect("no stderror");
-
-    async fn read_debug_url<S>(stream: S) -> String
-    where
-        S: futures::AsyncRead + Unpin,
-    {
-        use futures::AsyncBufReadExt;
-        let mut buf = futures::io::BufReader::new(stream);
-        let mut line = String::new();
-        loop {
-            if buf.read_line(&mut line).await.is_ok() {
-                // check for ws in line
-                if let Some(ws) = line.rsplit("listening on ").next() {
-                    if ws.starts_with("ws") && ws.contains("devtools/browser") {
-                        return ws.trim().to_string();
+    let mut stderr_bytes = Vec::<u8>::new();
+    let mut exit_status_fut = Box::pin(child_process.async_wait()).fuse();
+    let mut buf = futures::io::BufReader::new(stderr);
+    loop {
+        select! {
+            _ = timeout_fut => return Err(CdpError::LaunchTimeout(BrowserStderr::new(stderr_bytes))),
+            exit_status = exit_status_fut => {
+                return Err(match exit_status {
+                    Err(e) => CdpError::LaunchIo(e, BrowserStderr::new(stderr_bytes)),
+                    Ok(exit_status) => CdpError::LaunchExit(exit_status, BrowserStderr::new(stderr_bytes)),
+                })
+            },
+            read_res = buf.read_until(b'\n', &mut stderr_bytes).fuse() => {
+                match read_res {
+                    Err(e) => return Err(CdpError::LaunchIo(e, BrowserStderr::new(stderr_bytes))),
+                    Ok(byte_count) => {
+                        if byte_count == 0 {
+                            let e = io::Error::new(io::ErrorKind::UnexpectedEof, "unexpected end of stream");
+                            return Err(CdpError::LaunchIo(e, BrowserStderr::new(stderr_bytes)));
+                        }
+                        let start_offset = stderr_bytes.len() - byte_count;
+                        let new_bytes = &stderr_bytes[start_offset..];
+                        match std::str::from_utf8(new_bytes) {
+                            Err(_) => {
+                                let e = io::Error::new(io::ErrorKind::InvalidData, "stream did not contain valid UTF-8");
+                                return Err(CdpError::LaunchIo(e, BrowserStderr::new(stderr_bytes)));
+                            }
+                            Ok(line) => {
+                                if let Some((_, ws)) = line.rsplit_once("listening on ") {
+                                    if ws.starts_with("ws") && ws.contains("devtools/browser") {
+                                        return Ok(ws.trim().to_string());
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-            } else {
-                line = String::new();
             }
         }
     }
-    read_debug_url(stderr).await
 }
 
 #[derive(Debug, Clone)]
