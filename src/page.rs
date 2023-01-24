@@ -404,7 +404,7 @@ impl Page {
     /// # Note Generating a pdf is currently only supported in Chrome headless.
     pub async fn pdf(&self, params: PrintToPdfParams) -> Result<Vec<u8>> {
         let res = self.execute(params).await?;
-        Ok(base64::decode(&res.data)?)
+        Ok(utils::base64::decode(&res.data)?)
     }
 
     /// Save the current page as pdf as file to the `output` path and return the

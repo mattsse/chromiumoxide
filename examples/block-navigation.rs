@@ -3,6 +3,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_std::task::sleep;
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
 use chromiumoxide::cdp::browser_protocol::fetch::{
     self, ContinueRequestParams, EventRequestPaused, FailRequestParams, FulfillRequestParams,
 };
@@ -211,7 +213,7 @@ async fn fullfill(page: &Page, request_id: &fetch::RequestId) {
         .execute(
             FulfillRequestParams::builder()
                 .request_id(request_id.clone())
-                .body(base64::encode(CONTENT))
+                .body(BASE64_STANDARD.encode(CONTENT))
                 .response_code(200)
                 .build()
                 .unwrap(),

@@ -13,7 +13,7 @@ keywords = ["chrome", "chromedriver", "puppeteer", "automation"]
 categories = ["web-programming", "api-bindings", "development-tools::testing"]
 
 [dependencies]
-async-tungstenite = "0.17"
+async-tungstenite = "0.19"
 serde = { version = "1", features = ["derive"] }
 async-std = { version = "1.5", features = ["attributes", "unstable"], optional = true }
 futures = "0.3"
@@ -24,7 +24,7 @@ serde_json = "1"
 which = "4"
 thiserror = "1"
 url = "2"
-base64 = "0.13"
+base64 = "0.21"
 fnv = "1"
 futures-timer = "3"
 cfg-if = "1"
