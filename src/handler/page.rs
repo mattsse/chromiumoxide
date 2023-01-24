@@ -36,7 +36,7 @@ use crate::handler::target_message_future::TargetMessageFuture;
 use crate::js::EvaluationResult;
 use crate::layout::Point;
 use crate::page::ScreenshotParams;
-use crate::{keys, ArcHttpRequest};
+use crate::{keys, utils, ArcHttpRequest};
 
 #[derive(Debug)]
 pub struct PageHandle {
@@ -383,7 +383,7 @@ impl PageInner {
             self.execute(ClearDeviceMetricsOverrideParams {}).await?;
         }
 
-        Ok(base64::decode(&res.data)?)
+        Ok(utils::base64::decode(&res.data)?)
     }
 }
 

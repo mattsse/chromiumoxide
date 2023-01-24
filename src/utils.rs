@@ -14,6 +14,16 @@ pub(crate) async fn write<P: AsRef<Path> + Unpin, C: AsRef<[u8]>>(
     }
 }
 
+pub(crate) mod base64 {
+    use base64::engine::general_purpose::STANDARD;
+    use base64::{DecodeError, Engine};
+
+    /// Decode base64 using the standard alphabet and padding
+    pub fn decode<T: AsRef<[u8]>>(input: T) -> Result<Vec<u8>, DecodeError> {
+        STANDARD.decode(input)
+    }
+}
+
 /// Creates a javascript function string as `(<function>)("<param 1>", "<param
 /// 2>")`
 pub fn evaluation_string(function: impl AsRef<str>, params: &[impl AsRef<str>]) -> String {

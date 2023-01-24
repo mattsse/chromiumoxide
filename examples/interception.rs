@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
 use chromiumoxide::cdp::browser_protocol::fetch::{
     ContinueRequestParams, EventRequestPaused, FulfillRequestParams,
 };
@@ -43,7 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .execute(
                         FulfillRequestParams::builder()
                             .request_id(event.request_id.clone())
-                            .body(base64::encode(CONTENT))
+                            .body(BASE64_STANDARD.encode(CONTENT))
                             .response_code(200)
                             .build()
                             .unwrap(),
