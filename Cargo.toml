@@ -28,7 +28,7 @@ base64 = "0.21"
 fnv = "1"
 futures-timer = "3"
 cfg-if = "1"
-tokio = { version = "1", features = ["rt", "rt-multi-thread", "time", "fs", "macros"], optional = true }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "time", "fs", "macros", "process"], optional = true }
 tracing = "0.1"
 pin-project-lite = "0.2"
 

@@ -1,4 +1,6 @@
+use std::fmt;
 use std::io;
+use std::process::ExitStatus;
 use std::time::Instant;
 
 use async_tungstenite::tungstenite;
@@ -28,6 +30,14 @@ pub enum CdpError {
     NoResponse,
     #[error("{0}")]
     ChannelSendError(#[from] ChannelError),
+    #[error("Browser process exited with status {0:?} before websocket URL could be resolved, stderr: {1:?}")]
+    LaunchExit(ExitStatus, BrowserStderr),
+    #[error("Timeout while resolving websocket URL from browser process, stderr: {0:?}")]
+    LaunchTimeout(BrowserStderr),
+    #[error(
+        "Input/Output error while resolving websocket URL from browser process, stderr: {0:?}"
+    )]
+    LaunchIo(#[source] io::Error, BrowserStderr),
     #[error("Request timed out.")]
     Timeout,
     #[error("FrameId {0:?} not found.")]
@@ -100,5 +110,40 @@ impl DeadlineExceeded {
     pub fn new(now: Instant, deadline: Instant) -> Self {
         // assert!(now > deadline);
         Self { deadline, now }
+    }
+}
+
+/// `stderr` output of the browser child process
+///
+/// This implements a custom `Debug` formatter similar to [`std::process::Output`]. If the output
+/// is valid UTF-8, format as a string; otherwise format the byte sequence.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct BrowserStderr(Vec<u8>);
+
+impl BrowserStderr {
+    pub fn new(stderr: Vec<u8>) -> Self {
+        Self(stderr)
+    }
+
+    pub fn as_slice(&self) -> &[u8] {
+        &self.0
+    }
+
+    pub fn into_vec(self) -> Vec<u8> {
+        self.0
+    }
+}
+
+impl fmt::Debug for BrowserStderr {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let stderr_utf8 = std::str::from_utf8(&self.0);
+        let stderr_debug: &dyn fmt::Debug = match stderr_utf8 {
+            Ok(ref str) => str,
+            Err(_) => &self.0,
+        };
+
+        fmt.debug_tuple("BrowserStderr")
+            .field(stderr_debug)
+            .finish()
     }
 }
