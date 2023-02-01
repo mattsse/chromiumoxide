@@ -35,7 +35,7 @@ pub enum CdpError {
     #[error("Timeout while resolving websocket URL from browser process, stderr: {0:?}")]
     LaunchTimeout(BrowserStderr),
     #[error(
-        "Input/Output error while resolving websocket URL from browser process, stderr: {0:?}"
+        "Input/Output error while resolving websocket URL from browser process, stderr: {1:?}: {0}"
     )]
     LaunchIo(#[source] io::Error, BrowserStderr),
     #[error("Request timed out.")]

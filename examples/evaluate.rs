@@ -10,13 +10,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (mut browser, mut handler) = Browser::launch(BrowserConfig::builder().build()?).await?;
 
     let handle = async_std::task::spawn(async move {
-        loop {
-            match handler.next().await {
-                Some(h) => match h {
-                    Ok(_) => continue,
-                    Err(_) => break,
-                },
-                None => break,
+        while let Some(h) = handler.next().await {
+            match h {
+                Ok(_) => continue,
+                Err(_) => break,
             }
         }
     });

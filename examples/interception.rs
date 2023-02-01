@@ -52,15 +52,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     )
                     .await
                 {
-                    println!("Failed to fullfill request: {}", e);
+                    println!("Failed to fullfill request: {e}");
                 }
-            } else {
-                if let Err(e) = intercept_page
-                    .execute(ContinueRequestParams::new(event.request_id.clone()))
-                    .await
-                {
-                    println!("Failed to continue request: {}", e);
-                }
+            } else if let Err(e) = intercept_page
+                .execute(ContinueRequestParams::new(event.request_id.clone()))
+                .await
+            {
+                println!("Failed to continue request: {e}");
             }
         }
     });

@@ -110,7 +110,7 @@ impl std::error::Error for ExceptionDetails {}
 impl fmt::Display for StackTrace {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(desc) = self.description.as_ref() {
-            writeln!(f, "{}", desc)?;
+            writeln!(f, "{desc}")?;
         }
         for frame in &self.call_frames {
             writeln!(
