@@ -223,7 +223,7 @@ impl Generator {
             } else {
                 sequential_retries += 1;
                 if sequential_retries > refs.len() {
-                    panic!("No type found for ref {}", reff);
+                    panic!("No type found for ref {reff}");
                 }
                 refs.push_back((name, reff));
             }
@@ -385,7 +385,7 @@ impl Generator {
             }
         };
 
-        let output = target.join(format!("{}.rs", mod_name));
+        let output = target.join(format!("{mod_name}.rs"));
         fs::write(output, stream.to_string())?;
 
         fmt(target);
@@ -897,7 +897,7 @@ impl Generator {
             let ref_domain_idx = self
                 .domains
                 .get(&path)
-                .unwrap_or_else(|| panic!("No referenced domain found for {}", path));
+                .unwrap_or_else(|| panic!("No referenced domain found for {path}"));
 
             if *current_domain_idx == *ref_domain_idx {
                 let super_ident = format_ident!("{}", path.to_snake_case());
@@ -945,7 +945,7 @@ impl Generator {
                 let size = *self
                     .type_size
                     .get(&ev_name)
-                    .unwrap_or_else(|| panic!("No type found for ref {}", ev_name));
+                    .unwrap_or_else(|| panic!("No type found for ref {ev_name}"));
 
                 // See https://rust-lang.github.io/rust-clippy/master/#large_enum_variant
                 // The maximum size of a enum’s variant to avoid box suggestion is 200
@@ -1190,7 +1190,7 @@ pub fn fmt(out_dir: impl AsRef<Path>) {
 
         match result {
             Err(e) => {
-                eprintln!("error running rustfmt: {:?}", e);
+                eprintln!("error running rustfmt: {e:?}");
             }
             Ok(output) => {
                 if !output.status.success() {

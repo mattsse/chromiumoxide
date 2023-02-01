@@ -73,7 +73,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         if event.request.url == TARGET {
                           resolution.action = InterceptAction::Fullfill;
                         }
-                        println!("paused: {:?}, network: {:?}", resolution, network_id);
+                        println!("paused: {resolution:?}, network: {network_id:?}");
                         resolve(&intercept_page, &network_id, &mut resolutions).await;
                     }
                   }
@@ -87,7 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                           InterceptAction::Forward
                       };
                       resolution.action = action;
-                      println!("sent: {:?}", resolution);
+                      println!("sent: {resolution:?}");
                       resolve(&intercept_page, &event.request_id, &mut resolutions).await;
                   }
               },
@@ -103,7 +103,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Navigate to target
     page.goto("http://google.com").await?;
     let content = page.content().await?;
-    println!("Content: {}", content);
+    println!("Content: {content}");
 
     browser.close().await?;
     browser_handle.await;
@@ -145,15 +145,14 @@ impl RequestIdExt for fetch::RequestId {
 }
 
 fn is_navigation(event: &EventRequestWillBeSent) -> bool {
-    if event.request_id.inner() == event.loader_id.inner() {
-        if event
+    if event.request_id.inner() == event.loader_id.inner()
+        && event
             .r#type
             .as_ref()
             .map(|t| *t == ResourceType::Document)
             .unwrap_or(false)
-        {
-            return true;
-        }
+    {
+        return true;
     }
     false
 }
@@ -185,17 +184,17 @@ async fn resolve(
 }
 
 async fn forward(page: &Page, request_id: &fetch::RequestId) {
-    println!("Request {:?} forwarded", request_id);
+    println!("Request {request_id:?} forwarded");
     if let Err(e) = page
         .execute(ContinueRequestParams::new(request_id.clone()))
         .await
     {
-        println!("Failed to forward request: {}", e);
+        println!("Failed to forward request: {e}");
     }
 }
 
 async fn abort(page: &Page, request_id: &fetch::RequestId) {
-    println!("Request {:?} aborted", request_id);
+    println!("Request {request_id:?} aborted");
     if let Err(e) = page
         .execute(FailRequestParams::new(
             request_id.clone(),
@@ -203,12 +202,12 @@ async fn abort(page: &Page, request_id: &fetch::RequestId) {
         ))
         .await
     {
-        println!("Failed to abort request: {}", e);
+        println!("Failed to abort request: {e}");
     }
 }
 
 async fn fullfill(page: &Page, request_id: &fetch::RequestId) {
-    println!("Request {:?} fullfilled", request_id);
+    println!("Request {request_id:?} fullfilled");
     if let Err(e) = page
         .execute(
             FulfillRequestParams::builder()
@@ -220,6 +219,6 @@ async fn fullfill(page: &Page, request_id: &fetch::RequestId) {
         )
         .await
     {
-        println!("Failed to fullfill request: {}", e);
+        println!("Failed to fullfill request: {e}");
     }
 }
