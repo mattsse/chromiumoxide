@@ -124,6 +124,12 @@ impl Browser {
         Ok((browser, fut))
     }
 
+    /// Request for the browser to close completely.
+    ///
+    /// If the browser was spawned by [`Browser::launch`], it is recommended to wait for the
+    /// spawned instance exit, to avoid "zombie" processes ([`Browser::wait`],
+    /// [`Browser::wait_sync`], [`Browser::try_wait`]).
+    /// [`Browser::drop`] waits automatically if needed.
     pub async fn close(&mut self) -> Result<CloseReturns> {
         let (tx, rx) = oneshot_channel();
 
@@ -135,16 +141,56 @@ impl Browser {
         rx.await?
     }
 
-    /// Wait for the spawned chromium instance (by method launch) to exit completely usually called after the method close. this method is blocking
-    pub fn wait(&mut self) -> io::Result<Option<ExitStatus>> {
+    /// Asynchronously wait for the spawned chromium instance to exit completely.
+    ///
+    /// The instance is spawned by [`Browser::launch`]. `wait` is usually called after
+    /// [`Browser::close`]. You can call this explicitly to collect the process and avoid
+    /// "zombie" processes.
+    ///
+    /// This method is not blocking. Its behavior depends on the selected runtime, see
+    /// [`async_process::Child::wait`] for details.
+    ///
+    /// This call has no effect if this [`Browser`] did not spawn any chromium instance (e.g.
+    /// connected to an existing browser through [`Browser::connect`])
+    pub async fn wait(&mut self) -> io::Result<Option<ExitStatus>> {
         if let Some(child) = self.child.as_mut() {
-            Ok(Some(child.wait()?))
+            Ok(Some(child.wait().await?))
         } else {
             Ok(None)
         }
     }
 
-    /// Try Wait for the spawned chromium instance (by method launch) to exit completely usually called after the method close. this method is non blocking
+    /// Synchronously wait for the spawned chromium instance to exit completely.
+    ///
+    /// The instance is spawned by [`Browser::launch`]. `wait_sync` is usually called after
+    /// [`Browser::close`]. You can call this explicitly to collect the process and avoid
+    /// "zombie" processes. `wait_sync` is called automatically as part of [`Browser::drop`]
+    /// if needed.
+    ///
+    /// This method is blocking. Its behavior depends on the selected runtime, see
+    /// [`async_process::Child::wait_sync`] for details.
+    ///
+    /// This call has no effect if this [`Browser`] did not spawn any chromium instance (e.g.
+    /// connected to an existing browser through [`Browser::connect`])
+    pub fn wait_sync(&mut self) -> io::Result<Option<ExitStatus>> {
+        if let Some(child) = self.child.as_mut() {
+            Ok(Some(child.wait_sync()?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// If the spawned chromium instance has completely exited, wait for it.
+    ///
+    /// The instance is spawned by [`Browser::launch`]. `try_wait` is usually called after
+    /// [`Browser::close`]. You can call this explicitly to collect the process and avoid
+    /// "zombie" processes.
+    ///
+    /// This method is not blocking. Its behavior depends on the selected runtime, see
+    /// [`async_process::Child::try_wait`] for details.
+    ///
+    /// This call has no effect if this [`Browser`] did not spawn any chromium instance (e.g.
+    /// connected to an existing browser through [`Browser::connect`])
     pub fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
         if let Some(child) = self.child.as_mut() {
             child.try_wait()
@@ -153,15 +199,56 @@ impl Browser {
         }
     }
 
-    /// get child instance
+    /// Get the spawned chromium instance
+    ///
+    /// The instance is spawned by [`Browser::launch`]. The result is a [`async_process::Child`]
+    /// value. It acts as a compat wrapper for an `async-std` or `tokio` child process.
+    ///
+    /// You may use [`async_process::Child::as_mut_inner`] to retrieve the concrete implementation
+    /// for the selected runtime.
+    ///
+    /// This call has no effect if this [`Browser`] did not spawn any chromium instance (e.g.
+    /// connected to an existing browser through [`Browser::connect`])
     pub fn get_mut_child(&mut self) -> Option<&mut Child> {
         self.child.as_mut()
     }
 
-    /// force kill browser process if it doesn't close after calling close,
-    /// which is almost always the case, you'll also need to call wait [blocking] or try_wait()
-    pub fn kill(&mut self) -> Option<io::Result<()>> {
-        self.child.as_mut().map(|child| child.kill())
+    /// Forcibly kill the spawned chromium instance
+    ///
+    /// The instance is spawned by [`Browser::launch`]. `kill` is usually followed by
+    /// [`Browser::wait`] or [`Browser::try_wait`] to avoid "zombie" processes.
+    ///
+    /// This method is provided to help if the browser does not close by itself. You should prefer
+    /// to use [`Browser::close`].
+    ///
+    /// **This method may or may not be blocking.** The behavior depends on the selected runtime,
+    /// see [`async_process::Child::kill`] for details.
+    ///
+    /// This call has no effect if this [`Browser`] did not spawn any chromium instance (e.g.
+    /// connected to an existing browser through [`Browser::connect`])
+    pub async fn kill(&mut self) -> Option<io::Result<()>> {
+        match self.child.as_mut() {
+            Some(child) => Some(child.kill().await),
+            None => None,
+        }
+    }
+
+    /// Forcibly kill the spawned chromium instance
+    ///
+    /// The instance is spawned by [`Browser::launch`]. `kill` is usually followed by
+    /// [`Browser::wait_sync`] or [`Browser::try_wait`] to avoid "zombie" processes. It is called
+    /// automatically as part of [`Browser::drop`] if needed.
+    ///
+    /// This method is provided to help if the browser does not close by itself. You should prefer
+    /// to use [`Browser::close`].
+    ///
+    /// This method is blocking. The behavior depends on the selected runtime,
+    /// see [`async_process::Child::kill`] for details.
+    ///
+    /// This call has no effect if this [`Browser`] did not spawn any chromium instance (e.g.
+    /// connected to an existing browser through [`Browser::connect`])
+    pub fn kill_sync(&mut self) -> Option<io::Result<()>> {
+        self.child.as_mut().map(|child| child.kill_sync())
     }
 
     /// If not launched as incognito this creates a new incognito browser
@@ -308,7 +395,7 @@ impl Drop for Browser {
                 // already exited, do nothing. Usually occurs after using the method close.
                 // If there is a method to detect whether the child handle is still available, it should be used instead of try_wait.
             } else {
-                child.kill().expect("!kill");
+                child.kill_sync().expect("!kill");
                 // important to wait other wise kill will leave zombie process in system
                 // this is blocking call and we dont have any choice in the drop function
                 // one way is to do something like
@@ -319,7 +406,7 @@ impl Drop for Browser {
                 // child process is killed either by manually calling kill() and wait()
                 // or call kill() and then repeatedly calling try_wait() until it return true
                 // if developer wants true asynchronous version
-                child.wait().expect("!wait");
+                child.wait_sync().expect("!wait");
             }
         }
     }
@@ -342,7 +429,7 @@ async fn ws_url_from_output(
     let mut timeout_fut = timeout_fut.fuse();
     let stderr = child_process.stderr.take().expect("no stderror");
     let mut stderr_bytes = Vec::<u8>::new();
-    let mut exit_status_fut = Box::pin(child_process.async_wait()).fuse();
+    let mut exit_status_fut = Box::pin(child_process.wait()).fuse();
     let mut buf = futures::io::BufReader::new(stderr);
     loop {
         select! {
