@@ -82,7 +82,7 @@ impl Child {
     ///
     /// - `async-std-runtime`: blocking call to `async_std::process::Child::kill`.
     /// - `tokio-runtime`: async call to `tokio::process::Child::kill`
-    pub async fn async_kill(&mut self) -> std::io::Result<()> {
+    pub async fn kill(&mut self) -> std::io::Result<()> {
         cfg_if::cfg_if! {
             if #[cfg(feature = "async-std-runtime")] {
                 self.inner.kill()
@@ -96,7 +96,7 @@ impl Child {
     ///
     /// - `async-std-runtime`: blocking call to `async_std::process::Child::kill`.
     /// - `tokio-runtime`: async call to `tokio::process::Child::kill`, resolved with `tokio::runtime::Handle::block_on`
-    pub fn kill(&mut self) -> std::io::Result<()> {
+    pub fn kill_sync(&mut self) -> std::io::Result<()> {
         cfg_if::cfg_if! {
             if #[cfg(feature = "async-std-runtime")] {
                 self.inner.kill()
@@ -112,7 +112,7 @@ impl Child {
     ///
     /// - `async-std-runtime`: async call to `async_std::process::Child::status`.
     /// - `tokio-runtime`: async call to `tokio::process::Child::wait`
-    pub async fn async_wait(&mut self) -> std::io::Result<ExitStatus> {
+    pub async fn wait(&mut self) -> std::io::Result<ExitStatus> {
         cfg_if::cfg_if! {
             if #[cfg(feature = "async-std-runtime")] {
                 self.inner.status().await
@@ -126,10 +126,10 @@ impl Child {
     ///
     /// - `async-std-runtime`: async call to `async_std::process::Child::status`, resolved with `async_std::task::block_on`
     /// - `tokio-runtime`: async call to `tokio::process::Child::wait`, resolved with `tokio::runtime::Handle::block_on`
-    pub fn wait(&mut self) -> std::io::Result<ExitStatus> {
+    pub fn wait_sync(&mut self) -> std::io::Result<ExitStatus> {
         cfg_if::cfg_if! {
             if #[cfg(feature = "async-std-runtime")] {
-                let fut = self.async_wait();
+                let fut = self.wait();
                 async_std::task::block_on(fut)
             } else if #[cfg(feature = "tokio-runtime")] {
                 let fut = self.async_wait();
@@ -152,11 +152,37 @@ impl Child {
             }
         }
     }
+
+    /// Return a mutable reference to the inner process
+    ///
+    /// `stderr` may not be available.
+    ///
+    /// - `async-std-runtime`: return `&mut async_std::process::Child`
+    /// - `tokio-runtime`: return `&mut tokio::process::Child`
+    pub fn as_mut_inner(&mut self) -> &mut process::Child {
+        &mut self.inner
+    }
+
+    /// Return the inner process
+    ///
+    /// - `async-std-runtime`: return `async_std::process::Child`
+    /// - `tokio-runtime`: return `tokio::process::Child`
+    pub fn into_inner(self) -> process::Child {
+        let mut inner = self.inner;
+        inner.stderr = self.stderr.map(ChildStderr::into_inner);
+        inner
+    }
 }
 
 #[derive(Debug)]
 pub struct ChildStderr {
     pub inner: process::ChildStderr,
+}
+
+impl ChildStderr {
+    pub fn into_inner(self) -> process::ChildStderr {
+        self.inner
+    }
 }
 
 impl futures::AsyncRead for ChildStderr {
