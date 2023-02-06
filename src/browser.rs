@@ -83,21 +83,47 @@ impl Browser {
         // launch a new chromium instance
         let mut child = config.launch()?;
 
-        let dur = config.launch_timeout;
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "async-std-runtime")] {
-                let timeout_fut = Box::pin(async_std::task::sleep(dur));
-            } else if #[cfg(feature = "tokio-runtime")] {
-                let timeout_fut = tokio::time::sleep(dur);
-            } else {
-                panic!("missing chromiumoxide runtime: enable `async-std-runtime` or `tokio-runtime`")
+        /// Faillible initialization to run once the child process is created.
+        ///
+        /// All faillible calls must be executed inside this function. This ensures that all
+        /// errors are caught and that the child process is properly cleaned-up.
+        async fn with_child(
+            config: &BrowserConfig,
+            child: &mut Child,
+        ) -> Result<(String, Connection<CdpEventMessage>)> {
+            let dur = config.launch_timeout;
+            cfg_if::cfg_if! {
+                if #[cfg(feature = "async-std-runtime")] {
+                    let timeout_fut = Box::pin(async_std::task::sleep(dur));
+                } else if #[cfg(feature = "tokio-runtime")] {
+                    let timeout_fut = tokio::time::sleep(dur);
+                } else {
+                    panic!("missing chromiumoxide runtime: enable `async-std-runtime` or `tokio-runtime`")
+                }
+            };
+            // extract the ws:
+            let debug_ws_url = ws_url_from_output(child, timeout_fut).await?;
+            let conn = Connection::<CdpEventMessage>::connect(&debug_ws_url).await?;
+            Ok((debug_ws_url, conn))
+        }
+
+        let (debug_ws_url, conn) = match with_child(&config, &mut child).await {
+            Ok(conn) => conn,
+            Err(e) => {
+                // An initialization error occurred, clean up the process
+                if let Ok(Some(_)) = child.try_wait() {
+                    // already exited, do nothing, may happen if the browser crashed
+                } else {
+                    // the process is still alive, kill it and wait for exit (avoid zombie processes)
+                    child.kill().await.expect("`Browser::launch` failed but could not clean-up the child process (`kill`)");
+                    child.wait().await.expect("`Browser::launch` failed but could not clean-up the child process (`wait`)");
+                }
+                return Err(e);
             }
         };
 
-        // extract the ws:
-        let debug_ws_url = ws_url_from_output(&mut child, timeout_fut).await?;
-
-        let conn = Connection::<CdpEventMessage>::connect(&debug_ws_url).await?;
+        // Only infaillible calls are allowed after this point to avoid clean-up issues with the
+        // child process.
 
         let (tx, rx) = channel(1);
 
