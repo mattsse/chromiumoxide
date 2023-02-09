@@ -96,7 +96,7 @@ impl Browser {
                 if #[cfg(feature = "async-std-runtime")] {
                     let timeout_fut = Box::pin(async_std::task::sleep(dur));
                 } else if #[cfg(feature = "tokio-runtime")] {
-                    let timeout_fut = tokio::time::sleep(dur);
+                    let timeout_fut = Box::pin(tokio::time::sleep(dur));
                 } else {
                     panic!("missing chromiumoxide runtime: enable `async-std-runtime` or `tokio-runtime`")
                 }
