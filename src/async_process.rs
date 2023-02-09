@@ -101,7 +101,7 @@ impl Child {
             if #[cfg(feature = "async-std-runtime")] {
                 self.inner.kill()
             } else if #[cfg(feature = "tokio-runtime")] {
-                let fut = self.async_kill();
+                let fut = self.kill();
                 let handle = tokio::runtime::Handle::current();
                 handle.block_on(fut)
             }
@@ -132,7 +132,7 @@ impl Child {
                 let fut = self.wait();
                 async_std::task::block_on(fut)
             } else if #[cfg(feature = "tokio-runtime")] {
-                let fut = self.async_wait();
+                let fut = self.wait();
                 let handle = tokio::runtime::Handle::current();
                 handle.block_on(fut)
             }

@@ -101,7 +101,8 @@ fn create_symlink(link_target: Vec<u8>, link_path: &Path) -> ZipResult<()> {
 #[cfg(target_family = "windows")]
 fn create_symlink(link_target: Vec<u8>, link_path: &Path) -> ZipResult<()> {
     // Only supports UTF-8 paths which is enough for our usecase
-    let link_target = String::from_utf8(contents)?;
+    let link_target = String::from_utf8(link_target)
+        .map_err(|_| ZipError::InvalidArchive("Invalid synmlink target name"))?;
     std::os::windows::fs::symlink_file(link_target, link_path)?;
 
     Ok(())
