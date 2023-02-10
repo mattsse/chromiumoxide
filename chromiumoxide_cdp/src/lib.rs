@@ -6,9 +6,14 @@ use crate::cdp::browser_protocol::target::CreateTargetParams;
 use crate::cdp::js_protocol::runtime::{
     CallFunctionOnParams, EvaluateParams, ExceptionDetails, StackTrace,
 };
+use crate::revision::Revision;
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 pub mod cdp;
+pub mod revision;
+
+/// Currently built CDP revision
+pub const CURRENT_REVISION: Revision = Revision(818844);
 
 /// convenience fixups
 impl Default for CreateTargetParams {
