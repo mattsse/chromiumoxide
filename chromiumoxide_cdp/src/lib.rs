@@ -9,11 +9,12 @@ use crate::cdp::js_protocol::runtime::{
 use crate::revision::Revision;
 
 #[allow(clippy::derive_partial_eq_without_eq)]
+#[allow(unreachable_patterns)]
 pub mod cdp;
 pub mod revision;
 
 /// Currently built CDP revision
-pub const CURRENT_REVISION: Revision = Revision(818844);
+pub const CURRENT_REVISION: Revision = Revision(1045489);
 
 /// convenience fixups
 impl Default for CreateTargetParams {
@@ -91,6 +92,8 @@ impl From<EvaluateParams> for CallFunctionOnParams {
             await_promise: params.await_promise,
             execution_context_id: params.context_id,
             object_group: params.object_group,
+            throw_on_side_effect: None,
+            generate_web_driver_value: None,
         }
     }
 }

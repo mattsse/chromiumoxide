@@ -340,8 +340,8 @@ impl PageInner {
 
         if full_page {
             let metrics = self.layout_metrics().await?;
-            let width = metrics.content_size.width;
-            let height = metrics.content_size.height;
+            let width = metrics.css_content_size.width;
+            let height = metrics.css_content_size.height;
 
             cdp_params.clip = Some(Viewport {
                 x: 0.,

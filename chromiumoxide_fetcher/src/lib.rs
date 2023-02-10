@@ -3,9 +3,8 @@ pub use self::error::FetcherError;
 pub use self::platform::Platform;
 pub use self::revision::Revision;
 
-/// Currently used chromium revision.
-/// Matches PDL revision r818844.
-pub const CURRENT_REVISION: Revision = Revision(818858);
+/// Currently downloaded chromium revision
+pub const CURRENT_REVISION: Revision = Revision(1045629);
 
 mod browser;
 mod error;
