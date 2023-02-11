@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Write to file with configured runtime
 pub(crate) async fn write<P: AsRef<Path> + Unpin, C: AsRef<[u8]>>(
@@ -12,6 +12,21 @@ pub(crate) async fn write<P: AsRef<Path> + Unpin, C: AsRef<[u8]>>(
             tokio::fs::write(path.as_ref(), contents.as_ref()).await
         }
     }
+}
+
+/// Canonicalize path
+///
+/// Chromium sandboxing does not support Window UNC paths which are used by Rust
+/// when the path is relative. See https://bugs.chromium.org/p/chromium/issues/detail?id=1415018.
+pub(crate) async fn canonicalize<P: AsRef<Path> + Unpin>(path: P) -> std::io::Result<PathBuf> {
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "async-std-runtime")] {
+            let path: PathBuf = async_std::fs::canonicalize(path.as_ref()).await?.into();
+        } else if #[cfg(feature = "tokio-runtime")] {
+            let path = tokio::fs::canonicalize(path.as_ref()).await?;
+        }
+    }
+    Ok(dunce::simplified(&path).to_path_buf())
 }
 
 pub(crate) mod base64 {
