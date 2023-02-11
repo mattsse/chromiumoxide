@@ -27,6 +27,7 @@ use crate::handler::viewport::Viewport;
 use crate::handler::{Handler, HandlerConfig, HandlerMessage, REQUEST_TIMEOUT};
 use crate::listeners::{EventListenerRequest, EventStream};
 use crate::page::Page;
+use crate::utils;
 use chromiumoxide_cdp::cdp::browser_protocol::browser::{
     CloseReturns, GetVersionParams, GetVersionReturns,
 };
@@ -79,8 +80,11 @@ impl Browser {
     /// This fails if no web socket url could be detected from the child
     /// processes stderr for more than the configured `launch_timeout`
     /// (20 seconds by default).
-    pub async fn launch(config: BrowserConfig) -> Result<(Self, Handler)> {
-        // launch a new chromium instance
+    pub async fn launch(mut config: BrowserConfig) -> Result<(Self, Handler)> {
+        // Canonalize paths to reduce issues with sandboxing
+        config.executable = utils::canonicalize(&config.executable).await?;
+
+        // Launch a new chromium instance
         let mut child = config.launch()?;
 
         /// Faillible initialization to run once the child process is created.
