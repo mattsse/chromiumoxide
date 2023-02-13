@@ -81,6 +81,8 @@ pub struct Handler {
     config: HandlerConfig,
     /// All registered event subscriptions
     event_listeners: EventListeners,
+    /// Keeps track is the browser is closing
+    closing: bool,
 }
 
 impl Handler {
@@ -118,6 +120,7 @@ impl Handler {
             next_navigation_id: 0,
             config,
             event_listeners: Default::default(),
+            closing: false,
         }
     }
 
@@ -221,6 +224,10 @@ impl Handler {
                         target.on_response(resp, method.as_ref());
                     }
                 }
+                PendingRequest::CloseBrowser(tx) => {
+                    self.closing = true;
+                    let _ = tx.send(Ok(CloseReturns {})).ok();
+                }
             }
         }
     }
@@ -273,6 +280,23 @@ impl Handler {
 
         self.pending_commands
             .insert(call_id, (PendingRequest::Navigate(id), req.method, now));
+    }
+
+    fn submit_close(&mut self, tx: OneshotSender<Result<CloseReturns>>, now: Instant) {
+        let close_msg = CloseParams::default();
+        let method = close_msg.identifier();
+
+        let call_id = self
+            .conn
+            .submit_command(
+                method.clone(),
+                None,
+                serde_json::to_value(close_msg).unwrap(),
+            )
+            .unwrap();
+
+        self.pending_commands
+            .insert(call_id, (PendingRequest::CloseBrowser(tx), method, now));
     }
 
     /// Process a message received by the target's page via channel
@@ -445,6 +469,9 @@ impl Handler {
                         let _ = tx.send(Err(CdpError::Timeout));
                     }
                     PendingRequest::InternalCommand(_) => {}
+                    PendingRequest::CloseBrowser(tx) => {
+                        let _ = tx.send(Err(CdpError::Timeout));
+                    }
                 }
             }
         }
@@ -472,16 +499,7 @@ impl Stream for Handler {
                         pin.submit_external_command(cmd, now)?;
                     }
                     HandlerMessage::CloseBrowser(tx) => {
-                        let close_msg = CloseParams::default();
-
-                        pin.conn.submit_command(
-                            close_msg.identifier(),
-                            None,
-                            serde_json::to_value(close_msg).unwrap(),
-                        )?;
-                        tx.send(Ok(CloseReturns {})).ok();
-
-                        return Poll::Ready(None);
+                        pin.submit_close(tx, now);
                     }
                     HandlerMessage::CreatePage(params, tx) => {
                         pin.create_page(params, tx);
@@ -554,7 +572,13 @@ impl Stream for Handler {
 
             while let Poll::Ready(Some(ev)) = Pin::new(&mut pin.conn).poll_next(cx) {
                 match ev {
-                    Ok(Message::Response(resp)) => pin.on_response(resp),
+                    Ok(Message::Response(resp)) => {
+                        pin.on_response(resp);
+                        if pin.closing {
+                            // handler should stop processing
+                            return Poll::Ready(None);
+                        }
+                    }
                     Ok(Message::Event(ev)) => {
                         pin.on_event(ev);
                     }
@@ -667,6 +691,8 @@ enum PendingRequest {
     /// Requests that are initiated directly from a `Target` (all the
     /// initialization commands).
     InternalCommand(TargetId),
+    // A Request to close the browser.
+    CloseBrowser(OneshotSender<Result<CloseReturns>>),
 }
 
 /// Events used internally to communicate with the handler, which are executed
