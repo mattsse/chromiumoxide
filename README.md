@@ -18,13 +18,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
    // create a `Browser` that spawns a `chromium` process running with UI (`with_head()`, headless is default) 
    // and the handler that drives the websocket etc.
-    let (browser, mut handler) =
+    let (mut browser, mut handler) =
         Browser::launch(BrowserConfig::builder().with_head().build()?).await?;
     
    // spawn a new task that continuously polls the handler
     let handle = async_std::task::spawn(async move {
-        loop {
-           let _ = handler.next().await.unwrap();
+        while let Some(h) = handler.next().await {
+            if h.is_err() {
+                break;
+            }
         }
     });
     
@@ -44,6 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
    let html = page.wait_for_navigation().await?.content().await?;
    
+    browser.close().await?;
     handle.await;
     Ok(())
 }
@@ -89,12 +92,47 @@ Every chrome pdl domain is put in its own rust module, the types for the page do
 
 [vanilla.aslushnikov.com](https://vanilla.aslushnikov.com/) is a great resource to browse all the types defined in the pdl files. This site displays `Command` types as defined in the pdl files as `Method`. `chromiumoxid` sticks to the `Command` nomenclature. So for everything that is defined as a command type in the pdl (=marked as `Method` on [vanilla.aslushnikov.com](https://vanilla.aslushnikov.com/)) `chromiumoxide` contains a type for command and a designated type for the return type. For every command there is a `<name of command>Params` type with builder support (`<name of command>Params::builder()`) and its corresponding return type: `<name of command>Returns`. All commands share an implementation of the `chromiumoxide_types::Command` trait.
 All Events are bundled in single enum (`CdpEvent`)
- 
+
+## Fetcher
+
+By default `chromiumoxide` will try to find an installed version of chromium on the computer it runs on.
+It is possible to download and install one automatically for some platforms using the `fetcher`.
+
+Ther features are currently a bit messy due to a Cargo bug and will be changed once it is resolved.
+Based on your runtime and TLS configuration you should enable one of the following:
+- `_fetcher-rustls-async-std`
+- `_fetcher-rusttls-tokio`
+- `_fetcher-native-async-std`
+- `_fetcher-native-tokio`
+
+```rust
+use std::path::Path;
+
+use futures::StreamExt;
+
+use chromiumoxide::browser::{BrowserConfig};
+use chromiumoxide::fetcher::{BrowserFetcher, BrowserFetcherOptions};
+
+#[async_std::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let download_path = Path::new("./download");
+    async_std::fs::create_dir_all(&download_path).await?;
+    let fetcher = BrowserFetcher::new(
+        BrowserFetcherOptions::builder()
+            .with_path(&download_path)
+            .build()?,
+    );
+    let info = fetcher.fetch().await?;
+
+    let config = BrowserConfig::builder()
+        .chrome_executable(info.executable_path)
+        .build()?,
+}
+```
 
 ## Known Issues
 
 * The rust files generated for the PDL files in [chromiumoxide_cdp](./chromiumoxide_cdp) don't compile when support for experimental types is manually turned off (`export CDP_NO_EXPERIMENTAL=true`). This is because the use of some experimental pdl types in the `*.pdl` files themselves are not marked as experimental.
-* `chromiumoxide` requires an installed chromium application and may not be able to find it on its own. The option to download chromium certainly would be a handy feature.
 
 ## Troubleshooting
 

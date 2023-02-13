@@ -30,11 +30,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             match handler.next().await {
                 Some(h) => match h {
                     Ok(_) => continue,
-                    Err(_) => break,
+                    Err(e) => {
+                        println!("Err: {}", e);
+                        break;
+                    }
                 },
-                None => break,
+                None => {
+                    println!("None");
+                    break;
+                }
             }
         }
+        println!("Done");
     });
 
     let page = browser.new_page("about:blank").await?;
@@ -44,6 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("it worked!");
 
     browser.close().await?;
+    browser.wait().await?;
     handle.await;
     Ok(())
 }
