@@ -177,9 +177,6 @@ impl Browser {
     /// [`Browser::close`]. You can call this explicitly to collect the process and avoid
     /// "zombie" processes.
     ///
-    /// This method is not blocking. Its behavior depends on the selected runtime, see
-    /// [`async_process::Child::wait`] for details.
-    ///
     /// This call has no effect if this [`Browser`] did not spawn any chromium instance (e.g.
     /// connected to an existing browser through [`Browser::connect`])
     pub async fn wait(&mut self) -> io::Result<Option<ExitStatus>> {
@@ -190,34 +187,11 @@ impl Browser {
         }
     }
 
-    /// Synchronously wait for the spawned chromium instance to exit completely.
-    ///
-    /// The instance is spawned by [`Browser::launch`]. `wait_sync` is usually called after
-    /// [`Browser::close`]. You can call this explicitly to collect the process and avoid
-    /// "zombie" processes. `wait_sync` is called automatically as part of [`Browser::drop`]
-    /// if needed.
-    ///
-    /// This method is blocking. Its behavior depends on the selected runtime, see
-    /// [`async_process::Child::wait_sync`] for details.
-    ///
-    /// This call has no effect if this [`Browser`] did not spawn any chromium instance (e.g.
-    /// connected to an existing browser through [`Browser::connect`])
-    pub fn wait_sync(&mut self) -> io::Result<Option<ExitStatus>> {
-        if let Some(child) = self.child.as_mut() {
-            Ok(Some(child.wait_sync()?))
-        } else {
-            Ok(None)
-        }
-    }
-
     /// If the spawned chromium instance has completely exited, wait for it.
     ///
     /// The instance is spawned by [`Browser::launch`]. `try_wait` is usually called after
     /// [`Browser::close`]. You can call this explicitly to collect the process and avoid
     /// "zombie" processes.
-    ///
-    /// This method is not blocking. Its behavior depends on the selected runtime, see
-    /// [`async_process::Child::try_wait`] for details.
     ///
     /// This call has no effect if this [`Browser`] did not spawn any chromium instance (e.g.
     /// connected to an existing browser through [`Browser::connect`])
@@ -245,14 +219,11 @@ impl Browser {
 
     /// Forcibly kill the spawned chromium instance
     ///
-    /// The instance is spawned by [`Browser::launch`]. `kill` is usually followed by
-    /// [`Browser::wait`] or [`Browser::try_wait`] to avoid "zombie" processes.
+    /// The instance is spawned by [`Browser::launch`]. `kill` will automatically wait for the child
+    /// process to exit to avoid "zombie" processes.
     ///
     /// This method is provided to help if the browser does not close by itself. You should prefer
     /// to use [`Browser::close`].
-    ///
-    /// **This method may or may not be blocking.** The behavior depends on the selected runtime,
-    /// see [`async_process::Child::kill`] for details.
     ///
     /// This call has no effect if this [`Browser`] did not spawn any chromium instance (e.g.
     /// connected to an existing browser through [`Browser::connect`])
@@ -261,24 +232,6 @@ impl Browser {
             Some(child) => Some(child.kill().await),
             None => None,
         }
-    }
-
-    /// Forcibly kill the spawned chromium instance
-    ///
-    /// The instance is spawned by [`Browser::launch`]. `kill` is usually followed by
-    /// [`Browser::wait_sync`] or [`Browser::try_wait`] to avoid "zombie" processes. It is called
-    /// automatically as part of [`Browser::drop`] if needed.
-    ///
-    /// This method is provided to help if the browser does not close by itself. You should prefer
-    /// to use [`Browser::close`].
-    ///
-    /// This method is blocking. The behavior depends on the selected runtime,
-    /// see [`async_process::Child::kill`] for details.
-    ///
-    /// This call has no effect if this [`Browser`] did not spawn any chromium instance (e.g.
-    /// connected to an existing browser through [`Browser::connect`])
-    pub fn kill_sync(&mut self) -> Option<io::Result<()>> {
-        self.child.as_mut().map(|child| child.kill_sync())
     }
 
     /// If not launched as incognito this creates a new incognito browser
@@ -422,21 +375,16 @@ impl Drop for Browser {
     fn drop(&mut self) {
         if let Some(child) = self.child.as_mut() {
             if let Ok(Some(_)) = child.try_wait() {
-                // already exited, do nothing. Usually occurs after using the method close.
-                // If there is a method to detect whether the child handle is still available, it should be used instead of try_wait.
+                // Already exited, do nothing. Usually occurs after using the method close or kill.
             } else {
-                child.kill_sync().expect("!kill");
-                // important to wait other wise kill will leave zombie process in system
-                // this is blocking call and we dont have any choice in the drop function
-                // one way is to do something like
-                // tokio::task::spawn_blocking(move || {
-                //   drop(browser);
-                // });
-                // otherwise the end developer will have to make sure
-                // child process is killed either by manually calling kill() and wait()
-                // or call kill() and then repeatedly calling try_wait() until it return true
-                // if developer wants true asynchronous version
-                child.wait_sync().expect("!wait");
+                // We set the `kill_on_drop` property for the child process, so no need to explicitely
+                // kill it here. It can't really be done anyway since the method is async.
+                //
+                // On Unix, the process will be reaped in the background by the runtime automatically
+                // so it won't leave any resources locked. It is, however, a better practice for the user to
+                // do it himself since the runtime doesn't provide garantees as to when the reap occurs, so we
+                // warn him here.
+                tracing::warn!("Browser was not closed manually, it will be killed automatically in the background");
             }
         }
     }
