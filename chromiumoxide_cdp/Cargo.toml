@@ -12,6 +12,7 @@ include = ["src/**/*", "*.pdl", "LICENSE-*"]
 
 [dev-dependencies]
 chromiumoxide_pdl = { path = "../chromiumoxide_pdl", version = "0.4"}
+ureq = "2.6.2"
 tempfile = "3.2.0"
 
 [dependencies]

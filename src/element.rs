@@ -414,7 +414,7 @@ impl Element {
     /// Scrolls the element into and takes a screenshot of it
     pub async fn screenshot(&self, format: CaptureScreenshotFormat) -> Result<Vec<u8>> {
         let mut bounding_box = self.scroll_into_view().await?.bounding_box().await?;
-        let viewport = self.tab.layout_metrics().await?.layout_viewport;
+        let viewport = self.tab.layout_metrics().await?.css_layout_viewport;
 
         bounding_box.x += viewport.page_x as f64;
         bounding_box.y += viewport.page_y as f64;
