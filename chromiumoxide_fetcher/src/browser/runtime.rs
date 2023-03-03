@@ -1,9 +1,9 @@
-use std::path::{Path, PathBuf};
-
 use anyhow::Context;
+use std::path::{Path, PathBuf};
 
 use super::ZipArchive;
 
+#[derive(Debug, Default)]
 pub struct BrowserFetcherRuntime;
 
 #[cfg(feature = "async-std-runtime")]
