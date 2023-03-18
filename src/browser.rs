@@ -133,7 +133,7 @@ impl Browser {
 
         let handler_config = HandlerConfig {
             ignore_https_errors: config.ignore_https_errors,
-            viewport: Some(config.viewport.clone()),
+            viewport: config.viewport.clone(),
             context_ids: Vec::new(),
             request_timeout: config.request_timeout,
             request_intercept: config.request_intercept,
@@ -489,7 +489,7 @@ pub struct BrowserConfig {
 
     /// Ignore https errors, default is true
     ignore_https_errors: bool,
-    viewport: Viewport,
+    viewport: Option<Viewport>,
     /// The duration after a request with no response should time out
     request_timeout: Duration,
 
@@ -520,7 +520,7 @@ pub struct BrowserConfigBuilder {
     incognito: bool,
     launch_timeout: Duration,
     ignore_https_errors: bool,
-    viewport: Viewport,
+    viewport: Option<Viewport>,
     request_timeout: Duration,
     args: Vec<String>,
     disable_default_args: bool,
@@ -553,7 +553,7 @@ impl Default for BrowserConfigBuilder {
             incognito: false,
             launch_timeout: Duration::from_millis(LAUNCH_TIMEOUT),
             ignore_https_errors: true,
-            viewport: Default::default(),
+            viewport: Some(Default::default()),
             request_timeout: Duration::from_millis(REQUEST_TIMEOUT),
             args: Vec::new(),
             disable_default_args: false,
@@ -604,8 +604,13 @@ impl BrowserConfigBuilder {
         self
     }
 
-    pub fn viewport(mut self, viewport: Viewport) -> Self {
-        self.viewport = viewport;
+    /// Configures the viewport of the browser, which defaults to `800x600`.
+    /// `None` disables viewport emulation (i.e., it uses the browsers default
+    /// configuration, which fills the available space. This is similar to what
+    /// Playwright does when you provide `null` as the value of its `viewport`
+    /// option).
+    pub fn viewport(mut self, viewport: impl Into<Option<Viewport>>) -> Self {
+        self.viewport = viewport.into();
         self
     }
 
