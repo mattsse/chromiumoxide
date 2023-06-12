@@ -79,7 +79,7 @@ pub use crate::page::Page;
 
 pub mod auth;
 pub mod browser;
-pub(crate) mod cmd;
+pub mod cmd;
 pub mod conn;
 pub mod detection;
 pub mod element;

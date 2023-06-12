@@ -1,0 +1,4 @@
+tab_spaces = 2
+max_width = 140
+use_small_heuristics = "Off"
+chain_width = 30

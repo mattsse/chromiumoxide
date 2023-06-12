@@ -36,6 +36,26 @@ pub struct Element {
 }
 
 impl Element {
+
+    pub(crate) async fn new_from_remote_id(tab: Arc<PageInner>, remote_object_id: RemoteObjectId) -> Result<Self> {
+        let node = &tab
+            .execute(
+                DescribeNodeParams::builder()
+                    .object_id(remote_object_id.clone())
+                    .build(),
+            )
+            .await?
+            .node;
+        let backend_node_id = node.backend_node_id; 
+        let node_id = node.node_id;
+        Ok(Self {
+            tab,
+            remote_object_id,
+            backend_node_id,
+            node_id,
+        })
+    }
+
     pub(crate) async fn new(tab: Arc<PageInner>, node_id: NodeId) -> Result<Self> {
         let backend_node_id = tab
             .execute(
@@ -191,6 +211,20 @@ impl Element {
     ) -> Result<CallFunctionOnReturns> {
         self.tab
             .call_js_fn(
+                function_declaration,
+                await_promise,
+                self.remote_object_id.clone(),
+            )
+            .await
+    }
+
+    pub async fn call_js_fn_return_by_value(
+        &self,
+        function_declaration: impl Into<String>,
+        await_promise: bool,
+    ) -> Result<CallFunctionOnReturns> {
+        self.tab
+            .call_js_fn_return_by_value(
                 function_declaration,
                 await_promise,
                 self.remote_object_id.clone(),
