@@ -29,7 +29,7 @@ pub(crate) async fn canonicalize<P: AsRef<Path> + Unpin>(path: P) -> std::io::Re
     Ok(dunce::simplified(&path).to_path_buf())
 }
 
-pub(crate) mod base64 {
+pub mod base64 {
     use base64::engine::general_purpose::STANDARD;
     use base64::{DecodeError, Engine};
 
