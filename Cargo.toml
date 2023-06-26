@@ -40,7 +40,7 @@ winreg = "0.50"
 quote = "1"
 proc-macro2 = "1"
 chrono = "0.4.1"
-tracing-subscriber = "0.2"
+tracing-subscriber = "0.3"
 
 [features]
 default = ["async-std-runtime"]
