@@ -1,7 +1,7 @@
 [package]
 name = "chromiumoxide"
 version = "0.5.0"
-rust-version = "1.60"
+rust-version = "1.64"
 authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
