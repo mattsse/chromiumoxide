@@ -34,7 +34,7 @@ pin-project-lite = "0.2"
 dunce = "1"
 
 [target.'cfg(windows)'.dependencies]
-winreg = "0.10"
+winreg = "0.50"
 
 [dev-dependencies]
 quote = "1"
