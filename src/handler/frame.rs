@@ -667,18 +667,13 @@ impl FrameNavigationRequest {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum LifecycleEvent {
+    #[default]
     Load,
     DomcontentLoaded,
     NetworkIdle,
     NetworkAlmostIdle,
-}
-
-impl Default for LifecycleEvent {
-    fn default() -> Self {
-        LifecycleEvent::Load
-    }
 }
 
 impl AsRef<str> for LifecycleEvent {

@@ -1033,9 +1033,10 @@ fn subenum_name(parent: &str, inner: &str) -> String {
     )
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub enum SerdeSupport {
     None,
+    #[default]
     Default,
     Feature(String),
 }
@@ -1160,12 +1161,6 @@ impl SerdeSupport {
                 #v
             }
         }
-    }
-}
-
-impl Default for SerdeSupport {
-    fn default() -> Self {
-        SerdeSupport::Default
     }
 }
 
