@@ -812,7 +812,7 @@ pub fn default_executable() -> Result<std::path::PathBuf, String> {
 
 /// These are passed to the Chrome binary by default.
 /// Via https://github.com/puppeteer/puppeteer/blob/4846b8723cf20d3551c0d755df394cc5e0c82a94/src/node/Launcher.ts#L157
-static DEFAULT_ARGS: [&str; 24] = [
+static DEFAULT_ARGS: [&str; 25] = [
     "--disable-background-networking",
     "--enable-features=NetworkService,NetworkServiceInProcess",
     "--disable-background-timer-throttling",
@@ -837,4 +837,5 @@ static DEFAULT_ARGS: [&str; 24] = [
     "--password-store=basic",
     "--use-mock-keychain",
     "--enable-blink-features=IdleDetection",
+    "--lang=en_US",
 ];
