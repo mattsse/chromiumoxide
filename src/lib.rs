@@ -79,7 +79,7 @@ pub use crate::page::Page;
 
 pub mod auth;
 pub mod browser;
-pub(crate) mod cmd;
+pub mod cmd;
 pub mod conn;
 pub mod detection;
 pub mod element;
@@ -95,6 +95,6 @@ pub mod keys;
 pub mod layout;
 pub mod listeners;
 pub mod page;
-pub(crate) mod utils;
+pub mod utils;
 
 pub type ArcHttpRequest = Option<Arc<HttpRequest>>;

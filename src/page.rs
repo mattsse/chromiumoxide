@@ -20,7 +20,7 @@ use chromiumoxide_cdp::cdp::js_protocol;
 use chromiumoxide_cdp::cdp::js_protocol::debugger::GetScriptSourceParams;
 use chromiumoxide_cdp::cdp::js_protocol::runtime::{
     AddBindingParams, CallArgument, CallFunctionOnParams, EvaluateParams, ExecutionContextId,
-    RemoteObjectType, ScriptId,
+    RemoteObjectType, ScriptId, RemoteObjectId,
 };
 use chromiumoxide_cdp::cdp::{browser_protocol, IntoEventKind};
 use chromiumoxide_types::*;
@@ -263,6 +263,11 @@ impl Page {
         let root = self.get_document().await?.node_id;
         let node_ids = self.inner.find_elements(selector, root).await?;
         Element::from_nodes(&self.inner, &node_ids).await
+    }
+
+    pub async fn convert_into_element(&self, remote_object_id: RemoteObjectId) -> Result<Element> {
+        let res = Element::new_from_remote_id(self.inner.clone(), remote_object_id).await?;
+        Ok(res)
     }
 
     /// Describes node given its id
@@ -852,6 +857,10 @@ impl Page {
         self.inner.execution_context().await
     }
 
+    pub async fn execution_context_for_frame(&self, frame_id: FrameId) -> Result<Option<ExecutionContextId>> {
+        self.inner.execution_context_for_world(DOMWorldKind::Main, Some(frame_id)).await
+    }
+
     /// Returns the secondary execution context identifier of this page that
     /// represents the context for JavaScript execution for manipulating the
     /// DOM.
@@ -902,7 +911,7 @@ impl Page {
 
         call.execution_context_id = self
             .inner
-            .execution_context_for_world(DOMWorldKind::Secondary)
+            .execution_context_for_world(DOMWorldKind::Secondary, None)
             .await?;
 
         self.evaluate_function(call).await?;

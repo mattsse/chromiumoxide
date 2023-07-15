@@ -6,13 +6,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use async_tungstenite::tungstenite::protocol::WebSocketConfig;
 use futures::channel::mpsc::{channel, unbounded, Sender};
 use futures::channel::oneshot::channel as oneshot_channel;
 use futures::select;
 use futures::SinkExt;
 
 use chromiumoxide_cdp::cdp::browser_protocol::target::{
-    CreateBrowserContextParams, CreateTargetParams, DisposeBrowserContextParams, TargetId,
+    CreateBrowserContextParams, CreateTargetParams, DisposeBrowserContextParams, TargetId, SessionId,
 };
 use chromiumoxide_cdp::cdp::{CdpEventMessage, IntoEventKind};
 use chromiumoxide_types::*;
@@ -53,9 +54,9 @@ pub struct Browser {
 
 impl Browser {
     /// Connect to an already running chromium instance via websocket
-    pub async fn connect(debug_ws_url: impl Into<String>) -> Result<(Self, Handler)> {
+    pub async fn connect(debug_ws_url: impl Into<String>, websocket_config: Option<WebSocketConfig>) -> Result<(Self, Handler)> {
         let debug_ws_url = debug_ws_url.into();
-        let conn = Connection::<CdpEventMessage>::connect(&debug_ws_url).await?;
+        let conn = Connection::<CdpEventMessage>::connect(&debug_ws_url, websocket_config).await?;
 
         let (tx, rx) = channel(1);
 
@@ -80,7 +81,11 @@ impl Browser {
     /// This fails if no web socket url could be detected from the child
     /// processes stderr for more than the configured `launch_timeout`
     /// (20 seconds by default).
-    pub async fn launch(mut config: BrowserConfig) -> Result<(Self, Handler)> {
+    pub async fn launch(config: BrowserConfig) -> Result<(Self, Handler)> {
+        Self::launch_with_ws_config(config, None).await
+    }
+
+    pub async fn launch_with_ws_config(mut config: BrowserConfig, websocket_config: Option<WebSocketConfig>) -> Result<(Self, Handler)> {
         // Canonalize paths to reduce issues with sandboxing
         config.executable = utils::canonicalize(&config.executable).await?;
 
@@ -94,6 +99,7 @@ impl Browser {
         async fn with_child(
             config: &BrowserConfig,
             child: &mut Child,
+            websocket_config: Option<WebSocketConfig>,
         ) -> Result<(String, Connection<CdpEventMessage>)> {
             let dur = config.launch_timeout;
             cfg_if::cfg_if! {
@@ -107,11 +113,11 @@ impl Browser {
             };
             // extract the ws:
             let debug_ws_url = ws_url_from_output(child, timeout_fut).await?;
-            let conn = Connection::<CdpEventMessage>::connect(&debug_ws_url).await?;
+            let conn = Connection::<CdpEventMessage>::connect(&debug_ws_url, websocket_config).await?;
             Ok((debug_ws_url, conn))
         }
 
-        let (debug_ws_url, conn) = match with_child(&config, &mut child).await {
+        let (debug_ws_url, conn) = match with_child(&config, &mut child, websocket_config).await {
             Ok(conn) => conn,
             Err(e) => {
                 // An initialization error occurred, clean up the process
@@ -329,6 +335,18 @@ impl Browser {
         let method = cmd.identifier();
         let msg = CommandMessage::new(cmd, tx)?;
 
+        self.sender
+            .clone()
+            .send(HandlerMessage::Command(msg))
+            .await?;
+        let resp = rx.await??;
+        to_command_response::<T>(resp, method)
+    }
+
+    pub async fn execute_with_session<T: Command>(&self, cmd: T, session_id: Option<SessionId>) -> Result<CommandResponse<T::Response>> {
+        let (tx, rx) = oneshot_channel();
+        let method = cmd.identifier();
+        let msg = CommandMessage::with_session(cmd, tx, session_id)?;
         self.sender
             .clone()
             .send(HandlerMessage::Command(msg))

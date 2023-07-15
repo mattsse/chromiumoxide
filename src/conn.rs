@@ -2,7 +2,8 @@ use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::pin::Pin;
 
-use async_tungstenite::{tungstenite::protocol::WebSocketConfig, WebSocketStream};
+use async_tungstenite::WebSocketStream;
+use async_tungstenite::tungstenite::protocol::WebSocketConfig;
 use futures::stream::Stream;
 use futures::task::{Context, Poll};
 use futures::Sink;
@@ -37,13 +38,14 @@ pub struct Connection<T: EventMessage> {
 }
 
 impl<T: EventMessage + Unpin> Connection<T> {
-    pub async fn connect(debug_ws_url: impl AsRef<str>) -> Result<Self> {
+    pub async fn connect(debug_ws_url: impl AsRef<str>, maybe_config: Option<WebSocketConfig>) -> Result<Self> {
         let config = WebSocketConfig {
             max_message_size: None,
             max_frame_size: None,
             max_send_queue: None,
             ..Default::default()
         };
+        let config = maybe_config.unwrap_or(config);
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "async-std-runtime")] {
@@ -136,13 +138,15 @@ impl<T: EventMessage + Unpin> Stream for Connection<T> {
         // read from the ws
         match Stream::poll_next(Pin::new(&mut pin.ws), cx) {
             Poll::Ready(Some(Ok(msg))) => {
-                return match serde_json::from_slice::<Message<T>>(&msg.into_data()) {
+                let data = &msg.into_data();
+                return match serde_json::from_slice::<Message<T>>(data) {
                     Ok(msg) => {
                         tracing::trace!("Received {:?}", msg);
                         Poll::Ready(Some(Ok(msg)))
                     }
                     Err(err) => {
-                        tracing::error!("Failed to deserialize WS response {}", err);
+                        let data = std::str::from_utf8(data).unwrap_or_default();
+                        tracing::error!("Failed to deserialize WS response {} [{}]", err, data);
                         Poll::Ready(Some(Err(err.into())))
                     }
                 };

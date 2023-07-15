@@ -14,22 +14,22 @@ use crate::error::{CdpError, DeadlineExceeded, Result};
 use crate::handler::REQUEST_TIMEOUT;
 
 /// Deserialize a response
-pub(crate) fn to_command_response<T: Command>(
-    resp: Response,
-    method: MethodId,
-) -> Result<CommandResponse<T::Response>> {
-    if let Some(res) = resp.result {
-        let result = serde_json::from_value(res)?;
-        Ok(CommandResponse {
-            id: resp.id,
-            result,
-            method,
-        })
-    } else if let Some(err) = resp.error {
-        Err(err.into())
-    } else {
-        Err(CdpError::NoResponse)
-    }
+pub fn to_command_response<T: Command>(resp: Response, method: MethodId) -> Result<CommandResponse<T::Response>> {
+  if let Some(res) = resp.result {
+    let result = serde_json::from_value(res.clone()).map_err(|e| {
+      let msg = format!("error converting response [{}] [{}] [{}]", method, res, e.to_string());
+      CdpError::ChromeMessage(msg)
+    })?;
+    Ok(CommandResponse {
+      id: resp.id,
+      result,
+      method,
+    })
+  } else if let Some(err) = resp.error {
+    Err(err.into())
+  } else {
+    Err(CdpError::NoResponse)
+  }
 }
 
 /// Messages used internally to communicate with the connection, which is
@@ -45,82 +45,82 @@ pub struct CommandMessage<T = Result<Response>> {
 }
 
 impl<T> CommandMessage<T> {
-    pub fn new<C: Command>(cmd: C, sender: OneshotSender<T>) -> serde_json::Result<Self> {
-        Ok(Self {
-            method: cmd.identifier(),
-            session_id: None,
-            params: serde_json::to_value(cmd)?,
-            sender,
-        })
-    }
+  pub fn new<C: Command>(cmd: C, sender: OneshotSender<T>) -> serde_json::Result<Self> {
+    Ok(Self {
+      method: cmd.identifier(),
+      session_id: None,
+      params: serde_json::to_value(cmd)?,
+      sender,
+    })
+  }
 
-    /// Whether this command is a navigation
-    pub fn is_navigation(&self) -> bool {
-        self.method.as_ref() == NavigateParams::IDENTIFIER
-    }
+  /// Whether this command is a navigation
+  pub fn is_navigation(&self) -> bool {
+    self.method.as_ref() == NavigateParams::IDENTIFIER
+  }
 
     pub fn with_session<C: Command>(
         cmd: C,
         sender: OneshotSender<T>,
         session_id: Option<SessionId>,
     ) -> serde_json::Result<Self> {
-        Ok(Self {
-            method: cmd.identifier(),
-            session_id,
-            params: serde_json::to_value(cmd)?,
-            sender,
-        })
-    }
+    Ok(Self {
+      method: cmd.identifier(),
+      session_id,
+      params: serde_json::to_value(cmd)?,
+      sender,
+    })
+  }
 
-    pub fn split(self) -> (Request, OneshotSender<T>) {
-        (
-            Request {
-                method: self.method,
+  pub fn split(self) -> (Request, OneshotSender<T>) {
+    (
+      Request {
+        method: self.method,
                 session_id: self.session_id.map(Into::into),
-                params: self.params,
-            },
-            self.sender,
-        )
-    }
+        params: self.params,
+      },
+      self.sender,
+    )
+  }
 }
 
 impl Method for CommandMessage {
-    fn identifier(&self) -> MethodId {
-        self.method.clone()
-    }
+  fn identifier(&self) -> MethodId {
+    self.method.clone()
+  }
 }
 
 #[derive(Debug)]
 pub struct CommandChain {
-    /// The commands to process: (method identifier, params)
-    cmds: VecDeque<(MethodId, serde_json::Value)>,
-    /// The last issued command we currently waiting for its completion
-    waiting: Option<(MethodId, Instant)>,
-    /// The window a response after issuing a request must arrive
-    timeout: Duration,
+  /// The commands to process: (method identifier, params)
+  cmds: VecDeque<(MethodId, serde_json::Value)>,
+  /// The last issued command we currently waiting for its completion
+  waiting: Option<(MethodId, Instant)>,
+  /// The window a response after issuing a request must arrive
+  timeout: Duration,
 }
 
 pub type NextCommand = Poll<Option<Result<(MethodId, serde_json::Value), DeadlineExceeded>>>;
 
 impl CommandChain {
-    /// Creates a new `CommandChain` from an `Iterator`.
-    ///
-    /// The order of the commands corresponds to the iterator's
-    pub fn new<I>(cmds: I, timeout: Duration) -> Self
-    where
-        I: IntoIterator<Item = (MethodId, serde_json::Value)>,
-    {
-        Self {
-            cmds: VecDeque::from_iter(cmds),
-            waiting: None,
-            timeout,
-        }
+  /// Creates a new `CommandChain` from an `Iterator`.
+  ///
+  /// The order of the commands corresponds to the iterator's
+  pub fn new<I>(cmds: I, timeout: Duration) -> Self
+  where
+    I: IntoIterator<Item = (MethodId, serde_json::Value)>,
+  {
+    Self {
+      cmds: VecDeque::from_iter(cmds),
+      waiting: None,
+      timeout,
     }
+  }
 
-    /// queue in another request
-    pub fn push_back(&mut self, method: MethodId, params: serde_json::Value) {
+  /// queue in another request
+  pub fn push_back(&mut self, method: MethodId, params: serde_json::Value) {
         self.cmds.push_back((method, params))
-    }
+  }
 
     /// Removes the waiting state if the identifier matches that of the last
     /// issued command
@@ -143,25 +143,25 @@ impl CommandChain {
                     cmd,
                     now - *deadline
                 );
-                Poll::Ready(Some(Err(DeadlineExceeded::new(now, *deadline))))
-            } else {
-                Poll::Pending
-            }
-        } else if let Some((method, val)) = self.cmds.pop_front() {
-            self.waiting = Some((method.clone(), now + self.timeout));
-            Poll::Ready(Some(Ok((method, val))))
-        } else {
-            Poll::Ready(None)
-        }
+        Poll::Ready(Some(Err(DeadlineExceeded::new(now, *deadline))))
+      } else {
+        Poll::Pending
+      }
+    } else if let Some((method, val)) = self.cmds.pop_front() {
+      self.waiting = Some((method.clone(), now + self.timeout));
+      Poll::Ready(Some(Ok((method, val))))
+    } else {
+      Poll::Ready(None)
     }
+  }
 }
 
 impl Default for CommandChain {
-    fn default() -> Self {
-        Self {
-            cmds: Default::default(),
-            waiting: None,
-            timeout: Duration::from_millis(REQUEST_TIMEOUT),
-        }
+  fn default() -> Self {
+    Self {
+      cmds: Default::default(),
+      waiting: None,
+      timeout: Duration::from_millis(REQUEST_TIMEOUT),
     }
+  }
 }
