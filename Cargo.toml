@@ -87,10 +87,10 @@ required-features = ["_fetcher-native-async-std"]
 name = "fetcher-tokio"
 required-features = ["tokio-runtime", "_fetcher-native-tokio"]
 
-# [workspace]
-# members = [
-#     "chromiumoxide_pdl",
-#     "chromiumoxide_types",
-#     "chromiumoxide_cdp",
-#     "chromiumoxide_fetcher",
-# ]
+[workspace]
+members = [
+    "chromiumoxide_pdl",
+    "chromiumoxide_types",
+    "chromiumoxide_cdp",
+    "chromiumoxide_fetcher",
+]
