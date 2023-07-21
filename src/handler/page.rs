@@ -7,7 +7,8 @@ use futures::{SinkExt, StreamExt};
 
 use chromiumoxide_cdp::cdp::browser_protocol::browser::{GetVersionParams, GetVersionReturns};
 use chromiumoxide_cdp::cdp::browser_protocol::dom::{
-    NodeId, QuerySelectorAllParams, QuerySelectorParams, Rgba,
+    DiscardSearchResultsParams, GetSearchResultsParams, NodeId, PerformSearchParams,
+    QuerySelectorAllParams, QuerySelectorParams, Rgba,
 };
 use chromiumoxide_cdp::cdp::browser_protocol::emulation::{
     ClearDeviceMetricsOverrideParams, SetDefaultBackgroundColorOverrideParams,
@@ -141,6 +142,33 @@ impl PageInner {
             .await?
             .result
             .node_ids)
+    }
+
+    /// Returns all elements which matches the given xpath selector
+    pub async fn find_xpaths(&self, query: impl Into<String>) -> Result<Vec<NodeId>> {
+        let perform_search_returns = self
+            .execute(PerformSearchParams {
+                query: query.into(),
+                include_user_agent_shadow_dom: Some(true),
+            })
+            .await?
+            .result;
+
+        let search_results = self
+            .execute(GetSearchResultsParams::new(
+                perform_search_returns.search_id.clone(),
+                0,
+                perform_search_returns.result_count,
+            ))
+            .await?
+            .result;
+
+        self.execute(DiscardSearchResultsParams::new(
+            perform_search_returns.search_id,
+        ))
+        .await?;
+
+        Ok(search_results.node_ids)
     }
 
     /// Moves the mouse to this point (dispatches a mouseMoved event)
