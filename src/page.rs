@@ -265,6 +265,23 @@ impl Page {
         Element::from_nodes(&self.inner, &node_ids).await
     }
 
+    /// Returns the first element in the document which matches the given xpath
+    /// selector.
+    ///
+    /// Execute a xpath selector on the document's node.
+    pub async fn find_xpath(&self, selector: impl Into<String>) -> Result<Element> {
+        self.get_document().await?;
+        let node_id = self.inner.find_xpaths(selector).await?[0];
+        Element::new(Arc::clone(&self.inner), node_id).await
+    }
+
+    /// Return all `Element`s in the document that match the given xpath selector
+    pub async fn find_xpaths(&self, selector: impl Into<String>) -> Result<Vec<Element>> {
+        self.get_document().await?;
+        let node_ids = self.inner.find_xpaths(selector).await?;
+        Element::from_nodes(&self.inner, &node_ids).await
+    }
+
     /// Describes node given its id
     pub async fn describe_node(&self, node_id: NodeId) -> Result<Node> {
         let resp = self
