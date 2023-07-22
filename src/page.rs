@@ -529,6 +529,34 @@ impl Page {
         Ok(self)
     }
 
+    // Enables DOM agent
+    pub async fn enable_dom(&self) -> Result<&Self> {
+        self.execute(browser_protocol::dom::EnableParams::default())
+            .await?;
+        Ok(self)
+    }
+
+    // Disables DOM agent
+    pub async fn disable_dom(&self) -> Result<&Self> {
+        self.execute(browser_protocol::dom::DisableParams::default())
+            .await?;
+        Ok(self)
+    }
+
+    // Enables the CSS agent
+    pub async fn enable_css(&self) -> Result<&Self> {
+        self.execute(browser_protocol::css::EnableParams::default())
+            .await?;
+        Ok(self)
+    }
+
+    // Disables the CSS agent
+    pub async fn disable_css(&self) -> Result<&Self> {
+        self.execute(browser_protocol::css::DisableParams::default())
+            .await?;
+        Ok(self)
+    }
+
     /// Activates (focuses) the target.
     pub async fn activate(&self) -> Result<&Self> {
         self.inner.activate().await?;
