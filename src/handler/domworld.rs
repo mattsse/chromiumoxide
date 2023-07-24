@@ -48,17 +48,12 @@ impl DOMWorld {
 ///
 /// Besides pages, execution contexts can be found in
 /// [Web Workers](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API).
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum DOMWorldKind {
     /// The main world of a frame that represents the default execution context
     /// of a frame and is also created.
+    #[default]
     Main,
     /// Each frame gets its own isolated world with universal access
     Secondary,
-}
-
-impl Default for DOMWorldKind {
-    fn default() -> Self {
-        DOMWorldKind::Main
-    }
 }

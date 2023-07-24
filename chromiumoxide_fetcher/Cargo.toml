@@ -3,6 +3,7 @@ name = "chromiumoxide_fetcher"
 version = "0.5.0"
 authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
 edition = "2021"
+rust-version = "1.64"
 license = "MIT OR Apache-2.0"
 description = "Contains a chromium fetcher"
 homepage = "https://github.com/mattsse/chromiumoxide"
