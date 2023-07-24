@@ -1,6 +1,6 @@
 [package]
 name = "chromiumoxide_types"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
 edition = "2021"
 description = "Contains the essential types necessary for using chromiumoxide"
