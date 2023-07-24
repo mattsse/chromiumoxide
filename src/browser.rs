@@ -29,7 +29,7 @@ use crate::listeners::{EventListenerRequest, EventStream};
 use crate::page::Page;
 use crate::utils;
 use chromiumoxide_cdp::cdp::browser_protocol::browser::{
-    CloseReturns, GetVersionParams, GetVersionReturns,
+    BrowserContextId, CloseReturns, GetVersionParams, GetVersionReturns,
 };
 
 /// Default `Browser::launch` timeout in MS
@@ -241,11 +241,10 @@ impl Browser {
     /// other browser contexts.
     pub async fn start_incognito_context(&mut self) -> Result<&mut Self> {
         if !self.is_incognito_configured() {
-            let resp = self
-                .execute(CreateBrowserContextParams::default())
-                .await?
-                .result;
-            self.browser_context = BrowserContext::from(resp.browser_context_id);
+            let browser_context_id = self
+                .create_browser_context(CreateBrowserContextParams::default())
+                .await?;
+            self.browser_context = BrowserContext::from(browser_context_id);
             self.sender
                 .clone()
                 .send(HandlerMessage::InsertContext(self.browser_context.clone()))
@@ -262,8 +261,7 @@ impl Browser {
     /// incognito context.
     pub async fn quit_incognito_context(&mut self) -> Result<&mut Self> {
         if let Some(id) = self.browser_context.take() {
-            self.execute(DisposeBrowserContextParams::new(id.clone()))
-                .await?;
+            self.dispose_browser_context(id.clone()).await?;
             self.sender
                 .clone()
                 .send(HandlerMessage::DisposeContext(BrowserContext::from(id)))
@@ -357,7 +355,7 @@ impl Browser {
         rx.await?.ok_or(CdpError::NotFound)
     }
 
-    //Set listener for browser event
+    /// Set listener for browser event
     pub async fn event_listener<T: IntoEventKind>(&self) -> Result<EventStream<T>> {
         let (tx, rx) = unbounded();
         self.sender
@@ -368,6 +366,26 @@ impl Browser {
             .await?;
 
         Ok(EventStream::new(rx))
+    }
+
+    /// Creates a new empty browser context.
+    pub async fn create_browser_context(
+        &self,
+        params: CreateBrowserContextParams,
+    ) -> Result<BrowserContextId> {
+        let response = self.execute(params).await?;
+        Ok(response.result.browser_context_id)
+    }
+
+    /// Deletes a browser context.
+    pub async fn dispose_browser_context(
+        &self,
+        browser_context_id: impl Into<BrowserContextId>,
+    ) -> Result<()> {
+        self.execute(DisposeBrowserContextParams::new(browser_context_id))
+            .await?;
+
+        Ok(())
     }
 }
 
