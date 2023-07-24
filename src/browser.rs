@@ -242,7 +242,7 @@ impl Browser {
     pub async fn start_incognito_context(&mut self) -> Result<&mut Self> {
         if !self.is_incognito_configured() {
             let browser_context_id = self
-                .create_browser_context(CreateBrowserContextParams::builder().build())
+                .create_browser_context(CreateBrowserContextParams::default())
                 .await?;
             self.browser_context = BrowserContext::from(browser_context_id);
             self.sender
