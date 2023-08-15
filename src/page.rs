@@ -43,6 +43,118 @@ pub struct Page {
 }
 
 impl Page {
+    /// Changes your user_agent, removes the `navigator.webdriver` property
+    /// changes permissions, pluggins rendering contexts and the `window.chrome`
+    /// property to make it harder to detect the scraper as a bot
+    pub async fn enable_stealth_mode(&self) -> Result<()> {
+        self.hide_webdriver().await?;
+        self.hide_permissions().await?;
+        self.hide_plugins().await?;
+        self.hide_webgl_vendor().await?;
+        self.hide_chrome().await?;
+        self.set_user_agent("Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.5296.0 Safari/537.36").await?;
+
+        Ok(())
+    }
+
+    /// Sets `window.chrome` on frame creation
+    async fn hide_chrome(&self) -> Result<(), CdpError> {
+        self.execute(AddScriptToEvaluateOnNewDocumentParams {
+            source: "window.chrome = { runtime: {} };".to_string(),
+            world_name: None,
+            include_command_line_api: None,
+        })
+        .await?;
+        Ok(())
+    }
+
+    /// Obfuscates WebGL vendor on frame creation
+    async fn hide_webgl_vendor(&self) -> Result<(), CdpError> {
+        self
+            .execute(AddScriptToEvaluateOnNewDocumentParams {
+                source: "
+                    const getParameter = WebGLRenderingContext.getParameter;
+                    WebGLRenderingContext.prototype.getParameter = function (parameter) {
+                        if (parameter === 37445) {
+                            return 'Google Inc. (NVIDIA)';
+                        }
+    
+                        if (parameter === 37446) {
+                            return 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1050 Direct3D11 vs_5_0 ps_5_0, D3D11-27.21.14.5671)';
+                        }
+    
+                        return getParameter(parameter);
+                    };
+                "
+                .to_string(),
+                world_name: None,
+                include_command_line_api: None,
+            })
+            .await?;
+        Ok(())
+    }
+
+    /// Obfuscates browser plugins on frame creation
+    async fn hide_plugins(&self) -> Result<(), CdpError> {
+        self.execute(AddScriptToEvaluateOnNewDocumentParams {
+            source: "
+                    Object.defineProperty(
+                        navigator,
+                        'plugins',
+                        {
+                            get: () => [
+                                { filename: 'internal-pdf-viewer' },
+                                { filename: 'adsfkjlkjhalkh' },
+                                { filename: 'internal-nacl-plugin '}
+                            ],
+                        }
+                    );
+                "
+            .to_string(),
+            world_name: None,
+            include_command_line_api: None,
+        })
+        .await?;
+        Ok(())
+    }
+
+    /// Obfuscates browser permissions on frame creation
+    async fn hide_permissions(&self) -> Result<(), CdpError> {
+        self.execute(AddScriptToEvaluateOnNewDocumentParams {
+            source: "
+                    const originalQuery = window.navigator.permissions.query;
+                    window.navigator.permissions.__proto__.query = parameters => {
+                        return parameters.name === 'notifications'
+                            ? Promise.resolve({ state: Notification.permission })
+                            : originalQuery(parameters);
+                    }
+                "
+            .to_string(),
+            world_name: None,
+            include_command_line_api: None,
+        })
+        .await?;
+        Ok(())
+    }
+
+    /// Removes the `navigator.webdriver` property on frame creation
+    async fn hide_webdriver(&self) -> Result<(), CdpError> {
+        self.execute(AddScriptToEvaluateOnNewDocumentParams {
+            source: "
+                    Object.defineProperty(
+                        navigator,
+                        'webdriver',
+                        { get: () => undefined }
+                    );
+                "
+            .to_string(),
+            world_name: None,
+            include_command_line_api: None,
+        })
+        .await?;
+        Ok(())
+    }
+
     /// Execute a command and return the `Command::Response`
     pub async fn execute<T: Command>(&self, cmd: T) -> Result<CommandResponse<T::Response>> {
         self.command_future(cmd)?.await

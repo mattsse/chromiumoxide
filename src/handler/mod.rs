@@ -377,8 +377,8 @@ impl Handler {
             _ => {}
         }
         chromiumoxide_cdp::consume_event!(match params {
-           |ev| self.event_listeners.start_send(ev),
-           |json| { let _ = self.event_listeners.try_send_custom(&method, json);}
+            |ev| self.event_listeners.start_send(ev),
+            |json| { let _ = self.event_listeners.try_send_custom(&method, json);}
         });
     }
 
