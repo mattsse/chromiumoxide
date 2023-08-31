@@ -7,6 +7,7 @@ use futures::channel::mpsc::Receiver;
 use futures::channel::oneshot::Sender as OneshotSender;
 use futures::stream::{Fuse, Stream, StreamExt};
 use futures::task::{Context, Poll};
+use serde::Deserialize;
 
 use crate::listeners::{EventListenerRequest, EventListeners};
 use chromiumoxide_cdp::cdp::browser_protocol::browser::*;
@@ -581,6 +582,21 @@ impl Stream for Handler {
                     }
                     Ok(Message::Event(ev)) => {
                         pin.on_event(ev);
+                    }
+                    Ok(Message::RawEvent(ev)) => {
+                        // HACK: We deserializew the raw CdpEventMessage from the handler.
+                        let msg = CdpEventMessage::deserialize(ev);
+                        match msg {
+                            Ok(ev) => {
+                                pin.on_event(ev);
+                            }
+                            Err(e) => {
+                                tracing::error!("failed to deserialize raw event: {:?}", e);
+                                return Poll::Ready(Some(Err(CdpError::ChromeMessage(
+                                    "failed to deserialize raw event".to_string(),
+                                ))));
+                            }
+                        }
                     }
                     Err(err) => {
                         tracing::error!("WS Connection error: {:?}", err);

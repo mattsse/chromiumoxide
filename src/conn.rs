@@ -8,7 +8,10 @@ use futures::task::{Context, Poll};
 use futures::Sink;
 
 use chromiumoxide_cdp::cdp::browser_protocol::target::SessionId;
-use chromiumoxide_types::{CallId, EventMessage, Message, MethodCall, MethodId};
+use chromiumoxide_types::{
+    CallId, CdpJsonEventMessage, EventMessage, Message, MethodCall, MethodId,
+};
+use serde_json::Value;
 
 use crate::error::CdpError;
 use crate::error::Result;
@@ -136,14 +139,42 @@ impl<T: EventMessage + Unpin> Stream for Connection<T> {
         // read from the ws
         match Stream::poll_next(Pin::new(&mut pin.ws), cx) {
             Poll::Ready(Some(Ok(msg))) => {
-                return match serde_json::from_slice::<Message<T>>(&msg.into_data()) {
+                // NOTE: This piece of code avoids a problem caused by
+                // `arbitrary_precision` feature and other shenanigans that mess
+                // with `serde_json`.
+                // Issues:
+                // - https://github.com/serde-rs/json/issues/1046
+                // - https://github.com/serde-rs/json/issues/959
+                // - https://github.com/serde-rs/serde/issues/1183
+                let interim_msg: Value = serde_json::from_slice(&msg.into_data())?;
+                let msg: Result<Message<T>, _> = serde_json::from_value(interim_msg.clone());
+                return match msg {
                     Ok(msg) => {
                         tracing::trace!("Received {:?}", msg);
                         Poll::Ready(Some(Ok(msg)))
                     }
-                    Err(err) => {
-                        tracing::error!("Failed to deserialize WS response {}", err);
-                        Poll::Ready(Some(Err(err.into())))
+                    Err(_err) => {
+                        // NOTE: This is a fallback for the case when the value
+                        // deserialization fails for untagged enums
+                        // specifically.
+                        // Try deserializing the inner product of the untagged enum directly.
+                        let inner: Result<CdpJsonEventMessage, _> =
+                            serde_json::from_value(interim_msg.clone());
+                        match inner {
+                            Ok(msg) => {
+                                // If we get here, we know that the message is a valid event.
+                                tracing::trace!("Received fallback event {:?}", msg);
+                                // HACK: I return a raw value, because the
+                                // `handler` "upstairs" requires a
+                                // CdpEventMessage which we cannot add in the
+                                // Message enum because of a cyclic dependency.
+                                Poll::Ready(Some(Ok(Message::RawEvent(interim_msg))))
+                            }
+                            Err(err) => {
+                                tracing::error!("Failed to deserialize WS response {}", err);
+                                Poll::Ready(Some(Err(err.into())))
+                            }
+                        }
                     }
                 };
             }

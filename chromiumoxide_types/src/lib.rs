@@ -5,6 +5,7 @@ use std::ops::Deref;
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 pub type MethodId = Cow<'static, str>;
 
@@ -207,6 +208,8 @@ pub enum Message<T = CdpJsonEventMessage> {
     Response(Response),
     /// An emitted event from the server
     Event(T),
+    /// Non generic version of the event as a hack to prevent message mismatches.
+    RawEvent(Value),
 }
 
 /// A response can either contain the `Command::Response` type in the `result`
