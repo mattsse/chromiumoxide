@@ -22,8 +22,8 @@ impl TryFrom<String> for Revision {
     fn try_from(value: String) -> Result<Self, Self::Error> {
         value
             .parse::<u32>()
-            .map_err(|e| FetcherError::InvalidRevision(e))
-            .map(|v| Self(v))
+            .map_err(FetcherError::InvalidRevision)
+            .map(Self)
     }
 }
 

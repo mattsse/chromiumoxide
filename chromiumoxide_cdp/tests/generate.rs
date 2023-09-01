@@ -18,7 +18,7 @@ fn generated_code_is_fresh() {
 
     let tmp = tempfile::tempdir().unwrap();
     Generator::default()
-        .out_dir(&tmp.path())
+        .out_dir(tmp.path())
         .experimental(env::var("CDP_NO_EXPERIMENTAL").is_err())
         .deprecated(env::var("CDP_DEPRECATED").is_ok())
         .compile_pdls(&[js_proto, browser_proto])

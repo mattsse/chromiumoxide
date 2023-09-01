@@ -84,7 +84,7 @@ impl BrowserFetcherOptionsBuilder {
 
         let platform =
             self.platform
-                .or_else(|| Platform::current())
+                .or_else(Platform::current)
                 .ok_or(FetcherError::UnsupportedOs(
                     std::env::consts::OS,
                     std::env::consts::ARCH,
