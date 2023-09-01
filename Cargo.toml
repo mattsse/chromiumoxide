@@ -57,7 +57,7 @@ default = ["async-std-runtime"]
 async-std-runtime = ["async-std", "async-tungstenite/async-std-runtime"]
 tokio-runtime = ["tokio", "async-tungstenite/tokio-runtime"]
 fetcher = []
-disable_auto_attach_debugger = []
+disable_auto_attach_target = []
 
 # Temporary features until cargo weak dependencies bug is fixed
 # See https://github.com/rust-lang/cargo/issues/10801
