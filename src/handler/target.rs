@@ -3,6 +3,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
 
+use chromiumoxide_cdp::cdp::browser_protocol::target::DetachFromTargetParams;
 use futures::channel::oneshot::Sender;
 use futures::stream::Stream;
 use futures::task::{Context, Poll};
@@ -34,7 +35,9 @@ use crate::handler::viewport::Viewport;
 use crate::handler::{PageInner, REQUEST_TIMEOUT};
 use crate::listeners::{EventListenerRequest, EventListeners};
 use crate::{page::Page, ArcHttpRequest};
-use chromiumoxide_cdp::cdp::js_protocol::runtime::ExecutionContextId;
+use chromiumoxide_cdp::cdp::js_protocol::runtime::{
+    ExecutionContextId, RunIfWaitingForDebuggerParams,
+};
 use std::time::Duration;
 
 macro_rules! advance_state {
@@ -244,6 +247,40 @@ impl Target {
             CdpEvent::PageLifecycleEvent(ev) => self.frame_manager.on_page_lifecycle_event(ev),
             CdpEvent::PageFrameStartedLoading(ev) => {
                 self.frame_manager.on_frame_started_loading(ev);
+            }
+
+            // `Target` events
+            CdpEvent::TargetAttachedToTarget(ev) => {
+                //  https://github.com/puppeteer/puppeteer/blob/main/packages/puppeteer-core/src/common/ChromeTargetManager.ts#L343
+                if ev.target_info.r#type == "service_worker" {
+                    let session_id = ev.session_id.clone();
+                    // Reference: https://github.com/puppeteer/puppeteer/blob/main/packages/puppeteer-core/src/common/ChromeTargetManager.ts#L343
+                    let runtime_cmd = RunIfWaitingForDebuggerParams::default();
+                    let detach_cmd = DetachFromTargetParams::builder()
+                        .session_id(session_id.clone())
+                        .build();
+
+                    self.queued_events.push_back(TargetEvent::Request(Request {
+                        method: runtime_cmd.identifier(),
+                        session_id: Some(session_id.clone().into()),
+                        params: serde_json::Value::Null,
+                    }));
+
+                    self.queued_events.push_back(TargetEvent::Request(Request {
+                        method: detach_cmd.identifier(),
+                        session_id: Some(session_id.clone().into()),
+                        params: serde_json::to_value(detach_cmd).expect("failed to serialize"),
+                    }));
+                } else if ev.waiting_for_debugger {
+                    let session_id = ev.session_id.clone();
+                    let runtime_cmd = RunIfWaitingForDebuggerParams::default();
+
+                    self.queued_events.push_back(TargetEvent::Request(Request {
+                        method: runtime_cmd.identifier(),
+                        session_id: Some(session_id.clone().into()),
+                        params: serde_json::Value::Null,
+                    }));
+                }
             }
 
             // `NetworkManager` events
