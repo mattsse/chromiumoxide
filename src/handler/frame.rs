@@ -306,13 +306,11 @@ impl FrameManager {
                 )));
             }
             if let Some(frame) = self.frames.get(&watcher.frame_id) {
-                tracing::warn!("frame: {:?}", frame);
                 if let Some(nav) = self.check_lifecycle_complete(&watcher, frame) {
                     // request is complete if the frame's lifecycle is complete = frame received all
                     // required events
                     return Some(FrameEvent::NavigationResult(Ok(nav)));
                 } else {
-                    tracing::error!(?frame, ?watcher, "frame not loaded yet");
                     // not finished yet
                     self.navigation = Some((watcher, deadline));
                 }
@@ -335,7 +333,6 @@ impl FrameManager {
 
     /// Entrypoint for page navigation
     pub fn goto(&mut self, req: FrameNavigationRequest) {
-        tracing::debug!(frame_id = ?self.main_frame, "navigate main frame");
         if let Some(frame_id) = self.main_frame.clone() {
             self.navigate_frame(frame_id, req);
         }
@@ -385,7 +382,6 @@ impl FrameManager {
     }
 
     pub fn on_frame_navigated(&mut self, frame: &CdpFrame) {
-        tracing::debug!(frame = ?frame, "frame navigated");
         if frame.parent_id.is_some() {
             if let Some((id, mut f)) = self.frames.remove_entry(&frame.id) {
                 for child in &f.child_frames {
@@ -499,7 +495,6 @@ impl FrameManager {
 
     /// Fired for top level page lifecycle events (nav, load, paint, etc.)
     pub fn on_page_lifecycle_event(&mut self, event: &EventLifecycleEvent) {
-        tracing::warn!(event = ?event, "page lifecycle event");
         if let Some(frame) = self.frames.get_mut(&event.frame_id) {
             if event.name == "init" {
                 frame.loader_id = Some(event.loader_id.clone());
