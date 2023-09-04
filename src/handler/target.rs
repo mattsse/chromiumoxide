@@ -3,6 +3,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
 
+use chromiumoxide_cdp::cdp::browser_protocol::target::DetachFromTargetParams;
 use futures::channel::oneshot::Sender;
 use futures::stream::Stream;
 use futures::task::{Context, Poll};
@@ -34,7 +35,9 @@ use crate::handler::viewport::Viewport;
 use crate::handler::{PageInner, REQUEST_TIMEOUT};
 use crate::listeners::{EventListenerRequest, EventListeners};
 use crate::{page::Page, ArcHttpRequest};
-use chromiumoxide_cdp::cdp::js_protocol::runtime::ExecutionContextId;
+use chromiumoxide_cdp::cdp::js_protocol::runtime::{
+    ExecutionContextId, RunIfWaitingForDebuggerParams,
+};
 use std::time::Duration;
 
 macro_rules! advance_state {
@@ -244,6 +247,33 @@ impl Target {
             CdpEvent::PageLifecycleEvent(ev) => self.frame_manager.on_page_lifecycle_event(ev),
             CdpEvent::PageFrameStartedLoading(ev) => {
                 self.frame_manager.on_frame_started_loading(ev);
+            }
+
+            // `Target` events
+            CdpEvent::TargetAttachedToTarget(ev) => {
+                tracing::debug!(session_id = ?self.session_id, event_session_id = ?ev.session_id);
+                let runtime_cmd = RunIfWaitingForDebuggerParams::default();
+
+                self.queued_events.push_front(TargetEvent::Request(Request {
+                    method: runtime_cmd.identifier(),
+                    session_id: Some(ev.session_id.clone().into()),
+                    params: serde_json::to_value(runtime_cmd).unwrap(),
+                }));
+
+                match ev.target_info.r#type.as_ref() {
+                    "service_worker" => {
+                        let detach_command = DetachFromTargetParams::builder()
+                            .session_id(ev.session_id.clone())
+                            .build();
+
+                        self.queued_events.push_front(TargetEvent::Request(Request {
+                            method: detach_command.identifier(),
+                            session_id: Some(self.session_id.clone().take().unwrap().into()),
+                            params: serde_json::to_value(detach_command).unwrap(),
+                        }));
+                    }
+                    _ => {}
+                }
             }
 
             // `NetworkManager` events

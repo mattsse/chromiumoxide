@@ -53,13 +53,16 @@ pub struct Browser {
 
 impl Browser {
     /// Connect to an already running chromium instance via websocket
-    pub async fn connect(debug_ws_url: impl Into<String>) -> Result<(Self, Handler)> {
+    pub async fn connect(
+        debug_ws_url: impl Into<String>,
+        handler_config: HandlerConfig,
+    ) -> Result<(Self, Handler)> {
         let debug_ws_url = debug_ws_url.into();
         let conn = Connection::<CdpEventMessage>::connect(&debug_ws_url).await?;
 
         let (tx, rx) = channel(1);
 
-        let fut = Handler::new(conn, rx, HandlerConfig::default());
+        let fut = Handler::new(conn, rx, handler_config);
         let browser_context = fut.default_browser_context().clone();
 
         let browser = Self {
