@@ -251,14 +251,15 @@ impl Target {
 
             // `Target` events
             CdpEvent::TargetAttachedToTarget(ev) => {
-                tracing::debug!(session_id = ?self.session_id, event_session_id = ?ev.session_id);
-                let runtime_cmd = RunIfWaitingForDebuggerParams::default();
+                if ev.waiting_for_debugger {
+                    let runtime_cmd = RunIfWaitingForDebuggerParams::default();
 
-                self.queued_events.push_front(TargetEvent::Request(Request {
-                    method: runtime_cmd.identifier(),
-                    session_id: Some(ev.session_id.clone().into()),
-                    params: serde_json::to_value(runtime_cmd).unwrap(),
-                }));
+                    self.queued_events.push_back(TargetEvent::Request(Request {
+                        method: runtime_cmd.identifier(),
+                        session_id: Some(ev.session_id.clone().into()),
+                        params: serde_json::to_value(runtime_cmd).unwrap(),
+                    }));
+                }
 
                 match ev.target_info.r#type.as_ref() {
                     "service_worker" => {
@@ -266,7 +267,7 @@ impl Target {
                             .session_id(ev.session_id.clone())
                             .build();
 
-                        self.queued_events.push_front(TargetEvent::Request(Request {
+                        self.queued_events.push_back(TargetEvent::Request(Request {
                             method: detach_command.identifier(),
                             session_id: Some(self.session_id.clone().take().unwrap().into()),
                             params: serde_json::to_value(detach_command).unwrap(),
