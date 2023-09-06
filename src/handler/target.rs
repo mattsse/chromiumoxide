@@ -261,19 +261,16 @@ impl Target {
                     }));
                 }
 
-                match ev.target_info.r#type.as_ref() {
-                    "service_worker" => {
-                        let detach_command = DetachFromTargetParams::builder()
-                            .session_id(ev.session_id.clone())
-                            .build();
+                if "service_worker" == &ev.target_info.r#type {
+                    let detach_command = DetachFromTargetParams::builder()
+                        .session_id(ev.session_id.clone())
+                        .build();
 
-                        self.queued_events.push_back(TargetEvent::Request(Request {
-                            method: detach_command.identifier(),
-                            session_id: Some(self.session_id.clone().take().unwrap().into()),
-                            params: serde_json::to_value(detach_command).unwrap(),
-                        }));
-                    }
-                    _ => {}
+                    self.queued_events.push_back(TargetEvent::Request(Request {
+                        method: detach_command.identifier(),
+                        session_id: self.session_id.clone().map(Into::into),
+                        params: serde_json::to_value(detach_command).unwrap(),
+                    }));
                 }
             }
 
