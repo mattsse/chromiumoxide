@@ -20,6 +20,11 @@ pin_project! {
         rx_command: oneshot::Receiver<M>,
         #[pin]
         target_sender: mpsc::Sender<TargetMessage>,
+        // We need delay to be pinned because it's a future
+        // and we need to be able to poll it
+        // it is used to timeout the command if page was closed while waiting for response
+        #[pin]
+        delay: futures_timer::Delay,
 
         message: Option<TargetMessage>,
 
@@ -42,10 +47,15 @@ impl<T: Command> CommandFuture<T> {
             cmd, tx, session,
         )?));
 
+        let delay = futures_timer::Delay::new(std::time::Duration::from_millis(
+            crate::handler::REQUEST_TIMEOUT,
+        ));
+
         Ok(Self {
             target_sender,
             rx_command,
             message,
+            delay,
             method,
             _marker: PhantomData,
         })
@@ -73,6 +83,8 @@ where
                 }
                 Poll::Pending => Poll::Pending,
             }
+        } else if this.delay.poll(cx).is_ready() {
+            Poll::Ready(Err(crate::error::CdpError::Timeout))
         } else {
             match this.rx_command.as_mut().poll(cx) {
                 Poll::Ready(Ok(Ok(response))) => {

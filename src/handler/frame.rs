@@ -254,15 +254,14 @@ impl FrameManager {
     }
 
     fn check_lifecycle(&self, watcher: &NavigationWatcher, frame: &Frame) -> bool {
-        watcher
-            .expected_lifecycle
+        watcher.expected_lifecycle.iter().all(|ev| {
+            frame.lifecycle_events.contains(ev)
+                || (frame.url.is_none() && frame.lifecycle_events.contains("DOMContentLoaded"))
+        }) && frame
+            .child_frames
             .iter()
-            .all(|ev| frame.lifecycle_events.contains(ev))
-            && frame
-                .child_frames
-                .iter()
-                .filter_map(|f| self.frames.get(f))
-                .all(|f| self.check_lifecycle(watcher, f))
+            .filter_map(|f| self.frames.get(f))
+            .all(|f| self.check_lifecycle(watcher, f))
     }
 
     fn check_lifecycle_complete(
