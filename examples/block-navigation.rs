@@ -5,16 +5,16 @@ use std::time::Duration;
 use async_std::task::sleep;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
-use chromiumoxide::cdp::browser_protocol::fetch::{
+use chromiumoxide_fork::cdp::browser_protocol::fetch::{
     self, ContinueRequestParams, EventRequestPaused, FailRequestParams, FulfillRequestParams,
 };
-use chromiumoxide::cdp::browser_protocol::network::{
+use chromiumoxide_fork::cdp::browser_protocol::network::{
     self, ErrorReason, EventRequestWillBeSent, ResourceType,
 };
-use chromiumoxide::Page;
+use chromiumoxide_fork::Page;
 use futures::{select, StreamExt};
 
-use chromiumoxide::browser::{Browser, BrowserConfig};
+use chromiumoxide_fork::browser::{Browser, BrowserConfig};
 
 const CONTENT: &str = "<html><head><meta http-equiv=\"refresh\" content=\"0;URL='http://www.example.com/'\" /></head><body><h1>TEST</h1></body></html>";
 const TARGET: &str = "http://google.com/";
@@ -103,7 +103,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Navigate to target
     page.goto("http://google.com").await?;
     let content = page.content().await?;
-    println!("Content: {content}");
+    println!("Content: {:?}", content);
 
     browser.close().await?;
     browser_handle.await;

@@ -46,13 +46,15 @@ impl Page {
     /// Changes your user_agent, removes the `navigator.webdriver` property
     /// changes permissions, pluggins rendering contexts and the `window.chrome`
     /// property to make it harder to detect the scraper as a bot
-    pub async fn enable_stealth_mode(&self) -> Result<()> {
+    pub async fn enable_stealth_mode(&self, ua: &str) -> Result<()> {
         self.hide_webdriver().await?;
         self.hide_permissions().await?;
         self.hide_plugins().await?;
         self.hide_webgl_vendor().await?;
         self.hide_chrome().await?;
-        self.set_user_agent("Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.5296.0 Safari/537.36").await?;
+        if !ua.is_empty() {
+            self.set_user_agent(ua).await?;
+        }
 
         Ok(())
     }
@@ -1068,6 +1070,7 @@ impl Page {
         self.wait_for_navigation().await
     }
 
+    #[cfg(not(feature = "bytes"))]
     /// Returns the HTML content of the page
     pub async fn content(&self) -> Result<String> {
         Ok(self
@@ -1088,6 +1091,27 @@ impl Page {
             .into_value()?)
     }
 
+    #[cfg(feature = "bytes")]
+    /// Returns the HTML content of the page
+    pub async fn content(&self) -> Result<bytes::Bytes> {
+        Ok(self
+            .evaluate(
+                "{
+            let retVal = '';
+            if (document.doctype) {
+            retVal = new XMLSerializer().serializeToString(document.doctype);
+            }
+            if (document.documentElement) {
+            retVal += document.documentElement.outerHTML;
+            }
+            retVal
+        }
+        ",
+            )
+            .await?
+            .into_value()?)
+    }
+    
     /// Returns source for the script with given id.
     ///
     /// Debugger must be enabled.

@@ -1,7 +1,7 @@
 use futures::StreamExt;
 
-use chromiumoxide::browser::{Browser, BrowserConfig};
-use chromiumoxide::page::ScreenshotParams;
+use chromiumoxide_fork::browser::{Browser, BrowserConfig};
+use chromiumoxide_fork::page::ScreenshotParams;
 use chromiumoxide_cdp::cdp::browser_protocol::page::CaptureScreenshotFormat;
 
 #[async_std::main]
