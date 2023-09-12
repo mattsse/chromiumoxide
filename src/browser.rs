@@ -51,10 +51,49 @@ pub struct Browser {
     browser_context: BrowserContext,
 }
 
+/// Browser connection information.
+#[derive(serde::Deserialize, Debug, Default)]
+pub struct BrowserConnection {
+    #[serde(rename = "Browser")]
+    /// The browser name
+    browser: String,
+    #[serde(rename = "Protocol-Version")]
+    /// Browser version
+    protocol_version: String,
+    #[serde(rename = "User-Agent")]
+    /// User Agent used by default.
+    user_agent: String,
+    #[serde(rename = "V8-Version")]
+    /// The v8 engine version
+    v8_version: String,
+    #[serde(rename = "WebKit-Version")]
+    /// Webkit version
+    webkit_version: String,
+    #[serde(rename = "webSocketDebuggerUrl")]
+    /// Remote debugging address
+    web_socket_debugger_url: String
+}
+
 impl Browser {
     /// Connect to an already running chromium instance via websocket
     pub async fn connect(debug_ws_url: impl Into<String>) -> Result<(Self, Handler)> {
-        let debug_ws_url = debug_ws_url.into();
+        let mut debug_ws_url = debug_ws_url.into();
+
+        if debug_ws_url.starts_with("http") {
+            let req =  reqwest::Client::new()
+            .get(&debug_ws_url)
+            .header("content-type", "application/json")
+            .send()
+            .await
+            .unwrap();
+
+            let connection: BrowserConnection = serde_json::from_slice(&req.bytes().await.unwrap_or_default()).unwrap_or_default();
+
+            if !connection.web_socket_debugger_url.is_empty() {
+                debug_ws_url = connection.web_socket_debugger_url;
+            }
+        }
+
         let conn = Connection::<CdpEventMessage>::connect(&debug_ws_url).await?;
 
         let (tx, rx) = channel(1);
