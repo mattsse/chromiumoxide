@@ -1,6 +1,6 @@
 [package]
 name = "chromiumoxide_fork"
-version = "0.5.8"
+version = "0.5.9"
 rust-version = "1.64"
 authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
 edition = "2021"
