@@ -87,12 +87,12 @@ impl Browser {
             .await
             .unwrap();
 
-            let ip = req.remote_addr().unwrap();
+            let socketaddr = req.remote_addr().unwrap();
             let connection: BrowserConnection = serde_json::from_slice(&req.bytes().await.unwrap_or_default()).unwrap_or_default();
 
             if !connection.web_socket_debugger_url.is_empty() {
                 // prevent proxy interfaces from returning local ips to connect to the exact machine
-                debug_ws_url = connection.web_socket_debugger_url.replace("127.0.0.1", &ip.to_string());
+                debug_ws_url = connection.web_socket_debugger_url.replace("127.0.0.1", &socketaddr.ip().to_string());
             }
         }
 
