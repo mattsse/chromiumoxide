@@ -81,7 +81,7 @@ impl Browser {
 
         if debug_ws_url.starts_with("http") {
             let req =  reqwest::Client::new()
-            .get(&debug_ws_url)
+            .post(if debug_ws_url.ends_with("/json/version") { debug_ws_url.to_owned() } else { format!("{}{}json/version", &debug_ws_url, if debug_ws_url.ends_with("/") { "" } else { "/" }) })
             .header("content-type", "application/json")
             .send()
             .await
