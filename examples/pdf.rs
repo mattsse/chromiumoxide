@@ -1,6 +1,6 @@
 use futures::StreamExt;
 
-use chromiumoxide_fork::browser::{Browser, BrowserConfig};
+use chromiumoxide::browser::{Browser, BrowserConfig};
 use chromiumoxide_cdp::cdp::browser_protocol::page::PrintToPdfParams;
 
 #[async_std::main]

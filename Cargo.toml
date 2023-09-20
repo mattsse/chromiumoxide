@@ -1,5 +1,5 @@
 [package]
-name = "chromiumoxide_fork"
+name = "chromiumoxide"
 version = "0.5.9"
 rust-version = "1.64"
 authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
