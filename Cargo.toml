@@ -13,7 +13,7 @@ keywords = ["chrome", "chromedriver", "puppeteer", "automation"]
 categories = ["web-programming", "api-bindings", "development-tools::testing"]
 
 [dependencies]
-async-tungstenite = "0.22"
+async-tungstenite = "0.23"
 serde = { version = "1", features = ["derive"] }
 async-std = { version = "1.5", features = [
     "attributes",
@@ -44,7 +44,7 @@ pin-project-lite = "0.2"
 dunce = "1"
 
 [target.'cfg(windows)'.dependencies]
-winreg = "0.50"
+winreg = "0.51"
 
 [dev-dependencies]
 quote = "1"

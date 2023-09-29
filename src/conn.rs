@@ -41,7 +41,6 @@ impl<T: EventMessage + Unpin> Connection<T> {
         let config = WebSocketConfig {
             max_message_size: None,
             max_frame_size: None,
-            max_send_queue: None,
             ..Default::default()
         };
 

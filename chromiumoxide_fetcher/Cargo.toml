@@ -14,7 +14,7 @@ include = ["src/**/*", "LICENSE-*"]
 [dependencies]
 thiserror = "1"
 anyhow = "1"
-directories = "4"
+directories = "5"
 os_info = { version = "3", default-features = false }
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
 async-std = { version = "1.5", features = ["unstable"], optional = true }
