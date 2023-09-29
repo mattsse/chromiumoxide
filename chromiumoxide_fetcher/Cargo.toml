@@ -1,9 +1,9 @@
 [package]
 name = "chromiumoxide_fetcher"
-version = "0.5.1"
+version = "0.5.2"
 authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
 edition = "2021"
-rust-version = "1.64"
+rust-version = "1.70"
 license = "MIT OR Apache-2.0"
 description = "Contains a chromium fetcher"
 homepage = "https://github.com/mattsse/chromiumoxide"
@@ -14,7 +14,7 @@ include = ["src/**/*", "LICENSE-*"]
 [dependencies]
 thiserror = "1"
 anyhow = "1"
-directories = "4"
+directories = "5"
 os_info = { version = "3", default-features = false }
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
 async-std = { version = "1.5", features = ["unstable"], optional = true }
