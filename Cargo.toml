@@ -1,6 +1,6 @@
 [package]
 name = "chromiumoxide"
-version = "0.5.1"
+version = "0.5.2"
 rust-version = "1.64"
 authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
 edition = "2021"
