@@ -26,7 +26,7 @@ impl EventListeners {
             method,
             kind,
         } = req;
-        let subs = self.listeners.entry(method).or_insert_with(Vec::new);
+        let subs = self.listeners.entry(method).or_default();
         subs.push(EventListener {
             listener,
             kind,
