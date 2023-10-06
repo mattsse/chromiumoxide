@@ -56,22 +56,22 @@ pub struct Browser {
 pub struct BrowserConnection {
     #[serde(rename = "Browser")]
     /// The browser name
-    browser: String,
+    pub browser: String,
     #[serde(rename = "Protocol-Version")]
     /// Browser version
-    protocol_version: String,
+    pub protocol_version: String,
     #[serde(rename = "User-Agent")]
     /// User Agent used by default.
-    user_agent: String,
+    pub user_agent: String,
     #[serde(rename = "V8-Version")]
     /// The v8 engine version
-    v8_version: String,
+    pub v8_version: String,
     #[serde(rename = "WebKit-Version")]
     /// Webkit version
-    webkit_version: String,
+    pub webkit_version: String,
     #[serde(rename = "webSocketDebuggerUrl")]
     /// Remote debugging address
-    web_socket_debugger_url: String
+    pub web_socket_debugger_url: String
 }
 
 impl Browser {
