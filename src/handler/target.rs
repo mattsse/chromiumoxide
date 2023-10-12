@@ -190,6 +190,10 @@ impl Target {
         self.info.opener_id.as_ref()
     }
 
+    pub fn frame_manager(&self) -> &FrameManager {
+        &self.frame_manager
+    }
+
     pub fn frame_manager_mut(&mut self) -> &mut FrameManager {
         &mut self.frame_manager
     }
