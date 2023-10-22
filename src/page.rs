@@ -1088,7 +1088,6 @@ impl Page {
         self.wait_for_navigation().await
     }
 
-    #[cfg(not(feature = "bytes"))]
     /// Returns the HTML content of the page
     pub async fn content(&self) -> Result<String> {
         Ok(self
@@ -1109,9 +1108,8 @@ impl Page {
             .into_value()?)
     }
 
-    #[cfg(feature = "bytes")]
     /// Returns the HTML content of the page
-    pub async fn content(&self) -> Result<bytes::Bytes> {
+    pub async fn content_bytes(&self) -> Result<bytes::Bytes> {
         Ok(self
             .evaluate(
                 "{
