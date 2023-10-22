@@ -1108,6 +1108,7 @@ impl Page {
             .into_value()?)
     }
 
+    #[cfg(feature = "bytes")]
     /// Returns the HTML content of the page
     pub async fn content_bytes(&self) -> Result<bytes::Bytes> {
         Ok(self
