@@ -30,7 +30,7 @@ use crate::error::{CdpError, Result};
 use crate::handler::commandfuture::CommandFuture;
 use crate::handler::domworld::DOMWorldKind;
 use crate::handler::httpfuture::HttpFuture;
-use crate::handler::target::TargetMessage;
+use crate::handler::target::{GetName, GetParent, GetUrl, TargetMessage};
 use crate::handler::PageInner;
 use crate::js::{Evaluation, EvaluationResult};
 use crate::layout::Point;
@@ -304,13 +304,52 @@ impl Page {
         self.inner.session_id()
     }
 
+    /// Returns the name of the frame
+    pub async fn frame_name(&self, frame_id: FrameId) -> Result<Option<String>> {
+        let (tx, rx) = oneshot_channel();
+        self.inner
+            .sender()
+            .clone()
+            .send(TargetMessage::Name(GetName {
+                frame_id: Some(frame_id),
+                tx,
+            }))
+            .await?;
+        Ok(rx.await?)
+    }
+
     /// Returns the current url of the page
     pub async fn url(&self) -> Result<Option<String>> {
         let (tx, rx) = oneshot_channel();
         self.inner
             .sender()
             .clone()
-            .send(TargetMessage::Url(tx))
+            .send(TargetMessage::Url(GetUrl::new(tx)))
+            .await?;
+        Ok(rx.await?)
+    }
+
+    /// Returns the current url of the frame
+    pub async fn frame_url(&self, frame_id: FrameId) -> Result<Option<String>> {
+        let (tx, rx) = oneshot_channel();
+        self.inner
+            .sender()
+            .clone()
+            .send(TargetMessage::Url(GetUrl {
+                frame_id: Some(frame_id),
+                tx,
+            }))
+            .await?;
+        Ok(rx.await?)
+    }
+
+    /// Returns the parent id of the frame
+    pub async fn frame_parent(&self, frame_id: FrameId) -> Result<Option<FrameId>> {
+        let (tx, rx) = oneshot_channel();
+        self.inner
+            .sender()
+            .clone()
+            .send(TargetMessage::Parent(GetParent { frame_id, tx }))
             .await?;
         Ok(rx.await?)
     }
@@ -1018,6 +1057,20 @@ impl Page {
         self.inner.secondary_execution_context().await
     }
 
+    pub async fn frame_execution_context(
+        &self,
+        frame_id: FrameId,
+    ) -> Result<Option<ExecutionContextId>> {
+        self.inner.frame_execution_context(frame_id).await
+    }
+
+    pub async fn frame_secondary_execution_context(
+        &self,
+        frame_id: FrameId,
+    ) -> Result<Option<ExecutionContextId>> {
+        self.inner.frame_secondary_execution_context(frame_id).await
+    }
+
     /// Evaluates given script in every frame upon creation (before loading
     /// frame's scripts)
     pub async fn evaluate_on_new_document(
@@ -1059,7 +1112,7 @@ impl Page {
 
         call.execution_context_id = self
             .inner
-            .execution_context_for_world(DOMWorldKind::Secondary)
+            .execution_context_for_world(None, DOMWorldKind::Secondary)
             .await?;
 
         self.evaluate_function(call).await?;
