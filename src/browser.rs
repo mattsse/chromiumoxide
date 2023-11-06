@@ -71,50 +71,49 @@ pub struct BrowserConnection {
     pub webkit_version: String,
     #[serde(rename = "webSocketDebuggerUrl")]
     /// Remote debugging address
-    pub web_socket_debugger_url: String
+    pub web_socket_debugger_url: String,
 }
 
 impl Browser {
-    /// Connect to an already running chromium instance via websocket
+    /// Connect to an already running chromium instance via the given URL.
+    ///
+    /// If the URL is a http(s) URL, it will first attempt to retrieve the Websocket URL from the `json/version` endpoint.
     pub async fn connect(debug_ws_url: impl Into<String>) -> Result<(Self, Handler)> {
-        let debug_ws_url = debug_ws_url.into();
-        let conn = Connection::<CdpEventMessage>::connect(&debug_ws_url).await?;
-
-        let (tx, rx) = channel(1);
-
-        let fut = Handler::new(conn, rx, HandlerConfig::default());
-        let browser_context = fut.default_browser_context().clone();
-
-        let browser = Self {
-            sender: tx,
-            config: None,
-            child: None,
-            debug_ws_url,
-            browser_context,
-        };
-        Ok((browser, fut))
-    }
-
-    /// Connect to an already running chromium instance via url
-    pub async fn connect_url(debug_ws_url: impl Into<String>) -> Result<(Self, Handler)> {
-        let mut debug_ws_url = debug_ws_url.into();
+        let mut debug_ws_url = debug_url.into();
 
         if debug_ws_url.starts_with("http") {
             match reqwest::Client::new()
-            .get(if debug_ws_url.ends_with("/json/version") { debug_ws_url.to_string() } else { format!("{}{}json/version", &debug_ws_url, if debug_ws_url.ends_with("/") { "" } else { "/" }) })
-            .header("content-type", "application/json")
-            .send()
-            .await {
+                .get(
+                    if debug_ws_url.ends_with("/json/version")
+                        || debug_ws_url.ends_with("/json/version/")
+                    {
+                        debug_ws_url.clone()
+                    } else {
+                        format!(
+                            "{}{}json/version",
+                            &debug_ws_url,
+                            if debug_ws_url.ends_with("/") { "" } else { "/" }
+                        )
+                    },
+                )
+                .header("content-type", "application/json")
+                .send()
+                .await
+            {
                 Ok(req) => {
                     let socketaddr = req.remote_addr().unwrap();
-                    let connection: BrowserConnection = serde_json::from_slice(&req.bytes().await.unwrap_or_default()).unwrap_or_default();
-        
+                    let connection: BrowserConnection =
+                        serde_json::from_slice(&req.bytes().await.unwrap_or_default())
+                            .unwrap_or_default();
+
                     if !connection.web_socket_debugger_url.is_empty() {
                         // prevent proxy interfaces from returning local ips to connect to the exact machine
-                        debug_ws_url = connection.web_socket_debugger_url.replace("127.0.0.1", &socketaddr.ip().to_string());
+                        debug_ws_url = connection
+                            .web_socket_debugger_url
+                            .replace("127.0.0.1", &socketaddr.ip().to_string());
                     }
                 }
-               Err(_) => return Err(CdpError::NoResponse)
+                Err(_) => return Err(CdpError::NoResponse),
             }
         }
 
@@ -913,6 +912,8 @@ pub fn default_executable() -> Result<std::path::PathBuf, String> {
     };
     detection::default_executable(options)
 }
+
+fn fetch_websocket_url(url: &str) -> Result<String> {}
 
 /// These are passed to the Chrome binary by default.
 /// Via https://github.com/puppeteer/puppeteer/blob/4846b8723cf20d3551c0d755df394cc5e0c82a94/src/node/Launcher.ts#L157

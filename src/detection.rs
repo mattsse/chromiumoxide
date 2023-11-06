@@ -90,19 +90,10 @@ fn get_by_name(options: &DetectionOptions) -> Option<PathBuf> {
 fn get_by_path(options: &DetectionOptions) -> Option<PathBuf> {
     #[cfg(all(unix, not(target_os = "macos")))]
     let default_paths: [(&str, bool); 3] = [
-        (
-            "/opt/chromium.org/chromium",
-            true
-        ),
-        (
-            "/opt/google/chrome",
-            true
-        ),
+        ("/opt/chromium.org/chromium", true),
+        ("/opt/google/chrome", true),
         // test for lambda
-        (
-            "/tmp/aws/lib",
-            true
-        )
+        ("/tmp/aws/lib", true),
     ];
     #[cfg(windows)]
     let default_paths = [(

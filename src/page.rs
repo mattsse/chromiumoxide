@@ -1128,7 +1128,7 @@ impl Page {
             .await?
             .into_value()?)
     }
-    
+
     /// Returns source for the script with given id.
     ///
     /// Debugger must be enabled.
