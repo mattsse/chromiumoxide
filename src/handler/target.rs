@@ -446,12 +446,28 @@ impl Target {
                                     .collect(),
                             );
                         }
-                        TargetMessage::Url(tx) => {
-                            let _ = tx.send(
-                                self.frame_manager
-                                    .main_frame()
-                                    .and_then(|f| f.url().map(str::to_string)),
-                            );
+                        TargetMessage::Url(req) => {
+                            let GetUrl { frame_id, tx } = req;
+                            let frame = if let Some(frame_id) = frame_id {
+                                self.frame_manager.frame(&frame_id)
+                            } else {
+                                self.frame_manager.main_frame()
+                            };
+                            let _ = tx.send(frame.and_then(|f| f.url().map(str::to_string)));
+                        }
+                        TargetMessage::Name(req) => {
+                            let GetName { frame_id, tx } = req;
+                            let frame = if let Some(frame_id) = frame_id {
+                                self.frame_manager.frame(&frame_id)
+                            } else {
+                                self.frame_manager.main_frame()
+                            };
+                            let _ = tx.send(frame.and_then(|f| f.name().map(str::to_string)));
+                        }
+                        TargetMessage::Parent(req) => {
+                            let GetParent { frame_id, tx } = req;
+                            let frame = self.frame_manager.frame(&frame_id);
+                            let _ = tx.send(frame.and_then(|f| f.parent_id().cloned()));
                         }
                         TargetMessage::WaitForNavigation(tx) => {
                             if let Some(frame) = self.frame_manager.main_frame() {
@@ -727,6 +743,36 @@ impl GetExecutionContext {
 }
 
 #[derive(Debug)]
+pub struct GetUrl {
+    /// The id of the frame to get the url for (None = main frame)
+    pub frame_id: Option<FrameId>,
+    /// Sender half of the channel to send the response back
+    pub tx: Sender<Option<String>>,
+}
+
+impl GetUrl {
+    pub fn new(tx: Sender<Option<String>>) -> Self {
+        Self { frame_id: None, tx }
+    }
+}
+
+#[derive(Debug)]
+pub struct GetName {
+    /// The id of the frame to get the name for (None = main frame)
+    pub frame_id: Option<FrameId>,
+    /// Sender half of the channel to send the response back
+    pub tx: Sender<Option<String>>,
+}
+
+#[derive(Debug)]
+pub struct GetParent {
+    /// The id of the frame to get the parent for (None = main frame)
+    pub frame_id: FrameId,
+    /// Sender half of the channel to send the response back
+    pub tx: Sender<Option<FrameId>>,
+}
+
+#[derive(Debug)]
 pub enum TargetMessage {
     /// Execute a command within the session of this target
     Command(CommandMessage),
@@ -734,8 +780,12 @@ pub enum TargetMessage {
     MainFrame(Sender<Option<FrameId>>),
     /// Return all the frames of this target's page
     AllFrames(Sender<Vec<FrameId>>),
-    /// Return the url of this target's page
-    Url(Sender<Option<String>>),
+    /// Return the url if available
+    Url(GetUrl),
+    /// Return the name if available
+    Name(GetName),
+    /// Return the parent id of a frame
+    Parent(GetParent),
     /// A Message that resolves when the frame finished loading a new url
     WaitForNavigation(Sender<ArcHttpRequest>),
     /// A request to submit a new listener that gets notified with every

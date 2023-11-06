@@ -80,6 +80,10 @@ impl Frame {
         }
     }
 
+    pub fn parent_id(&self) -> Option<&FrameId> {
+        self.parent_frame.as_ref()
+    }
+
     pub fn id(&self) -> &FrameId {
         &self.id
     }
