@@ -43,17 +43,37 @@ pub struct Page {
 }
 
 impl Page {
-    /// Changes your user_agent, removes the `navigator.webdriver` property
+    /// Removes the `navigator.webdriver` property
     /// changes permissions, pluggins rendering contexts and the `window.chrome`
     /// property to make it harder to detect the scraper as a bot
-    pub async fn enable_stealth_mode(&self) -> Result<()> {
+    async fn _enable_stealth_mode(&self) -> Result<()> {
         self.hide_webdriver().await?;
         self.hide_permissions().await?;
         self.hide_plugins().await?;
         self.hide_webgl_vendor().await?;
         self.hide_chrome().await?;
+
+        Ok(())
+    }
+
+    /// Changes your user_agent, removes the `navigator.webdriver` property
+    /// changes permissions, pluggins rendering contexts and the `window.chrome`
+    /// property to make it harder to detect the scraper as a bot
+    pub async fn enable_stealth_mode(&self) -> Result<()> {
+        self._enable_stealth_mode().await?;
         self.set_user_agent("Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.5296.0 Safari/537.36").await?;
 
+        Ok(())
+    }
+
+    /// Changes your user_agent with a custom agent, removes the `navigator.webdriver` property
+    /// changes permissions, pluggins rendering contexts and the `window.chrome`
+    /// property to make it harder to detect the scraper as a bot
+    pub async fn enable_stealth_mode_with_agent(&self, ua: &str) -> Result<()> {
+        self._enable_stealth_mode().await?;
+        if !ua.is_empty() {
+            self.set_user_agent(ua).await?;
+        }
         Ok(())
     }
 
@@ -1136,6 +1156,27 @@ impl Page {
           retVal
       }
       ",
+            )
+            .await?
+            .into_value()?)
+    }
+
+    #[cfg(feature = "bytes")]
+    /// Returns the HTML content of the page
+    pub async fn content_bytes(&self) -> Result<bytes::Bytes> {
+        Ok(self
+            .evaluate(
+                "{
+            let retVal = '';
+            if (document.doctype) {
+            retVal = new XMLSerializer().serializeToString(document.doctype);
+            }
+            if (document.documentElement) {
+            retVal += document.documentElement.outerHTML;
+            }
+            retVal
+        }
+        ",
             )
             .await?
             .into_value()?)

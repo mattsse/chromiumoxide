@@ -103,7 +103,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Navigate to target
     page.goto("http://google.com").await?;
     let content = page.content().await?;
-    println!("Content: {content}");
+    println!("Content: {:?}", content);
 
     browser.close().await?;
     browser_handle.await;
