@@ -13,6 +13,7 @@ use futures::SinkExt;
 
 use chromiumoxide_cdp::cdp::browser_protocol::target::{
     CreateBrowserContextParams, CreateTargetParams, DisposeBrowserContextParams, TargetId,
+    TargetInfo,
 };
 use chromiumoxide_cdp::cdp::{CdpEventMessage, IntoEventKind};
 use chromiumoxide_types::*;
@@ -175,6 +176,26 @@ impl Browser {
         };
 
         Ok((browser, fut))
+    }
+
+    /// Request to fetch all existing browser targets.
+    ///
+    /// By default, only targets launched after the browser connection are tracked
+    /// when connecting to a existing browser instance with the devtools websocket url
+    /// This function fetches existing targets on the browser and adds them as pages internally
+    ///
+    /// The pages are not guaranteed to be ready as soon as the function returns
+    /// You should wait a few millis if you need to use a page
+    /// Returns [TargetInfo]
+    pub async fn fetch_targets(&mut self) -> Result<Vec<TargetInfo>> {
+        let (tx, rx) = oneshot_channel();
+
+        self.sender
+            .clone()
+            .send(HandlerMessage::FetchTargets(tx))
+            .await?;
+
+        rx.await?
     }
 
     /// Request for the browser to close completely.

@@ -213,6 +213,30 @@ impl Handler {
                         }
                     }
                 }
+                PendingRequest::GetTargets(tx) => {
+                    match to_command_response::<GetTargetsParams>(resp, method) {
+                        Ok(resp) => {
+                            let targets: Vec<TargetInfo> = resp.result.target_infos;
+                            let results = targets.clone();
+                            for target_info in targets {
+                                let target_id = target_info.target_id.clone();
+                                let event: EventTargetCreated = EventTargetCreated { target_info };
+                                self.on_target_created(event);
+                                let attach = AttachToTargetParams::new(target_id);
+                                let _ = self.conn.submit_command(
+                                    attach.identifier(),
+                                    None,
+                                    serde_json::to_value(attach).unwrap(),
+                                );
+                            }
+
+                            let _ = tx.send(Ok(results)).ok();
+                        }
+                        Err(err) => {
+                            let _ = tx.send(Err(err)).ok();
+                        }
+                    }
+                }
                 PendingRequest::Navigate(id) => {
                     self.on_navigation_response(id, resp);
                 }
@@ -264,6 +288,18 @@ impl Handler {
             (PendingRequest::InternalCommand(target_id), req.method, now),
         );
         Ok(())
+    }
+
+    fn submit_fetch_targets(&mut self, tx: OneshotSender<Result<Vec<TargetInfo>>>, now: Instant) {
+        let msg = GetTargetsParams { filter: None };
+        let method = msg.identifier();
+        let call_id = self
+            .conn
+            .submit_command(method.clone(), None, serde_json::to_value(msg).unwrap())
+            .unwrap();
+
+        self.pending_commands
+            .insert(call_id, (PendingRequest::GetTargets(tx), method, now));
     }
 
     /// Send the Request over to the server and store its identifier to handle
@@ -456,6 +492,9 @@ impl Handler {
                     PendingRequest::CreateTarget(tx) => {
                         let _ = tx.send(Err(CdpError::Timeout));
                     }
+                    PendingRequest::GetTargets(tx) => {
+                        let _ = tx.send(Err(CdpError::Timeout));
+                    }
                     PendingRequest::Navigate(nav) => {
                         if let Some(nav) = self.navigations.remove(&nav) {
                             match nav {
@@ -497,6 +536,9 @@ impl Stream for Handler {
                 match msg {
                     HandlerMessage::Command(cmd) => {
                         pin.submit_external_command(cmd, now)?;
+                    }
+                    HandlerMessage::FetchTargets(tx) => {
+                        pin.submit_fetch_targets(tx, now);
                     }
                     HandlerMessage::CloseBrowser(tx) => {
                         pin.submit_close(tx, now);
@@ -679,6 +721,8 @@ enum PendingRequest {
     /// A Request to create a new `Target` that results in the creation of a
     /// `Page` that represents a browser page.
     CreateTarget(OneshotSender<Result<Page>>),
+    /// A Request to fetch old `Target`s created before connection
+    GetTargets(OneshotSender<Result<Vec<TargetInfo>>>),
     /// A Request to navigate a specific `Target`.
     ///
     /// Navigation requests are not automatically completed once the response to
@@ -701,6 +745,7 @@ enum PendingRequest {
 #[derive(Debug)]
 pub(crate) enum HandlerMessage {
     CreatePage(CreateTargetParams, OneshotSender<Result<Page>>),
+    FetchTargets(OneshotSender<Result<Vec<TargetInfo>>>),
     InsertContext(BrowserContext),
     DisposeContext(BrowserContext),
     GetPages(OneshotSender<Vec<Page>>),
