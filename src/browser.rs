@@ -79,6 +79,16 @@ impl Browser {
     ///
     /// If the URL is a http(s) URL, it will first attempt to retrieve the Websocket URL from the `json/version` endpoint.
     pub async fn connect(url: impl Into<String>) -> Result<(Self, Handler)> {
+        Self::connect_with_config(url, HandlerConfig::default()).await
+    }
+
+    // Connect to an already running chromium instance with a given `HandlerConfig`.
+    ///
+    /// If the URL is a http(s) URL, it will first attempt to retrieve the Websocket URL from the `json/version` endpoint.
+    pub async fn connect_with_config(
+        url: impl Into<String>,
+        config: HandlerConfig,
+    ) -> Result<(Self, Handler)> {
         let mut debug_ws_url = url.into();
 
         if debug_ws_url.starts_with("http") {
@@ -92,7 +102,7 @@ impl Browser {
                         format!(
                             "{}{}json/version",
                             &debug_ws_url,
-                            if debug_ws_url.ends_with("/") { "" } else { "/" }
+                            if debug_ws_url.ends_with('/') { "" } else { "/" }
                         )
                     },
                 )
@@ -117,29 +127,6 @@ impl Browser {
             }
         }
 
-        let conn = Connection::<CdpEventMessage>::connect(&debug_ws_url).await?;
-
-        let (tx, rx) = channel(1);
-
-        let fut = Handler::new(conn, rx, HandlerConfig::default());
-        let browser_context = fut.default_browser_context().clone();
-
-        let browser = Self {
-            sender: tx,
-            config: None,
-            child: None,
-            debug_ws_url,
-            browser_context,
-        };
-        Ok((browser, fut))
-    }
-
-    // Connect to an already running chromium instance via websocket with HandlerConfig
-    pub async fn connect_with_config(
-        debug_ws_url: impl Into<String>,
-        config: HandlerConfig,
-    ) -> Result<(Self, Handler)> {
-        let debug_ws_url = debug_ws_url.into();
         let conn = Connection::<CdpEventMessage>::connect(&debug_ws_url).await?;
 
         let (tx, rx) = channel(1);
@@ -912,8 +899,6 @@ pub fn default_executable() -> Result<std::path::PathBuf, String> {
     };
     detection::default_executable(options)
 }
-
-fn fetch_websocket_url(url: &str) -> Result<String> {}
 
 /// These are passed to the Chrome binary by default.
 /// Via https://github.com/puppeteer/puppeteer/blob/4846b8723cf20d3551c0d755df394cc5e0c82a94/src/node/Launcher.ts#L157
