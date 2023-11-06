@@ -293,17 +293,13 @@ impl Handler {
     fn submit_fetch_targets(&mut self, tx: OneshotSender<Result<Vec<TargetInfo>>>, now: Instant) {
         let msg = GetTargetsParams { filter: None };
         let method = msg.identifier();
-        let call_id = self.conn.submit_command(
-           method.clone(),
-            None,
-            serde_json::to_value(msg).unwrap(),
-        )
-        .unwrap();
+        let call_id = self
+            .conn
+            .submit_command(method.clone(), None, serde_json::to_value(msg).unwrap())
+            .unwrap();
 
-        self.pending_commands.insert(
-            call_id,
-            (PendingRequest::GetTargets(tx), method, now),
-        );
+        self.pending_commands
+            .insert(call_id, (PendingRequest::GetTargets(tx), method, now));
     }
 
     /// Send the Request over to the server and store its identifier to handle
