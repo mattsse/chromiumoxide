@@ -78,8 +78,8 @@ impl Browser {
     /// Connect to an already running chromium instance via the given URL.
     ///
     /// If the URL is a http(s) URL, it will first attempt to retrieve the Websocket URL from the `json/version` endpoint.
-    pub async fn connect(debug_ws_url: impl Into<String>) -> Result<(Self, Handler)> {
-        let mut debug_ws_url = debug_url.into();
+    pub async fn connect(url: impl Into<String>) -> Result<(Self, Handler)> {
+        let mut debug_ws_url = url.into();
 
         if debug_ws_url.starts_with("http") {
             match reqwest::Client::new()
