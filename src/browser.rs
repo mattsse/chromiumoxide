@@ -85,7 +85,7 @@ impl Browser {
 
     // Connect to an already running chromium instance with a given `HandlerConfig`.
     ///
-    /// If the URL is a http(s) URL, it will first attempt to retrieve the Websocket URL from the `json/version` endpoint.
+    /// If the URL is a http URL, it will first attempt to retrieve the Websocket URL from the `json/version` endpoint.
     pub async fn connect_with_config(
         url: impl Into<String>,
         config: HandlerConfig,
