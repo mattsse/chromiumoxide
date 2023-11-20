@@ -1273,6 +1273,12 @@ impl ScreenshotParamsBuilder {
         self
     }
 
+    /// Capture the screenshot beyond the viewport (defaults to false).
+    pub fn capture_beyond_viewport(mut self, capture_beyond_viewport: impl Into<bool>) -> Self {
+        self.cdp_params.capture_beyond_viewport = Some(capture_beyond_viewport.into());
+        self
+    }
+
     /// Full page screen capture.
     pub fn full_page(mut self, full_page: impl Into<bool>) -> Self {
         self.full_page = Some(full_page.into());
