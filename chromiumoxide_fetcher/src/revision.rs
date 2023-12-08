@@ -22,14 +22,21 @@ impl From<Revision> for u32 {
     }
 }
 
+impl std::str::FromStr for Revision {
+    type Err = FetcherError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.parse::<u32>()
+            .map_err(|e| FetcherError::InvalidRevision(e))
+            .map(|v| Self(v))
+    }
+}
+
 impl TryFrom<String> for Revision {
     type Error = FetcherError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        value
-            .parse::<u32>()
-            .map_err(|e| FetcherError::InvalidRevision(e))
-            .map(|v| Self(v))
+        value.parse()
     }
 }
 
