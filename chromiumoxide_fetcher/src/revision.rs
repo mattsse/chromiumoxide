@@ -1,6 +1,4 @@
-use std::fmt;
-
-use crate::FetcherError;
+use std::{fmt, num::ParseIntError};
 
 /// A [`Revision`] represents a version of chromium.
 ///
@@ -23,17 +21,15 @@ impl From<Revision> for u32 {
 }
 
 impl std::str::FromStr for Revision {
-    type Err = FetcherError;
+    type Err = ParseIntError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.parse::<u32>()
-            .map_err(|e| FetcherError::InvalidRevision(e))
-            .map(|v| Self(v))
+        s.parse::<u32>().map(|v| Self(v))
     }
 }
 
 impl TryFrom<String> for Revision {
-    type Error = FetcherError;
+    type Error = ParseIntError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         value.parse()
