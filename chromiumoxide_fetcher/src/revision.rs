@@ -16,6 +16,12 @@ impl From<u32> for Revision {
     }
 }
 
+impl From<Revision> for u32 {
+    fn from(value: Revision) -> Self {
+        value.0
+    }
+}
+
 impl TryFrom<String> for Revision {
     type Error = FetcherError;
 
