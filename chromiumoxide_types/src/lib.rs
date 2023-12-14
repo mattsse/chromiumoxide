@@ -3,8 +3,9 @@ use std::fmt;
 use std::fmt::Debug;
 use std::ops::Deref;
 
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use serde::de::{DeserializeOwned};
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value;
 
 pub type MethodId = Cow<'static, str>;
 
@@ -199,14 +200,24 @@ pub struct Response {
 /// An incoming message read from the web socket can either be a response to a
 /// previously submitted `Request`, identified by an identifier `id`, or an
 /// `Event` emitted by the server.
-#[derive(Deserialize, Debug, Clone)]
-#[serde(untagged)]
+#[derive(Debug, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum Message<T = CdpJsonEventMessage> {
     /// A response for a request
     Response(Response),
     /// An emitted event from the server
     Event(T),
+}
+
+impl<'de, T>  Deserialize<'de> for Message<T> where T: for<'t> Deserialize<'t> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+        let value = Value::deserialize(deserializer)?;
+        if let Ok(response) = serde_json::from_value(value.clone()) {
+            return Ok(Self::Response(response))
+        }
+        use serde::de::{Error};
+        Ok(Self::Event(serde_json::from_value(value.clone()).map_err(|err|Error::custom(format!("{:?}", err)))?))
+    }
 }
 
 /// A response can either contain the `Command::Response` type in the `result`
