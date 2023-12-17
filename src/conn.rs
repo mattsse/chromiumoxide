@@ -147,6 +147,9 @@ impl<T: EventMessage + Unpin> Stream for Connection<T> {
 
         tracing::trace!(target: "chromiumoxide::conn::raw_ws", ?msg, "Got raw WS message");
 
+        #[cfg(feature = "debug-raw-ws-messages")]
+        let msg_for_debug = msg.clone();
+
         Poll::Ready(Some(
             match serde_json::from_slice::<Message<T>>(&msg.into_data()) {
                 Ok(msg) => {
@@ -154,6 +157,9 @@ impl<T: EventMessage + Unpin> Stream for Connection<T> {
                     Ok(msg)
                 }
                 Err(err) => {
+                    #[cfg(feature = "debug-raw-ws-messages")]
+                    tracing::debug!(target: "chromiumoxide::conn::raw_ws::parse_errors", msg = ?msg_for_debug, "Failed to parse raw WS message");
+
                     tracing::error!("Failed to deserialize WS response {}", err);
                     Err(err.into())
                 }
