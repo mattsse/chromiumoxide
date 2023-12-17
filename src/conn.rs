@@ -136,22 +136,28 @@ impl<T: EventMessage + Unpin> Stream for Connection<T> {
         }
 
         // read from the ws
-        match ready!(pin.ws.poll_next_unpin(cx)) {
-            Some(Ok(msg)) => match serde_json::from_slice::<Message<T>>(&msg.into_data()) {
+        let msg = match ready!(pin.ws.poll_next_unpin(cx)) {
+            Some(Ok(msg)) => msg,
+            Some(Err(err)) => return Poll::Ready(Some(Err(CdpError::Ws(err)))),
+            None => {
+                // ws connection closed
+                return Poll::Ready(None);
+            }
+        };
+
+        tracing::trace!(target: "chromiumoxide::conn::raw_ws", ?msg, "Got raw WS message");
+
+        Poll::Ready(Some(
+            match serde_json::from_slice::<Message<T>>(&msg.into_data()) {
                 Ok(msg) => {
                     tracing::trace!("Received {:?}", msg);
-                    Poll::Ready(Some(Ok(msg)))
+                    Ok(msg)
                 }
                 Err(err) => {
                     tracing::error!("Failed to deserialize WS response {}", err);
-                    Poll::Ready(Some(Err(err.into())))
+                    Err(err.into())
                 }
             },
-            Some(Err(err)) => Poll::Ready(Some(Err(CdpError::Ws(err)))),
-            None => {
-                // ws connection closed
-                Poll::Ready(None)
-            }
-        }
+        ))
     }
 }
