@@ -167,3 +167,121 @@ impl<T: EventMessage + Unpin> Stream for Connection<T> {
         ))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SAMPLES: &[&str] = &[r#"{
+            "method": "Network.responseReceivedExtraInfo",
+            "params": {
+                "requestId": "...",
+                "blockedCookies": [
+                    {
+                        "blockedReasons": [
+                            "SameSiteUnspecifiedTreatedAsLax"
+                        ],
+                        "cookieLine": "...=5; expires=Mon, 18 Dec 2023 01:25:44 GMT; Max-Age=3600; Path=/",
+                        "cookie": {
+                            "name": "...",
+                            "value": "5",
+                            "domain": "...",
+                            "path": "/",
+                            "expires": 1702862744.118586,
+                            "size": 21,
+                            "httpOnly": false,
+                            "secure": false,
+                            "session": false,
+                            "priority": "Medium",
+                            "sameParty": false,
+                            "sourceScheme": "Secure",
+                            "sourcePort": 443
+                        }
+                    },
+                    {
+                        "blockedReasons": [
+                            "SameSiteUnspecifiedTreatedAsLax"
+                        ],
+                        "cookieLine": "...=\"\"; expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; Path=/",
+                        "cookie": {
+                            "name": "...",
+                            "value": "\"\"",
+                            "domain": "...",
+                            "path": "/",
+                            "expires": null,
+                            "size": 20,
+                            "httpOnly": false,
+                            "secure": false,
+                            "session": false,
+                            "priority": "Medium",
+                            "sameParty": false,
+                            "sourceScheme": "Secure",
+                            "sourcePort": 443
+                        }
+                    },
+                    {
+                        "blockedReasons": [
+                            "SameSiteUnspecifiedTreatedAsLax"
+                        ],
+                        "cookieLine": "...=\"\"; expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; Path=/",
+                        "cookie": {
+                            "name": "...",
+                            "value": "\"\"",
+                            "domain": "...",
+                            "path": "/",
+                            "expires": null,
+                            "size": 11,
+                            "httpOnly": false,
+                            "secure": false,
+                            "session": false,
+                            "priority": "Medium",
+                            "sameParty": false,
+                            "sourceScheme": "Secure",
+                            "sourcePort": 443
+                        }
+                    },
+                    {
+                        "blockedReasons": [
+                            "SameSiteUnspecifiedTreatedAsLax"
+                        ],
+                        "cookieLine": "...=\"\"; expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; Path=/",
+                        "cookie": {
+                            "name": "...",
+                            "value": "\"\"",
+                            "domain": "...",
+                            "path": "/",
+                            "expires": null,
+                            "size": 12,
+                            "httpOnly": false,
+                            "secure": false,
+                            "session": false,
+                            "priority": "Medium",
+                            "sameParty": false,
+                            "sourceScheme": "Secure",
+                            "sourcePort": 443
+                        }
+                    }
+                ],
+                "headers": {
+                    "server": "cloudflare",
+                    "more": "redacted"
+                },
+                "resourceIPAddressSpace": "Public",
+                "statusCode": 200,
+                "cookiePartitionKey": "https://...",
+                "cookiePartitionKeyOpaque": false
+            },
+            "sessionId": "2B3589AF08CFD7B319297F7D3E57FAEF"
+        }"#];
+
+    #[test]
+    fn parses_without_error() {
+        for sample in SAMPLES {
+            let _message: Message<chromiumoxide_cdp::cdp::CdpEventMessage> =
+                match serde_json::from_str(sample) {
+                    Ok(val) => val,
+                    Err(error) => panic!("Failed to parse the message:\n{error}\n{sample}",),
+                };
+        }
+    }
+}
