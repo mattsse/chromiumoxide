@@ -7,7 +7,7 @@ use futures::{stream, SinkExt, StreamExt};
 
 use chromiumoxide_cdp::cdp::browser_protocol::dom::*;
 use chromiumoxide_cdp::cdp::browser_protocol::emulation::{
-    MediaFeature, SetEmulatedMediaParams, SetTimezoneOverrideParams,
+    MediaFeature, SetEmulatedMediaParams, SetTimezoneOverrideParams, SetLocaleOverrideParams,
 };
 use chromiumoxide_cdp::cdp::browser_protocol::network::{
     Cookie, CookieParam, DeleteCookiesParams, GetCookiesParams, SetCookiesParams,
@@ -628,6 +628,15 @@ impl Page {
         timezoune_id: impl Into<SetTimezoneOverrideParams>,
     ) -> Result<&Self> {
         self.execute(timezoune_id.into()).await?;
+        Ok(self)
+    }
+
+    /// Overrides default host system locale with the specified one
+    pub async fn emulate_locale(
+        &self,
+        locale: impl Into<SetLocaleOverrideParams>,
+    ) -> Result<&Self> {
+        self.execute(locale.into()).await?;
         Ok(self)
     }
 
