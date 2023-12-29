@@ -7,8 +7,8 @@ use futures::{stream, SinkExt, StreamExt};
 
 use chromiumoxide_cdp::cdp::browser_protocol::dom::*;
 use chromiumoxide_cdp::cdp::browser_protocol::emulation::{
-    MediaFeature, SetEmulatedMediaParams, SetTimezoneOverrideParams, 
-    SetLocaleOverrideParams, SetGeolocationOverrideParams,
+    MediaFeature, SetEmulatedMediaParams, SetGeolocationOverrideParams, SetLocaleOverrideParams,
+    SetTimezoneOverrideParams,
 };
 use chromiumoxide_cdp::cdp::browser_protocol::network::{
     Cookie, CookieParam, DeleteCookiesParams, GetCookiesParams, SetCookiesParams,
