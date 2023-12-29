@@ -7,7 +7,8 @@ use futures::{stream, SinkExt, StreamExt};
 
 use chromiumoxide_cdp::cdp::browser_protocol::dom::*;
 use chromiumoxide_cdp::cdp::browser_protocol::emulation::{
-    MediaFeature, SetEmulatedMediaParams, SetTimezoneOverrideParams, SetLocaleOverrideParams,
+    MediaFeature, SetEmulatedMediaParams, SetTimezoneOverrideParams, 
+    SetLocaleOverrideParams, SetGeolocationOverrideParams,
 };
 use chromiumoxide_cdp::cdp::browser_protocol::network::{
     Cookie, CookieParam, DeleteCookiesParams, GetCookiesParams, SetCookiesParams,
@@ -637,6 +638,15 @@ impl Page {
         locale: impl Into<SetLocaleOverrideParams>,
     ) -> Result<&Self> {
         self.execute(locale.into()).await?;
+        Ok(self)
+    }
+
+    /// Overrides the Geolocation Position or Error. Omitting any of the parameters emulates position unavailable.
+    pub async fn emulate_geolocation(
+        &self,
+        geolocation: impl Into<SetGeolocationOverrideParams>,
+    ) -> Result<&Self> {
+        self.execute(geolocation.into()).await?;
         Ok(self)
     }
 
