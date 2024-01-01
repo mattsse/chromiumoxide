@@ -136,22 +136,152 @@ impl<T: EventMessage + Unpin> Stream for Connection<T> {
         }
 
         // read from the ws
-        match ready!(pin.ws.poll_next_unpin(cx)) {
-            Some(Ok(msg)) => match serde_json::from_slice::<Message<T>>(&msg.into_data()) {
-                Ok(msg) => {
-                    tracing::trace!("Received {:?}", msg);
-                    Poll::Ready(Some(Ok(msg)))
-                }
-                Err(err) => {
-                    tracing::error!("Failed to deserialize WS response {}", err);
-                    Poll::Ready(Some(Err(err.into())))
-                }
-            },
-            Some(Err(err)) => Poll::Ready(Some(Err(CdpError::Ws(err)))),
+        let msg = match ready!(pin.ws.poll_next_unpin(cx)) {
+            Some(Ok(msg)) => msg,
+            Some(Err(err)) => return Poll::Ready(Some(Err(CdpError::Ws(err)))),
             None => {
                 // ws connection closed
-                Poll::Ready(None)
+                return Poll::Ready(None);
             }
+        };
+
+        tracing::trace!(target: "chromiumoxide::conn::raw_ws", ?msg, "Got raw WS message");
+
+        #[cfg(feature = "debug-raw-ws-messages")]
+        let msg_for_debug = msg.clone();
+
+        Poll::Ready(Some(
+            match serde_json::from_slice::<Message<T>>(&msg.into_data()) {
+                Ok(msg) => {
+                    tracing::trace!("Received {:?}", msg);
+                    Ok(msg)
+                }
+                Err(err) => {
+                    #[cfg(feature = "debug-raw-ws-messages")]
+                    tracing::debug!(target: "chromiumoxide::conn::raw_ws::parse_errors", msg = ?msg_for_debug, "Failed to parse raw WS message");
+
+                    tracing::error!("Failed to deserialize WS response {}", err);
+                    Err(err.into())
+                }
+            },
+        ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SAMPLES: &[&str] = &[r#"{
+            "method": "Network.responseReceivedExtraInfo",
+            "params": {
+                "requestId": "...",
+                "blockedCookies": [
+                    {
+                        "blockedReasons": [
+                            "SameSiteUnspecifiedTreatedAsLax"
+                        ],
+                        "cookieLine": "...=5; expires=Mon, 18 Dec 2023 01:25:44 GMT; Max-Age=3600; Path=/",
+                        "cookie": {
+                            "name": "...",
+                            "value": "5",
+                            "domain": "...",
+                            "path": "/",
+                            "expires": 1702862744.118586,
+                            "size": 21,
+                            "httpOnly": false,
+                            "secure": false,
+                            "session": false,
+                            "priority": "Medium",
+                            "sameParty": false,
+                            "sourceScheme": "Secure",
+                            "sourcePort": 443
+                        }
+                    },
+                    {
+                        "blockedReasons": [
+                            "SameSiteUnspecifiedTreatedAsLax"
+                        ],
+                        "cookieLine": "...=\"\"; expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; Path=/",
+                        "cookie": {
+                            "name": "...",
+                            "value": "\"\"",
+                            "domain": "...",
+                            "path": "/",
+                            "expires": null,
+                            "size": 20,
+                            "httpOnly": false,
+                            "secure": false,
+                            "session": false,
+                            "priority": "Medium",
+                            "sameParty": false,
+                            "sourceScheme": "Secure",
+                            "sourcePort": 443
+                        }
+                    },
+                    {
+                        "blockedReasons": [
+                            "SameSiteUnspecifiedTreatedAsLax"
+                        ],
+                        "cookieLine": "...=\"\"; expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; Path=/",
+                        "cookie": {
+                            "name": "...",
+                            "value": "\"\"",
+                            "domain": "...",
+                            "path": "/",
+                            "expires": null,
+                            "size": 11,
+                            "httpOnly": false,
+                            "secure": false,
+                            "session": false,
+                            "priority": "Medium",
+                            "sameParty": false,
+                            "sourceScheme": "Secure",
+                            "sourcePort": 443
+                        }
+                    },
+                    {
+                        "blockedReasons": [
+                            "SameSiteUnspecifiedTreatedAsLax"
+                        ],
+                        "cookieLine": "...=\"\"; expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; Path=/",
+                        "cookie": {
+                            "name": "...",
+                            "value": "\"\"",
+                            "domain": "...",
+                            "path": "/",
+                            "expires": null,
+                            "size": 12,
+                            "httpOnly": false,
+                            "secure": false,
+                            "session": false,
+                            "priority": "Medium",
+                            "sameParty": false,
+                            "sourceScheme": "Secure",
+                            "sourcePort": 443
+                        }
+                    }
+                ],
+                "headers": {
+                    "server": "cloudflare",
+                    "more": "redacted"
+                },
+                "resourceIPAddressSpace": "Public",
+                "statusCode": 200,
+                "cookiePartitionKey": "https://...",
+                "cookiePartitionKeyOpaque": false
+            },
+            "sessionId": "2B3589AF08CFD7B319297F7D3E57FAEF"
+        }"#];
+
+    #[test]
+    fn parses_without_error() {
+        for sample in SAMPLES {
+            let _message: Message<chromiumoxide_cdp::cdp::CdpEventMessage> =
+                match serde_json::from_str(sample) {
+                    Ok(val) => val,
+                    Err(error) => panic!("Failed to parse the message:\n{error}\n{sample}",),
+                };
         }
     }
 }
