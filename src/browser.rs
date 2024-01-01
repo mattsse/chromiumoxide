@@ -155,8 +155,18 @@ impl Browser {
     /// (20 seconds by default).
     pub async fn launch(mut config: BrowserConfig) -> Result<(Self, Handler)> {
         // Canonalize paths to reduce issues with sandboxing
-        config.executable = utils::canonicalize(&config.executable).await?;
-
+        let mut executable_cleaned = utils::canonicalize(&config.executable).await?;
+        // Handle case where executable is provided by snap
+        if executable_cleaned.to_str().unwrap().ends_with("/snap") {
+            if config.executable.is_absolute() {
+                executable_cleaned = config.executable;
+            } else {
+                executable_cleaned = std::env::current_dir()?.join(config.executable);
+            }
+            config.executable = dunce::simplified(&executable_cleaned).to_path_buf();
+        } else {
+            config.executable = executable_cleaned;
+        }
         // Launch a new chromium instance
         let mut child = config.launch()?;
 
