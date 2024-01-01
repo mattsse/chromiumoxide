@@ -69,6 +69,8 @@ _fetcher-rusttls-tokio = ["fetcher", "chromiumoxide_fetcher/_rustls-tokio"]
 _fetcher-native-async-std = ["fetcher", "chromiumoxide_fetcher/_native-async-std"]
 _fetcher-native-tokio = ["fetcher", "chromiumoxide_fetcher/_native-tokio"]
 
+debug-raw-ws-messages = []
+
 [[example]]
 name = "wiki-tokio"
 required-features = ["tokio-runtime"]

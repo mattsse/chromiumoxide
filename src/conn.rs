@@ -117,41 +117,53 @@ impl<T: EventMessage + Unpin> Stream for Connection<T> {
         let pin = self.get_mut();
 
         loop {
-            // queue in the next message if not currently flushing
-            if let Err(err) = pin.start_send_next(cx) {
-                return Poll::Ready(Some(Err(err)));
+            loop {
+                // queue in the next message if not currently flushing
+                if let Err(err) = pin.start_send_next(cx) {
+                    return Poll::Ready(Some(Err(err)));
+                }
+
+                // send the message
+                if let Some(call) = pin.pending_flush.take() {
+                    if pin.ws.poll_ready_unpin(cx).is_ready() {
+                        pin.needs_flush = true;
+                        // try another flush
+                        continue;
+                    } else {
+                        pin.pending_flush = Some(call);
+                    }
+                }
+                break;
             }
 
-            // send the message
-            if let Some(call) = pin.pending_flush.take() {
-                if pin.ws.poll_ready_unpin(cx).is_ready() {
-                    pin.needs_flush = true;
-                    // try another flush
-                    continue;
-                } else {
-                    pin.pending_flush = Some(call);
+            // read from the ws
+            let msg = match ready!(pin.ws.poll_next_unpin(cx)) {
+                Some(Ok(msg)) => msg,
+                Some(Err(err)) => return Poll::Ready(Some(Err(CdpError::Ws(err)))),
+                None => {
+                    // ws connection closed
+                    return Poll::Ready(None);
                 }
-            }
-            break;
-        }
+            };
 
-        // read from the ws
-        match ready!(pin.ws.poll_next_unpin(cx)) {
-            Some(Ok(msg)) => match serde_json::from_slice::<Message<T>>(&msg.into_data()) {
-                Ok(msg) => {
-                    tracing::trace!("Received {:?}", msg);
-                    Poll::Ready(Some(Ok(msg)))
-                }
+            tracing::trace!(target: "chromiumoxide::conn::raw_ws", ?msg, "Got raw WS message");
+
+            #[cfg(feature = "debug-raw-ws-messages")]
+            let msg_for_debug = msg.clone();
+
+            let msg = match serde_json::from_slice::<Message<T>>(&msg.into_data()) {
+                Ok(msg) => msg,
                 Err(err) => {
+                    #[cfg(feature = "debug-raw-ws-messages")]
+                    tracing::debug!(target: "chromiumoxide::conn::raw_ws::parse_errors", msg = ?msg_for_debug, "Failed to parse raw WS message");
+
                     tracing::error!("Failed to deserialize WS response {}", err);
-                    Poll::Ready(Some(Err(err.into())))
+                    continue;
                 }
-            },
-            Some(Err(err)) => Poll::Ready(Some(Err(CdpError::Ws(err)))),
-            None => {
-                // ws connection closed
-                Poll::Ready(None)
-            }
+            };
+
+            tracing::trace!("Received {:?}", msg);
+            return Poll::Ready(Some(Ok(msg)));
         }
     }
 }
