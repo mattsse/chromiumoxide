@@ -303,6 +303,53 @@ impl Page {
         Ok(self)
     }
 
+    /// Wait for the network to be idle for 500ms
+    #[cfg(feature = "tokio-runtime")]
+    pub async fn wait_for_network_idle(&self) -> Result<&Self> {
+        let mut events = self.event_listener::<chromiumoxide_cdp::cdp::browser_protocol::network::EventLoadingFinished>().await?;
+
+        if let Err(_) = tokio::time::timeout(tokio::time::Duration::from_secs(30), async move {
+            loop {
+                let sleep = tokio::time::sleep(tokio::time::Duration::from_millis(500));
+                tokio::pin!(sleep);
+                tokio::select! {
+                    _ = &mut sleep => break,
+                    _ = events.next() => (),
+                    else => break,
+                }
+            }
+        })
+        .await
+        {}
+
+        Ok(self)
+    }
+
+    /// Wait for the network to be idle for 500ms
+    #[cfg(feature = "async-std-runtime")]
+    pub async fn wait_for_network_idle(&self) -> Result<&Self> {
+        use futures::{future::FutureExt, pin_mut, select};
+        let mut events = self.event_listener::<chromiumoxide_cdp::cdp::browser_protocol::network::EventLoadingFinished>().await?;
+
+        async_std::io::timeout(std::time::Duration::from_secs(30), async {
+            loop {
+                let t1 = async_std::task::sleep(std::time::Duration::from_millis(500)).fuse();
+                let t2 = events.next().fuse();
+
+                pin_mut!(t1, t2);
+
+                select! {
+                    () = t1 => break,
+                    _ = t2 => (),
+                }
+            }
+            Ok(())
+        })
+        .await?;
+
+        Ok(self)
+    }
+
     /// Navigate directly to the given URL.
     ///
     /// This resolves directly after the requested URL is fully loaded.
