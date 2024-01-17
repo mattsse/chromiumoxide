@@ -313,8 +313,7 @@ impl Page {
             tokio::pin!(sleep);
             tokio::select! {
                 _ = &mut sleep => break,
-                _ = events.next() => (),
-                else => break,
+                _ = events.next() => ()
             }
         }
 
