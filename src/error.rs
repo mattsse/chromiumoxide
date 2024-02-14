@@ -4,6 +4,7 @@ use std::process::ExitStatus;
 use std::time::Instant;
 
 use async_tungstenite::tungstenite;
+use async_tungstenite::tungstenite::Message;
 use base64::DecodeError;
 use futures::channel::mpsc::SendError;
 use futures::channel::oneshot::Canceled;
@@ -28,6 +29,8 @@ pub enum CdpError {
     Chrome(#[from] chromiumoxide_types::Error),
     #[error("Received no response from the chromium instance.")]
     NoResponse,
+    #[error("Received unexpected ws message: {0:?}")]
+    UnexpectedWsMessage(Message),
     #[error("{0}")]
     ChannelSendError(#[from] ChannelError),
     #[error("Browser process exited with status {0:?} before websocket URL could be resolved, stderr: {1:?}")]

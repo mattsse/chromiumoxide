@@ -3,6 +3,7 @@ use std::marker::PhantomData;
 use std::pin::Pin;
 use std::task::ready;
 
+use async_tungstenite::tungstenite::Message as WsMessage;
 use async_tungstenite::{tungstenite::protocol::WebSocketConfig, WebSocketStream};
 use futures::stream::Stream;
 use futures::task::{Context, Poll};
@@ -132,21 +133,33 @@ impl<T: EventMessage + Unpin> Stream for Connection<T> {
                     pin.pending_flush = Some(call);
                 }
             }
+
             break;
         }
 
         // read from the ws
         match ready!(pin.ws.poll_next_unpin(cx)) {
-            Some(Ok(msg)) => match serde_json::from_slice::<Message<T>>(&msg.into_data()) {
-                Ok(msg) => {
-                    tracing::trace!("Received {:?}", msg);
-                    Poll::Ready(Some(Ok(msg)))
-                }
-                Err(err) => {
-                    tracing::error!("Failed to deserialize WS response {}", err);
-                    Poll::Ready(Some(Err(err.into())))
-                }
-            },
+            Some(Ok(WsMessage::Text(text))) => {
+                let ready = match serde_json::from_str::<Message<T>>(&text) {
+                    Ok(msg) => {
+                        tracing::trace!("Received {:?}", msg);
+                        Ok(msg)
+                    }
+                    Err(err) => {
+                        tracing::debug!(target: "chromiumoxide::conn::raw_ws::parse_errors", msg = text, "Failed to parse raw WS message");
+                        tracing::error!("Failed to deserialize WS response {}", err);
+                        Err(err.into())
+                    }
+                };
+                Poll::Ready(Some(ready))
+            }
+            Some(Ok(WsMessage::Close(_))) => Poll::Ready(None),
+            // ignore ping and pong
+            Some(Ok(WsMessage::Ping(_))) | Some(Ok(WsMessage::Pong(_))) => {
+                cx.waker().wake_by_ref();
+                Poll::Pending
+            }
+            Some(Ok(msg)) => Poll::Ready(Some(Err(CdpError::UnexpectedWsMessage(msg)))),
             Some(Err(err)) => Poll::Ready(Some(Err(CdpError::Ws(err)))),
             None => {
                 // ws connection closed
