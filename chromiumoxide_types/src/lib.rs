@@ -215,6 +215,8 @@ pub enum Message<T = CdpJsonEventMessage> {
 // For now, we use a `FromStr` trait to deserialize the message, instead of `Deserialize` with
 // using `serde_json` to deserialize the message to `serde_json::Value` at first and then trying to
 // deserialize both `Response` or `Event` from the `serde_json::Value`.
+// Also, this has a win in error reporting compared to `untagged` because we can return the
+// detailed error instead of just "did not match any variant of untagged enum".
 impl<T> FromStr for Message<T>
 where
     T: DeserializeOwned + Debug,
