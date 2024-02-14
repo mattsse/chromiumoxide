@@ -3,6 +3,7 @@ use std::marker::PhantomData;
 use std::pin::Pin;
 use std::task::ready;
 
+use async_tungstenite::tungstenite::Message as WsMessage;
 use async_tungstenite::{tungstenite::protocol::WebSocketConfig, WebSocketStream};
 use futures::stream::Stream;
 use futures::task::{Context, Poll};
@@ -132,38 +133,37 @@ impl<T: EventMessage + Unpin> Stream for Connection<T> {
                     pin.pending_flush = Some(call);
                 }
             }
+
             break;
         }
 
         // read from the ws
-        let msg = match ready!(pin.ws.poll_next_unpin(cx)) {
-            Some(Ok(msg)) => msg,
-            Some(Err(err)) => return Poll::Ready(Some(Err(CdpError::Ws(err)))),
+        match ready!(pin.ws.poll_next_unpin(cx)) {
+            Some(Ok(WsMessage::Text(text))) => {
+                let ready = match serde_json::from_str::<Message<T>>(&text) {
+                    Ok(msg) => {
+                        tracing::trace!("Received {:?}", msg);
+                        Ok(msg)
+                    }
+                    Err(err) => {
+                        tracing::debug!(target: "chromiumoxide::conn::raw_ws::parse_errors", msg = text, "Failed to parse raw WS message");
+                        tracing::error!("Failed to deserialize WS response {}", err);
+                        Err(err.into())
+                    }
+                };
+                Poll::Ready(Some(ready))
+            }
+            Some(Ok(WsMessage::Close(_))) => Poll::Ready(None),
+            Some(Ok(WsMessage::Ping(_))) | Some(Ok(WsMessage::Pong(_))) => {
+                // ignore pings
+                Poll::Pending
+            }
+            Some(Ok(msg)) => Poll::Ready(Some(Err(CdpError::UnexpectedWsMessage(msg)))),
+            Some(Err(err)) => Poll::Ready(Some(Err(CdpError::Ws(err)))),
             None => {
                 // ws connection closed
-                return Poll::Ready(None);
+                Poll::Ready(None)
             }
-        };
-
-        tracing::trace!(target: "chromiumoxide::conn::raw_ws", ?msg, "Got raw WS message");
-
-        #[cfg(feature = "debug-raw-ws-messages")]
-        let msg_for_debug = msg.clone();
-
-        Poll::Ready(Some(
-            match serde_json::from_slice::<Message<T>>(&msg.into_data()) {
-                Ok(msg) => {
-                    tracing::trace!("Received {:?}", msg);
-                    Ok(msg)
-                }
-                Err(err) => {
-                    #[cfg(feature = "debug-raw-ws-messages")]
-                    tracing::debug!(target: "chromiumoxide::conn::raw_ws::parse_errors", msg = ?msg_for_debug, "Failed to parse raw WS message");
-
-                    tracing::error!("Failed to deserialize WS response {}", err);
-                    Err(err.into())
-                }
-            },
-        ))
+        }
     }
 }
