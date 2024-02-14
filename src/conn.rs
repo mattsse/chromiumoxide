@@ -154,8 +154,9 @@ impl<T: EventMessage + Unpin> Stream for Connection<T> {
                 Poll::Ready(Some(ready))
             }
             Some(Ok(WsMessage::Close(_))) => Poll::Ready(None),
+            // ignore ping and pong
             Some(Ok(WsMessage::Ping(_))) | Some(Ok(WsMessage::Pong(_))) => {
-                // ignore pings
+                cx.waker().wake_by_ref();
                 Poll::Pending
             }
             Some(Ok(msg)) => Poll::Ready(Some(Err(CdpError::UnexpectedWsMessage(msg)))),
