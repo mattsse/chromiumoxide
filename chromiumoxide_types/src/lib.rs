@@ -209,12 +209,12 @@ pub enum Message<T = CdpJsonEventMessage> {
     Event(T),
 }
 
-// #[serde(untagged)] does not work correctly with serde_json and numeric types in the schema
-// This could be fixed by activating the `arbitrary_precision` feature in serde_json and using
-// `serde_json::Number` instead of all usage of `f64` or else.
+// `#[serde(untagged)]` does not work correctly with serde_json and some numeric types in the schema,
+// without activating `arbitrary_precision` feature of serde_json and using `serde_json::Number` instead of all usage of `f64` or else.
 // For now, we use a `FromStr` trait to deserialize the message, instead of `Deserialize` with
 // using `serde_json` to deserialize the message to `serde_json::Value` at first and then trying to
 // deserialize both `Response` or `Event` from the `serde_json::Value`.
+// - https://github.com/serde-rs/serde/issues/2661
 // Also, this has a win in error reporting compared to `untagged` because we can return the
 // detailed error instead of just "did not match any variant of untagged enum".
 impl<T> FromStr for Message<T>
