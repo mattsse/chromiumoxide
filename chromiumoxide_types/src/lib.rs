@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::fmt;
 use std::fmt::Debug;
 use std::ops::Deref;
+use std::str::FromStr;
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -199,14 +200,38 @@ pub struct Response {
 /// An incoming message read from the web socket can either be a response to a
 /// previously submitted `Request`, identified by an identifier `id`, or an
 /// `Event` emitted by the server.
-#[derive(Deserialize, Debug, Clone)]
-#[serde(untagged)]
+#[derive(Debug, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum Message<T = CdpJsonEventMessage> {
     /// A response for a request
     Response(Response),
     /// An emitted event from the server
     Event(T),
+}
+
+// #[serde(untagged)] does not work correctly with serde_json and numeric types in the schema
+// This could be fixed by activating the `arbitrary_precision` feature in serde_json and using
+// `serde_json::Number` instead of all usage of `f64` or else.
+// For now, we use a `FromStr` trait to deserialize the message, instead of `Deserialize` with
+// using `serde_json` to deserialize the message to `serde_json::Value` at first and then trying to
+// deserialize both `Response` or `Event` from the `serde_json::Value`.
+impl<T> FromStr for Message<T>
+where
+    T: DeserializeOwned + Debug,
+{
+    type Err = serde_json::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Ok(response) = serde_json::from_str::<Response>(s) {
+            Ok(Message::Response(response))
+        } else {
+            // For now, returns an error only about the event deserialization.
+            // Ideally, we can return an custom error type that contains errors for both response and event.
+            // It seems not necessary for now because the response seems to be deserialized correctly in most cases.
+            let event = serde_json::from_str::<T>(s)?;
+            Ok(Message::Event(event))
+        }
+    }
 }
 
 /// A response can either contain the `Command::Response` type in the `result`
