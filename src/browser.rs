@@ -560,10 +560,20 @@ async fn ws_url_from_output(
 }
 
 #[derive(Debug, Clone)]
+enum HeadlessMode {
+    /// The "headful" mode.
+    False,
+    /// The old headless mode (default).
+    True,
+    /// The new headless mode. See also: https://developer.chrome.com/docs/chromium/new-headless
+    New,
+}
+
+#[derive(Debug, Clone)]
 pub struct BrowserConfig {
     /// Determines whether to run headless version of the browser. Defaults to
     /// true.
-    headless: bool,
+    headless: HeadlessMode,
     /// Determines whether to run the browser with a sandbox.
     sandbox: bool,
     /// Launch the browser with a specific window width and height.
@@ -619,7 +629,7 @@ pub struct BrowserConfig {
 
 #[derive(Debug, Clone)]
 pub struct BrowserConfigBuilder {
-    headless: bool,
+    headless: HeadlessMode,
     sandbox: bool,
     window_size: Option<(u32, u32)>,
     port: u16,
@@ -652,7 +662,7 @@ impl BrowserConfig {
 impl Default for BrowserConfigBuilder {
     fn default() -> Self {
         Self {
-            headless: true,
+            headless: HeadlessMode::True,
             sandbox: true,
             window_size: None,
             port: 0,
@@ -686,7 +696,12 @@ impl BrowserConfigBuilder {
     }
 
     pub fn with_head(mut self) -> Self {
-        self.headless = false;
+        self.headless = HeadlessMode::False;
+        self
+    }
+
+    pub fn new_headless_mode(mut self) -> Self {
+        self.headless = HeadlessMode::New;
         self
     }
 
@@ -889,8 +904,10 @@ impl BrowserConfig {
             cmd.args(["--no-sandbox", "--disable-setuid-sandbox"]);
         }
 
-        if self.headless {
-            cmd.args(["--headless", "--hide-scrollbars", "--mute-audio"]);
+        match self.headless {
+            HeadlessMode::False => {}
+            HeadlessMode::True => cmd.args(["--headless", "--hide-scrollbars", "--mute-audio"]),
+            HeadlessMode::New => cmd.args(["--headless=new", "--hide-scrollbars", "--mute-audio"]),
         }
 
         if self.incognito {
