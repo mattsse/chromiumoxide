@@ -6,6 +6,7 @@ use std::str::FromStr;
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 
 pub type MethodId = Cow<'static, str>;
 
@@ -200,6 +201,9 @@ pub struct Response {
 /// An incoming message read from the web socket can either be a response to a
 /// previously submitted `Request`, identified by an identifier `id`, or an
 /// `Event` emitted by the server.
+///
+/// This implements both `Deserialize` and `FromStr`, where the latter is preferred in performance
+/// and error reporting.
 #[derive(Debug, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum Message<T = CdpJsonEventMessage> {
@@ -209,18 +213,26 @@ pub enum Message<T = CdpJsonEventMessage> {
     Event(T),
 }
 
-// `#[serde(untagged)]` does not work correctly with serde_json and some numeric types in the schema,
+// Manually implements Deserialize because `#[serde(untagged)]` does not work correctly with serde_json and some numeric types in the schema,
 // without activating `arbitrary_precision` feature of serde_json and using `serde_json::Number` instead of all usage of `f64` or else.
-// For now, we implement the `FromStr` trait to deserialize the message in no additional allocation manner,
-// instead of `Deserialize` with using `serde_json` to deserialize the message to `serde_json::Value` at first,
-// and then trying to deserialize `Response` or `Event` from the `serde_json::Value`.
-// This should be fine because it never be parsed as other formats than JSON in real use case.
 // - https://github.com/serde-rs/serde/issues/2661
-// Also, this has a win in error reporting compared to `untagged` because we can return the
-// detailed error instead of just "did not match any variant of untagged enum".
+// For now, we implement the `FromStr` trait to deserialize the message, and use it in this `Deserialize` impl.
+impl<'de, T> Deserialize<'de> for Message<T>
+where
+    T: DeserializeOwned,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Message<T>, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value: &RawValue = Deserialize::deserialize(deserializer)?;
+        value.get().parse().map_err(serde::de::Error::custom)
+    }
+}
+
 impl<T> FromStr for Message<T>
 where
-    T: DeserializeOwned + Debug,
+    T: DeserializeOwned,
 {
     type Err = serde_json::Error;
 
