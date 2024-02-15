@@ -140,7 +140,7 @@ impl<T: EventMessage + Unpin> Stream for Connection<T> {
         // read from the ws
         match ready!(pin.ws.poll_next_unpin(cx)) {
             Some(Ok(WsMessage::Text(text))) => {
-                let ready = match serde_json::from_str::<Message<T>>(&text) {
+                let ready = match text.parse::<Message<T>>() {
                     Ok(msg) => {
                         tracing::trace!("Received {:?}", msg);
                         Ok(msg)
