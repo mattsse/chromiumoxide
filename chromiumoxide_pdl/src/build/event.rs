@@ -142,11 +142,11 @@ impl<'a> EventBuilder<'a> {
 
             let deserialize_from = if event.needs_box {
                 quote! {
-                        #ty_qualifier::IDENTIFIER =>CdpEvent::#var_ident(Box::new(map.next_value::<#ty_qualifier>()?)),
+                        #ty_qualifier::IDENTIFIER => serde_json::from_str(value.get()).map(Box::new).map(CdpEvent::#var_ident).unwrap_or_else(|_| CdpEvent::InvalidParams(serde_json::from_str::<serde_json::Value>(value.get()).unwrap())),
                 }
             } else {
                 quote! {
-                        #ty_qualifier::IDENTIFIER =>CdpEvent::#var_ident(map.next_value::<#ty_qualifier>()?),
+                        #ty_qualifier::IDENTIFIER => serde_json::from_str(value.get()).map(CdpEvent::#var_ident).unwrap_or_else(|_| CdpEvent::InvalidParams(serde_json::from_str::<serde_json::Value>(value.get()).unwrap())),
                 }
             };
 
@@ -182,7 +182,10 @@ impl<'a> EventBuilder<'a> {
             #[derive(Debug, Clone, PartialEq)]
             pub enum CdpEvent {
                 #variants_stream
-                Other(serde_json::Value)
+                /// A known method with invalid params
+                InvalidParams(serde_json::Value),
+                /// Unknown method
+                Other(serde_json::Value),
             }
 
             impl CdpEvent {
@@ -195,14 +198,16 @@ impl<'a> EventBuilder<'a> {
                 pub fn into_json(self) -> serde_json::Result<serde_json::Value> {
                     match self {
                         #(CdpEvent::#var_idents(inner) => serde_json::to_value(inner),)*
-                         CdpEvent::Other(val) => Ok(val)
+                        CdpEvent::InvalidParams(val) => Ok(val),
+                        CdpEvent::Other(val) => Ok(val),
                     }
                 }
 
                 pub fn into_event(self) -> ::std::result::Result<Box<dyn super::Event>, serde_json::Value> {
                     match self {
                         #event_as_boxed_results
-                        CdpEvent::Other(other) => Err(other)
+                        CdpEvent::InvalidParams(other) => Err(other),
+                        CdpEvent::Other(other) => Err(other),
                     }
                 }
 
@@ -289,10 +294,10 @@ impl<'a> EventBuilder<'a> {
                                         if params.is_some() {
                                             return Err(de::Error::duplicate_field("params"));
                                         }
-                                        params = Some(match method.as_ref().ok_or_else(|| de::Error::missing_field("params"))
-                                        ?.as_str() {
+                                        let value = map.next_value::<&serde_json::value::RawValue>()?;
+                                        params = Some(match method.as_ref().ok_or_else(|| de::Error::missing_field("method"))?.as_str() {
                                             #deserialize_from_method
-                                            _=>CdpEvent::Other(map.next_value::<serde_json::Value>()?)
+                                            _ => CdpEvent::Other(serde_json::from_str::<serde_json::Value>(value.get()).unwrap())
                                         });
                                     }
                                 }
@@ -340,6 +345,7 @@ impl<'a> EventBuilder<'a> {
                     {
                         match $ev {
                            #consume_event_macro_exprs
+                           CdpEvent::InvalidParams(json) => {$custom(json);}
                            CdpEvent::Other(json) => {$custom(json);}
                         }
                     }

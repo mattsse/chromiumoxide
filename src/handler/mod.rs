@@ -754,3 +754,77 @@ pub(crate) enum HandlerMessage {
     AddEventListener(EventListenerRequest),
     CloseBrowser(OneshotSender<Result<CloseReturns>>),
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_invalid_cdp_event() {
+        // expires is invalid
+        let json = serde_json::json!({
+          "method": "Network.responseReceivedExtraInfo",
+          "params": {
+            "requestId": "requestId",
+            "blockedCookies": [
+              {
+                "blockedReason": ["SecureOnly"],
+                "cookieLine": "cookieLine",
+                "cookie": {
+                  "name": "name",
+                  "value": "value",
+                  "domain": "example.com",
+                  "path": "/",
+                  "expires": null, // invalid here
+                  "size": 10,
+                  "httpOnly": false,
+                  "secure": false,
+                  "session": false,
+                  "priority": "Medium",
+                  "sameParty": false,
+                  "sourceScheme": "Secure",
+                  "sourcePort": 443
+                }
+              }
+            ],
+            "headers": {
+              "key": "value"
+            },
+            "resourceIPAddressSpace": "Public",
+            "statusCode": 200,
+          },
+          "sessionId": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        })
+        .to_string();
+        let message: CdpEventMessage = serde_json::from_str(&json).unwrap();
+        assert_eq!(message.params, CdpEvent::InvalidParams(serde_json::json!({
+          "requestId": "requestId",
+          "blockedCookies": [
+            {
+              "blockedReason": ["SecureOnly"],
+              "cookieLine": "cookieLine",
+              "cookie": {
+                "name": "name",
+                "value": "value",
+                "domain": "example.com",
+                "path": "/",
+                "expires": null, // invalid here
+                "size": 10,
+                "httpOnly": false,
+                "secure": false,
+                "session": false,
+                "priority": "Medium",
+                "sameParty": false,
+                "sourceScheme": "Secure",
+                "sourcePort": 443
+              }
+            }
+          ],
+          "headers": {
+            "key": "value"
+          },
+          "resourceIPAddressSpace": "Public",
+          "statusCode": 200,
+        })));
+    }
+}
