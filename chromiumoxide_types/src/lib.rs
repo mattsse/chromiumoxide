@@ -48,9 +48,12 @@ pub trait Command: serde::ser::Serialize + Method {
     /// The type of the response this request triggers on the chromium server
     type Response: serde::de::DeserializeOwned + fmt::Debug;
 
-    /// deserialize the response from json
-    fn response_from_value(response: serde_json::Value) -> serde_json::Result<Self::Response> {
-        serde_json::from_value(response)
+    /// A helper method to make the response type inferenced without fullly qualifying response type that returns the identical value.
+    ///
+    /// For example: `let response = serde_json::from_str(res).map(CaptureSnapshotParams::infer_response)?;`
+    /// instead of `let response = serde_json::from_str::<<CaptureSnapshotParams as Command>::Response>(res)?;`
+    fn infer_response(res: Self::Response) -> Self::Response {
+        res
     }
 }
 
@@ -186,12 +189,12 @@ impl Request {
 }
 
 /// A response to a [`MethodCall`] from the chromium instance
-#[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Response {
     /// Numeric identifier for the exact request
     pub id: CallId,
     /// The response payload
-    pub result: Option<serde_json::Value>,
+    pub result: Option<Box<serde_json::value::RawValue>>,
     /// The Reason why the [`MethodCall`] failed.
     pub error: Option<Error>,
 }

@@ -210,10 +210,11 @@ impl Target {
         #[allow(clippy::single_match)] // allow for now
         match method {
             GetFrameTreeParams::IDENTIFIER => {
-                if let Some(resp) = resp
-                    .result
-                    .and_then(|val| GetFrameTreeParams::response_from_value(val).ok())
-                {
+                if let Some(resp) = resp.result.and_then(|val| {
+                    serde_json::from_str(val.get())
+                        .map(GetFrameTreeParams::infer_response)
+                        .ok()
+                }) {
                     self.frame_manager.on_frame_tree(resp.frame_tree);
                 }
             }
