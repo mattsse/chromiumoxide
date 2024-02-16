@@ -61,6 +61,12 @@ pub enum CdpError {
     JavascriptException(Box<ExceptionDetails>),
     #[error("{0}")]
     Url(#[from] url::ParseError),
+    #[error("got invalid response with error: {error}")]
+    InvalidResponse {
+        // not Value to avoid deserialization and additional allocations
+        result: Box<serde_json::value::RawValue>,
+        error: serde_json::Error,
+    },
 }
 impl CdpError {
     pub fn msg(msg: impl Into<String>) -> Self {
