@@ -559,11 +559,12 @@ async fn ws_url_from_output(
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 enum HeadlessMode {
     /// The "headful" mode.
     False,
-    /// The old headless mode (default).
+    /// The old headless mode.
+    #[default]
     True,
     /// The new headless mode. See also: https://developer.chrome.com/docs/chromium/new-headless
     New,
@@ -702,6 +703,11 @@ impl BrowserConfigBuilder {
 
     pub fn new_headless_mode(mut self) -> Self {
         self.headless = HeadlessMode::New;
+        self
+    }
+
+    pub fn headless_mode(mut self, HeadlessMode: mode) -> Self {
+        self.headless = mode;
         self
     }
 
