@@ -560,7 +560,7 @@ async fn ws_url_from_output(
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-enum HeadlessMode {
+pub enum HeadlessMode {
     /// The "headful" mode.
     False,
     /// The old headless mode.
@@ -706,7 +706,7 @@ impl BrowserConfigBuilder {
         self
     }
 
-    pub fn headless_mode(mut self, HeadlessMode: mode) -> Self {
+    pub fn headless_mode(mut self, mode: HeadlessMode) -> Self {
         self.headless = mode;
         self
     }
@@ -911,9 +911,15 @@ impl BrowserConfig {
         }
 
         match self.headless {
-            HeadlessMode::False => {}
-            HeadlessMode::True => cmd.args(["--headless", "--hide-scrollbars", "--mute-audio"]),
-            HeadlessMode::New => cmd.args(["--headless=new", "--hide-scrollbars", "--mute-audio"]),
+            HeadlessMode::False => (),
+            HeadlessMode::True => {
+                cmd.args(["--headless", "--hide-scrollbars", "--mute-audio"]);
+                ()
+            }
+            HeadlessMode::New => {
+                cmd.args(["--headless=new", "--hide-scrollbars", "--mute-audio"]);
+                ()
+            }
         }
 
         if self.incognito {
