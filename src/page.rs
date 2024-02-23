@@ -312,7 +312,7 @@ impl Page {
             let sleep = tokio::time::sleep(tokio::time::Duration::from_millis(500));
             tokio::pin!(sleep);
             tokio::select! {
-                _ = &mut sleep => (),
+                _ = &mut sleep => break,
                 v = events.next() => {
                   if v.is_none () {
                       break;
@@ -337,7 +337,7 @@ impl Page {
             pin_mut!(t1, t2);
 
             select! {
-                () = t1 => (),
+                () = t1 => break,
                 v = t2 => {
                     if v.is_none () {
                         break;
