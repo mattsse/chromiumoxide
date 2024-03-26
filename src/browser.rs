@@ -863,11 +863,15 @@ impl BrowserConfig {
             cmd.arg(format!("--remote-debugging-port={}", self.port));
         }
 
-        cmd.args(
-            self.extensions
-                .iter()
-                .map(|e| format!("--load-extension={e}")),
-        );
+        if self.extensions.is_empty() {
+            cmd.arg("--disable-extensions");
+        } else {
+            cmd.args(
+                self.extensions
+                    .iter()
+                    .map(|e| format!("--load-extension={e}")),
+            );
+        }
 
         if let Some(ref user_data) = self.user_data_dir {
             cmd.arg(format!("--user-data-dir={}", user_data.display()));
@@ -923,7 +927,7 @@ pub fn default_executable() -> Result<std::path::PathBuf, String> {
 
 /// These are passed to the Chrome binary by default.
 /// Via https://github.com/puppeteer/puppeteer/blob/4846b8723cf20d3551c0d755df394cc5e0c82a94/src/node/Launcher.ts#L157
-static DEFAULT_ARGS: [&str; 25] = [
+static DEFAULT_ARGS: [&str; 24] = [
     "--disable-background-networking",
     "--enable-features=NetworkService,NetworkServiceInProcess",
     "--disable-background-timer-throttling",
@@ -933,7 +937,6 @@ static DEFAULT_ARGS: [&str; 25] = [
     "--disable-component-extensions-with-background-pages",
     "--disable-default-apps",
     "--disable-dev-shm-usage",
-    "--disable-extensions",
     "--disable-features=TranslateUI",
     "--disable-hang-monitor",
     "--disable-ipc-flooding-protection",
