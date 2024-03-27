@@ -615,6 +615,9 @@ pub struct BrowserConfig {
 
     /// Whether to enable cache
     pub cache_enabled: bool,
+
+    /// Avoid easy bot detection by setting `navigator.webdriver` to false
+    hidden: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -637,6 +640,7 @@ pub struct BrowserConfigBuilder {
     disable_default_args: bool,
     request_intercept: bool,
     cache_enabled: bool,
+    hidden: bool,
 }
 
 impl BrowserConfig {
@@ -670,6 +674,7 @@ impl Default for BrowserConfigBuilder {
             disable_default_args: false,
             request_intercept: false,
             cache_enabled: true,
+            hidden: false,
         }
     }
 }
@@ -816,6 +821,11 @@ impl BrowserConfigBuilder {
         self
     }
 
+    pub fn hide(mut self) -> Self {
+        self.hidden = true;
+        self
+    }
+
     pub fn build(self) -> std::result::Result<BrowserConfig, String> {
         let executable = if let Some(e) = self.executable {
             e
@@ -841,6 +851,7 @@ impl BrowserConfigBuilder {
             disable_default_args: self.disable_default_args,
             request_intercept: self.request_intercept,
             cache_enabled: self.cache_enabled,
+            hidden: self.hidden,
         })
     }
 }
@@ -899,6 +910,10 @@ impl BrowserConfig {
 
         if self.incognito {
             cmd.arg("--incognito");
+        }
+
+        if self.hidden {
+            cmd.arg("--disable-blink-features=AutomationControlled");
         }
 
         if let Some(ref envs) = self.process_envs {
