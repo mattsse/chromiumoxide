@@ -615,6 +615,9 @@ pub struct BrowserConfig {
 
     /// Whether to enable cache
     pub cache_enabled: bool,
+
+    /// Avoid easy bot detection by setting `navigator.webdriver` to false
+    hidden: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -637,6 +640,7 @@ pub struct BrowserConfigBuilder {
     disable_default_args: bool,
     request_intercept: bool,
     cache_enabled: bool,
+    hidden: bool,
 }
 
 impl BrowserConfig {
@@ -670,6 +674,7 @@ impl Default for BrowserConfigBuilder {
             disable_default_args: false,
             request_intercept: false,
             cache_enabled: true,
+            hidden: false,
         }
     }
 }
@@ -816,6 +821,11 @@ impl BrowserConfigBuilder {
         self
     }
 
+    pub fn hide(mut self) -> Self {
+        self.hidden = true;
+        self
+    }
+
     pub fn build(self) -> std::result::Result<BrowserConfig, String> {
         let executable = if let Some(e) = self.executable {
             e
@@ -841,6 +851,7 @@ impl BrowserConfigBuilder {
             disable_default_args: self.disable_default_args,
             request_intercept: self.request_intercept,
             cache_enabled: self.cache_enabled,
+            hidden: self.hidden,
         })
     }
 }
@@ -863,11 +874,15 @@ impl BrowserConfig {
             cmd.arg(format!("--remote-debugging-port={}", self.port));
         }
 
-        cmd.args(
-            self.extensions
-                .iter()
-                .map(|e| format!("--load-extension={e}")),
-        );
+        if self.extensions.is_empty() {
+            cmd.arg("--disable-extensions");
+        } else {
+            cmd.args(
+                self.extensions
+                    .iter()
+                    .map(|e| format!("--load-extension={e}")),
+            );
+        }
 
         if let Some(ref user_data) = self.user_data_dir {
             cmd.arg(format!("--user-data-dir={}", user_data.display()));
@@ -897,6 +912,10 @@ impl BrowserConfig {
             cmd.arg("--incognito");
         }
 
+        if self.hidden {
+            cmd.arg("--disable-blink-features=AutomationControlled");
+        }
+
         if let Some(ref envs) = self.process_envs {
             cmd.envs(envs);
         }
@@ -923,7 +942,7 @@ pub fn default_executable() -> Result<std::path::PathBuf, String> {
 
 /// These are passed to the Chrome binary by default.
 /// Via https://github.com/puppeteer/puppeteer/blob/4846b8723cf20d3551c0d755df394cc5e0c82a94/src/node/Launcher.ts#L157
-static DEFAULT_ARGS: [&str; 25] = [
+static DEFAULT_ARGS: [&str; 24] = [
     "--disable-background-networking",
     "--enable-features=NetworkService,NetworkServiceInProcess",
     "--disable-background-timer-throttling",
@@ -933,7 +952,6 @@ static DEFAULT_ARGS: [&str; 25] = [
     "--disable-component-extensions-with-background-pages",
     "--disable-default-apps",
     "--disable-dev-shm-usage",
-    "--disable-extensions",
     "--disable-features=TranslateUI",
     "--disable-hang-monitor",
     "--disable-ipc-flooding-protection",
