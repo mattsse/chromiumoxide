@@ -46,7 +46,7 @@ bytes = { version = "1.4.0", features = ["serde"], optional = true }
 reqwest = { version = "0.11.20", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
-winreg = "0.51"
+winreg = "0.52"
 
 [dev-dependencies]
 quote = "1"
