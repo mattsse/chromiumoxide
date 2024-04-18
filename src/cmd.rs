@@ -19,12 +19,14 @@ pub(crate) fn to_command_response<T: Command>(
     method: MethodId,
 ) -> Result<CommandResponse<T::Response>> {
     if let Some(res) = resp.result {
-        let result = serde_json::from_value(res)?;
-        Ok(CommandResponse {
-            id: resp.id,
-            result,
-            method,
-        })
+        match serde_json::from_str(res.get()) {
+            Ok(result) => Ok(CommandResponse {
+                id: resp.id,
+                result,
+                method,
+            }),
+            Err(error) => Err(CdpError::InvalidResponse { result: res, error }),
+        }
     } else if let Some(err) = resp.error {
         Err(err.into())
     } else {
