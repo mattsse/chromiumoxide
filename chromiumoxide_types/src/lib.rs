@@ -2,9 +2,11 @@ use std::borrow::Cow;
 use std::fmt;
 use std::fmt::Debug;
 use std::ops::Deref;
+use std::str::FromStr;
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 
 pub type MethodId = Cow<'static, str>;
 
@@ -199,14 +201,52 @@ pub struct Response {
 /// An incoming message read from the web socket can either be a response to a
 /// previously submitted `Request`, identified by an identifier `id`, or an
 /// `Event` emitted by the server.
-#[derive(Deserialize, Debug, Clone)]
-#[serde(untagged)]
+///
+/// This implements both `Deserialize` and `FromStr`, where the latter is preferred in performance
+/// and error reporting.
+#[derive(Debug, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum Message<T = CdpJsonEventMessage> {
     /// A response for a request
     Response(Response),
     /// An emitted event from the server
     Event(T),
+}
+
+// Manually implements Deserialize because `#[serde(untagged)]` does not work correctly with serde_json and some numeric types in the schema,
+// without activating `arbitrary_precision` feature of serde_json and using `serde_json::Number` instead of all usage of `f64` or else.
+// - https://github.com/serde-rs/serde/issues/2661
+// For now, we implement the `FromStr` trait to deserialize the message, and use it in this `Deserialize` impl.
+impl<'de, T> Deserialize<'de> for Message<T>
+where
+    T: DeserializeOwned,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Message<T>, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value: &RawValue = Deserialize::deserialize(deserializer)?;
+        value.get().parse().map_err(serde::de::Error::custom)
+    }
+}
+
+impl<T> FromStr for Message<T>
+where
+    T: DeserializeOwned,
+{
+    type Err = serde_json::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Ok(response) = serde_json::from_str::<Response>(s) {
+            Ok(Message::Response(response))
+        } else {
+            // For now, returns an error only about the event deserialization.
+            // Ideally, we can return an custom error type that contains errors for both response and event.
+            // It seems not necessary for now because the response seems to be deserialized correctly in most cases.
+            let event = serde_json::from_str::<T>(s)?;
+            Ok(Message::Event(event))
+        }
+    }
 }
 
 /// A response can either contain the `Command::Response` type in the `result`
