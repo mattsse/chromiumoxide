@@ -19,5 +19,5 @@ proc-macro2 = "1.0.32"
 heck = "0.4"
 serde_json = "1.0.72"
 serde = { version = "1.0.130", features = ["derive"] }
-chromiumoxide_types = { path = "../chromiumoxide_types", version = "0.5"}
+chromiumoxide_types = { path = "../chromiumoxide_types", version = "0.5" }
 either = "1.6.1"
