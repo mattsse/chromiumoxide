@@ -102,11 +102,11 @@ pub(crate) mod sealed {
             self.as_any().is::<T>()
         }
         #[inline]
-        pub fn downcast_arc<T: SealedEvent>(
+        pub fn downcast_arc<T>(
             self: ::std::sync::Arc<Self>,
         ) -> Result<::std::sync::Arc<T>, ::std::sync::Arc<Self>>
         where
-            T: ::std::any::Any + Send + Sync,
+            T: ::std::any::Any + Send + Sync + SealedEvent,
         {
             if self.is::<T>() {
                 Ok(ArcAny::into_any_arc(self).downcast::<T>().unwrap())
