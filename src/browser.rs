@@ -914,11 +914,9 @@ impl BrowserConfig {
             HeadlessMode::False => (),
             HeadlessMode::True => {
                 cmd.args(["--headless", "--hide-scrollbars", "--mute-audio"]);
-                ()
             }
             HeadlessMode::New => {
                 cmd.args(["--headless=new", "--hide-scrollbars", "--mute-audio"]);
-                ()
             }
         }
 

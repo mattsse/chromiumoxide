@@ -567,7 +567,7 @@ impl Generator {
 
     /// Generates the struct definitions including enum definitions inner
     /// parameter enums
-    fn generate_struct<'a, T: 'a>(
+    fn generate_struct<'a, T>(
         &mut self,
         domain: &Domain,
         dt: &DomainDatatype,
