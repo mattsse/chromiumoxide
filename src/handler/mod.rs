@@ -8,6 +8,7 @@ use futures::channel::oneshot::Sender as OneshotSender;
 use futures::stream::{Fuse, Stream, StreamExt};
 use futures::task::{Context, Poll};
 
+use crate::auth::Credentials;
 use crate::listeners::{EventListenerRequest, EventListeners};
 use chromiumoxide_cdp::cdp::browser_protocol::browser::*;
 use chromiumoxide_cdp::cdp::browser_protocol::target::*;
@@ -431,13 +432,13 @@ impl Handler {
             .unwrap_or_else(|| self.default_browser_context.clone());
         let target = Target::new(
             event.target_info,
-            TargetConfig::new(
-                self.config.ignore_https_errors,
-                self.config.request_timeout,
-                self.config.viewport.clone(),
-                self.config.request_intercept,
-                self.config.cache_enabled,
-            ),
+            TargetConfig {
+                ignore_https_errors: self.config.ignore_https_errors,
+                request_timeout: self.config.request_timeout,
+                viewport: self.config.viewport.clone(),
+                request_intercept: self.config.request_intercept,
+                cache_enabled: self.config.cache_enabled,
+            },
             browser_ctx,
         );
         self.target_ids.push(target.target_id().clone());

@@ -26,6 +26,7 @@ use chromiumoxide_cdp::cdp::js_protocol::runtime::{
 use chromiumoxide_cdp::cdp::{browser_protocol, IntoEventKind};
 use chromiumoxide_types::*;
 
+use crate::auth::Credentials;
 use crate::element::Element;
 use crate::error::{CdpError, Result};
 use crate::handler::commandfuture::CommandFuture;
@@ -337,6 +338,16 @@ impl Page {
             }))
             .await?;
         Ok(rx.await?)
+    }
+
+    pub async fn authenticate(&self, credentials: Credentials) -> Result<()> {
+        self.inner
+            .sender()
+            .clone()
+            .send(TargetMessage::Authenticate(credentials))
+            .await?;
+
+        Ok(())
     }
 
     /// Returns the current url of the page

@@ -18,6 +18,7 @@ use chromiumoxide_cdp::cdp::events::CdpEvent;
 use chromiumoxide_cdp::cdp::CdpEventMessage;
 use chromiumoxide_types::{Command, Method, Request, Response};
 
+use crate::auth::Credentials;
 use crate::cdp::browser_protocol::target::CloseTargetParams;
 use crate::cmd::CommandChain;
 use crate::cmd::CommandMessage;
@@ -513,6 +514,9 @@ impl Target {
                                 let _ = tx.send(None);
                             }
                         }
+                        TargetMessage::Authenticate(credentials) => {
+                            self.network_manager.authenticate(credentials);
+                        }
                     }
                 }
             }
@@ -597,24 +601,6 @@ pub struct TargetConfig {
     pub viewport: Option<Viewport>,
     pub request_intercept: bool,
     pub cache_enabled: bool,
-}
-
-impl TargetConfig {
-    pub fn new(
-        ignore_https_errors: bool,
-        request_timeout: Duration,
-        viewport: Option<Viewport>,
-        request_intercept: bool,
-        cache_enabled: bool,
-    ) -> Self {
-        Self {
-            ignore_https_errors,
-            request_timeout,
-            viewport,
-            request_intercept,
-            cache_enabled,
-        }
-    }
 }
 
 impl Default for TargetConfig {
@@ -793,4 +779,5 @@ pub enum TargetMessage {
     AddEventListener(EventListenerRequest),
     /// Get the `ExecutionContext` if available
     GetExecutionContext(GetExecutionContext),
+    Authenticate(Credentials),
 }
