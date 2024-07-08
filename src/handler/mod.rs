@@ -8,7 +8,6 @@ use futures::channel::oneshot::Sender as OneshotSender;
 use futures::stream::{Fuse, Stream, StreamExt};
 use futures::task::{Context, Poll};
 
-use crate::auth::Credentials;
 use crate::listeners::{EventListenerRequest, EventListeners};
 use chromiumoxide_cdp::cdp::browser_protocol::browser::*;
 use chromiumoxide_cdp::cdp::browser_protocol::target::*;
