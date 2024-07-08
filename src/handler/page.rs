@@ -46,11 +46,12 @@ pub struct PageHandle {
 }
 
 impl PageHandle {
-    pub fn new(target_id: TargetId, session_id: SessionId) -> Self {
+    pub fn new(target_id: TargetId, session_id: SessionId, opener_id: Option<TargetId>) -> Self {
         let (commands, rx) = channel(1);
         let page = PageInner {
             target_id,
             session_id,
+            opener_id,
             sender: commands,
         };
         Self {
@@ -68,6 +69,7 @@ impl PageHandle {
 pub(crate) struct PageInner {
     target_id: TargetId,
     session_id: SessionId,
+    opener_id: Option<TargetId>,
     sender: Sender<TargetMessage>,
 }
 
@@ -104,6 +106,11 @@ impl PageInner {
     /// The identifier of this page's target's session
     pub fn session_id(&self) -> &SessionId {
         &self.session_id
+    }
+
+    /// The identifier of this page's target's opener target
+    pub fn opener_id(&self) -> &Option<TargetId> {
+        &self.opener_id
     }
 
     pub(crate) fn sender(&self) -> &Sender<TargetMessage> {

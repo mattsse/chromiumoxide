@@ -26,6 +26,7 @@ use chromiumoxide_cdp::cdp::js_protocol::runtime::{
 use chromiumoxide_cdp::cdp::{browser_protocol, IntoEventKind};
 use chromiumoxide_types::*;
 
+use crate::auth::Credentials;
 use crate::element::Element;
 use crate::error::{CdpError, Result};
 use crate::handler::commandfuture::CommandFuture;
@@ -325,6 +326,11 @@ impl Page {
         self.inner.session_id()
     }
 
+    /// The identifier of the `Session` target of this page is attached to
+    pub fn opener_id(&self) -> &Option<TargetId> {
+        self.inner.opener_id()
+    }
+
     /// Returns the name of the frame
     pub async fn frame_name(&self, frame_id: FrameId) -> Result<Option<String>> {
         let (tx, rx) = oneshot_channel();
@@ -337,6 +343,16 @@ impl Page {
             }))
             .await?;
         Ok(rx.await?)
+    }
+
+    pub async fn authenticate(&self, credentials: Credentials) -> Result<()> {
+        self.inner
+            .sender()
+            .clone()
+            .send(TargetMessage::Authenticate(credentials))
+            .await?;
+
+        Ok(())
     }
 
     /// Returns the current url of the page
