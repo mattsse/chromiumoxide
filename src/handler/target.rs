@@ -162,7 +162,8 @@ impl Target {
     fn create_page(&mut self) {
         if self.page.is_none() {
             if let Some(session) = self.session_id.clone() {
-                let handle = PageHandle::new(self.target_id().clone(), session);
+                let handle =
+                    PageHandle::new(self.target_id().clone(), session, self.opener_id().cloned());
                 self.page = Some(handle);
             }
         }
@@ -187,7 +188,7 @@ impl Target {
     }
 
     /// Get the target that opened this target. Top-level targets return `None`.
-    pub fn opener(&self) -> Option<&TargetId> {
+    pub fn opener_id(&self) -> Option<&TargetId> {
         self.info.opener_id.as_ref()
     }
 

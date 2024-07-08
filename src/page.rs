@@ -326,6 +326,11 @@ impl Page {
         self.inner.session_id()
     }
 
+    /// The identifier of the `Session` target of this page is attached to
+    pub fn opener_id(&self) -> &Option<TargetId> {
+        self.inner.opener_id()
+    }
+
     /// Returns the name of the frame
     pub async fn frame_name(&self, frame_id: FrameId) -> Result<Option<String>> {
         let (tx, rx) = oneshot_channel();
