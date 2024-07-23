@@ -1,8 +1,8 @@
-use std::sync::Arc;
-use futures::StreamExt;
-use tokio::sync::Mutex;
 use chromiumoxide::browser::{Browser, BrowserConfig};
 use chromiumoxide_cdp::cdp::js_protocol::runtime::{AddBindingParams, EventBindingCalled};
+use futures::StreamExt;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
