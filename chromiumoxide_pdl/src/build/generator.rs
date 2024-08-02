@@ -768,7 +768,7 @@ impl Generator {
         // from str to string impl
         let vars: Vec<_> = variants
             .iter()
-            .map(|s| format_ident!("{}", s.name.to_upper_camel_case()))
+            .map(|s| format_ident!("{}", generate_enum_field_name(&s.name)))
             .collect();
 
         let str_values: Vec<_> = variants
@@ -776,7 +776,7 @@ impl Generator {
             .map(|s| {
                 let mut vars = vec![s.name.to_string()];
                 let lc = s.name.to_lowercase();
-                let cc = s.name.to_upper_camel_case();
+                let cc = generate_enum_field_name(&s.name);
                 if cc != lc && vars[0] != cc {
                     vars.push(cc);
                 }
@@ -1007,14 +1007,12 @@ pub(crate) fn generate_field_name(name: &str) -> String {
     }
 }
 
-/// Escapes reserved rust keywords
-pub(crate) fn generate_type_name(name: &str) -> String {
-    let name = name.to_upper_camel_case();
-    match name.as_str() {
-        "type" => "r#type".to_string(),
-        "mod" => "r#mod".to_string(),
-        "override" => "r#override".to_string(),
-        _ => name,
+pub(crate) fn generate_enum_field_name(name: &str) -> String {
+    match name {
+        "Self" => {
+            "KSelf".to_string()
+        },
+        _ => name.to_upper_camel_case(),
     }
 }
 
@@ -1029,7 +1027,7 @@ fn subenum_name(parent: &str, inner: &str) -> String {
     format!(
         "{}{}",
         parent.to_upper_camel_case(),
-        generate_type_name(inner)
+        generate_enum_field_name(inner)
     )
 }
 
@@ -1147,7 +1145,7 @@ impl SerdeSupport {
     }
 
     fn generate_variant(&self, var: &Variant) -> TokenStream {
-        let v = format_ident!("{}", var.name.to_upper_camel_case());
+        let v = format_ident!("{}", generate_enum_field_name(&var.name));
         let rename = self.generate_rename(var.name.as_ref());
         if let Some(desc) = var.description.as_ref() {
             quote! {
