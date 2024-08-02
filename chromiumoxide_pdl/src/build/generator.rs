@@ -1009,9 +1009,7 @@ pub(crate) fn generate_field_name(name: &str) -> String {
 
 pub(crate) fn generate_enum_field_name(name: &str) -> String {
     match name {
-        "Self" => {
-            "KSelf".to_string()
-        },
+        "Self" => "KSelf".to_string(),
         _ => name.to_upper_camel_case(),
     }
 }
