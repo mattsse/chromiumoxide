@@ -55,7 +55,7 @@ impl DOMWorld {
 /// - each [iframe](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe)
 ///   has a "default" execution context that is always created after the frame
 ///   is attached to DOM.
-/// [Extension's](https://developer.chrome.com/extensions) content scripts create additional execution contexts.
+///   [Extension's](https://developer.chrome.com/extensions) content scripts create additional execution contexts.
 ///
 /// Besides pages, execution contexts can be found in
 /// [Web Workers](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API).
