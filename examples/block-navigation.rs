@@ -7,7 +7,6 @@ use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use chromiumoxide::cdp::browser_protocol::fetch::{
     self, ContinueRequestParams, EventRequestPaused, FailRequestParams, FulfillRequestParams,
-    RequestId,
 };
 use chromiumoxide::cdp::browser_protocol::network::{
     self, ErrorReason, EventRequestWillBeSent, ResourceType,
@@ -32,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .request_timeout(Duration::from_secs(1))
             .build()?,
     )
-    .await?;
+        .await?;
 
     let browser_handle = async_std::task::spawn(async move {
         while let Some(h) = handler.next().await {
@@ -123,7 +122,7 @@ enum InterceptAction {
 #[derive(Debug)]
 struct InterceptResolution {
     action: InterceptAction,
-    request_id: Option<RequestId>,
+    request_id: Option<fetch::RequestId>,
 }
 
 impl InterceptResolution {
@@ -135,20 +134,11 @@ impl InterceptResolution {
     }
 }
 
-// Define the trait
 trait RequestIdExt {
     fn as_network_id(&self) -> network::RequestId;
 }
 
-// Implement the trait for `RequestId`
-impl RequestIdExt for RequestId {
-    fn as_network_id(&self) -> network::RequestId {
-        network::RequestId::new(self.inner().clone())
-    }
-}
-
-// Implement the trait for `&RequestId`
-impl RequestIdExt for &RequestId {
+impl RequestIdExt for network::RequestId {
     fn as_network_id(&self) -> network::RequestId {
         network::RequestId::new(self.inner().clone())
     }
@@ -157,10 +147,10 @@ impl RequestIdExt for &RequestId {
 fn is_navigation(event: &EventRequestWillBeSent) -> bool {
     if event.request_id.inner() == event.loader_id.inner()
         && event
-            .r#type
-            .as_ref()
-            .map(|t| *t == ResourceType::Document)
-            .unwrap_or(false)
+        .r#type
+        .as_ref()
+        .map(|t| *t == ResourceType::Document)
+        .unwrap_or(false)
     {
         return true;
     }
@@ -193,7 +183,7 @@ async fn resolve(
     }
 }
 
-async fn forward(page: &Page, request_id: &RequestId) {
+async fn forward(page: &Page, request_id: &fetch::RequestId) {
     println!("Request {request_id:?} forwarded");
     if let Err(e) = page
         .execute(ContinueRequestParams::new(request_id.clone()))
@@ -203,7 +193,7 @@ async fn forward(page: &Page, request_id: &RequestId) {
     }
 }
 
-async fn abort(page: &Page, request_id: &RequestId) {
+async fn abort(page: &Page, request_id: &fetch::RequestId) {
     println!("Request {request_id:?} aborted");
     if let Err(e) = page
         .execute(FailRequestParams::new(
@@ -216,7 +206,7 @@ async fn abort(page: &Page, request_id: &RequestId) {
     }
 }
 
-async fn fullfill(page: &Page, request_id: &RequestId) {
+async fn fullfill(page: &Page, request_id: &fetch::RequestId) {
     println!("Request {request_id:?} fullfilled");
     if let Err(e) = page
         .execute(
