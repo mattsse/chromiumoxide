@@ -458,13 +458,18 @@ impl FrameManager {
                     .and_then(|v| v["isDefault"].as_bool())
                     .unwrap_or_default()
                 {
-                    frame.main_world.set_context(event.context.id, event.context.unique_id.clone());
+                    frame
+                        .main_world
+                        .set_context(event.context.id, event.context.unique_id.clone());
                 } else if event.context.name == UTILITY_WORLD_NAME
                     && frame.secondary_world.execution_context().is_none()
                 {
-                    frame.secondary_world.set_context(event.context.id, event.context.unique_id.clone());
+                    frame
+                        .secondary_world
+                        .set_context(event.context.id, event.context.unique_id.clone());
                 }
-                self.context_ids.insert(event.context.unique_id.clone(), frame.id.clone());
+                self.context_ids
+                    .insert(event.context.unique_id.clone(), frame.id.clone());
             }
         }
         if event

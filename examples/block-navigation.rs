@@ -6,7 +6,8 @@ use async_std::task::sleep;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use chromiumoxide::cdp::browser_protocol::fetch::{
-    self, ContinueRequestParams, EventRequestPaused, FailRequestParams, FulfillRequestParams, RequestId
+    self, ContinueRequestParams, EventRequestPaused, FailRequestParams, FulfillRequestParams,
+    RequestId,
 };
 use chromiumoxide::cdp::browser_protocol::network::{
     self, ErrorReason, EventRequestWillBeSent, ResourceType,
