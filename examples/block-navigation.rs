@@ -31,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .request_timeout(Duration::from_secs(1))
             .build()?,
     )
-        .await?;
+    .await?;
 
     let browser_handle = async_std::task::spawn(async move {
         while let Some(h) = handler.next().await {
@@ -147,10 +147,10 @@ impl RequestIdExt for network::RequestId {
 fn is_navigation(event: &EventRequestWillBeSent) -> bool {
     if event.request_id.inner() == event.loader_id.inner()
         && event
-        .r#type
-        .as_ref()
-        .map(|t| *t == ResourceType::Document)
-        .unwrap_or(false)
+            .r#type
+            .as_ref()
+            .map(|t| *t == ResourceType::Document)
+            .unwrap_or(false)
     {
         return true;
     }
