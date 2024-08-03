@@ -8,6 +8,7 @@ use crate::cdp::js_protocol::runtime::{
 };
 use crate::revision::Revision;
 
+#[allow(clippy::multiple_bound_locations)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[allow(unreachable_patterns)]
 pub mod cdp;

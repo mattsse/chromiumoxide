@@ -11,6 +11,9 @@ repository = "https://github.com/mattsse/chromiumoxide"
 readme = "../README.md"
 include = ["src/**/*", "*.pdl", "LICENSE-*"]
 
+[features]
+serde0 = []
+
 [dev-dependencies]
 chromiumoxide_pdl = { path = "../chromiumoxide_pdl", version = "0.6" }
 ureq = "2.10.0"
