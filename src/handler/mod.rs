@@ -445,7 +445,7 @@ impl Handler {
     }
 
     /// A new session is attached to a target
-    fn on_attached_to_target(&mut self, event: EventAttachedToTarget) {
+    fn on_attached_to_target(&mut self, event: Box<EventAttachedToTarget>) {
         let session = Session::new(event.session_id.clone(), event.target_info.target_id);
         if let Some(target) = self.targets.get_mut(session.target_id()) {
             target.set_session_id(session.session_id().clone())

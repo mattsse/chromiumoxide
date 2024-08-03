@@ -6,7 +6,7 @@ use async_std::task::sleep;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use chromiumoxide::cdp::browser_protocol::fetch::{
-    self, ContinueRequestParams, EventRequestPaused, FailRequestParams, FulfillRequestParams,
+    self, ContinueRequestParams, EventRequestPaused, FailRequestParams, FulfillRequestParams, RequestId
 };
 use chromiumoxide::cdp::browser_protocol::network::{
     self, ErrorReason, EventRequestWillBeSent, ResourceType,
@@ -122,7 +122,7 @@ enum InterceptAction {
 #[derive(Debug)]
 struct InterceptResolution {
     action: InterceptAction,
-    request_id: Option<fetch::RequestId>,
+    request_id: Option<RequestId>,
 }
 
 impl InterceptResolution {
@@ -134,11 +134,20 @@ impl InterceptResolution {
     }
 }
 
+// Define the trait
 trait RequestIdExt {
     fn as_network_id(&self) -> network::RequestId;
 }
 
-impl RequestIdExt for fetch::RequestId {
+// Implement the trait for `RequestId`
+impl RequestIdExt for RequestId {
+    fn as_network_id(&self) -> network::RequestId {
+        network::RequestId::new(self.inner().clone())
+    }
+}
+
+// Implement the trait for `&RequestId`
+impl RequestIdExt for &RequestId {
     fn as_network_id(&self) -> network::RequestId {
         network::RequestId::new(self.inner().clone())
     }
@@ -183,7 +192,7 @@ async fn resolve(
     }
 }
 
-async fn forward(page: &Page, request_id: &fetch::RequestId) {
+async fn forward(page: &Page, request_id: &RequestId) {
     println!("Request {request_id:?} forwarded");
     if let Err(e) = page
         .execute(ContinueRequestParams::new(request_id.clone()))
@@ -193,7 +202,7 @@ async fn forward(page: &Page, request_id: &fetch::RequestId) {
     }
 }
 
-async fn abort(page: &Page, request_id: &fetch::RequestId) {
+async fn abort(page: &Page, request_id: &RequestId) {
     println!("Request {request_id:?} aborted");
     if let Err(e) = page
         .execute(FailRequestParams::new(
@@ -206,7 +215,7 @@ async fn abort(page: &Page, request_id: &fetch::RequestId) {
     }
 }
 
-async fn fullfill(page: &Page, request_id: &fetch::RequestId) {
+async fn fullfill(page: &Page, request_id: &RequestId) {
     println!("Request {request_id:?} fullfilled");
     if let Err(e) = page
         .execute(
