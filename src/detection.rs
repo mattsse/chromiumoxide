@@ -26,7 +26,7 @@ impl Default for DetectionOptions {
 ///   - Usual filenames in the user path
 ///   - (Windows) Registry
 ///   - (Windows & MacOS) Usual installations paths
-/// If all of the above fail, an error is returned.
+///     If all of the above fail, an error is returned.
 pub fn default_executable(options: DetectionOptions) -> Result<std::path::PathBuf, String> {
     if let Some(path) = get_by_env_var() {
         return Ok(path);

@@ -13,7 +13,7 @@ keywords = ["chrome", "chromedriver", "puppeteer", "automation"]
 categories = ["web-programming", "api-bindings", "development-tools::testing"]
 
 [dependencies]
-async-tungstenite = "0.25"
+async-tungstenite = "0.27.0"
 serde = { version = "1", features = ["derive"] }
 async-std = { version = "1.5", features = [
     "attributes",
@@ -24,7 +24,7 @@ chromiumoxide_types = { path = "chromiumoxide_types", version = "0.6" }
 chromiumoxide_cdp = { path = "chromiumoxide_cdp", version = "0.6" }
 chromiumoxide_fetcher = { path = "chromiumoxide_fetcher", version = "0.6", default-features = false, optional = true }
 serde_json = "1"
-which = "4"
+which = "6"
 thiserror = "1"
 url = "2"
 base64 = "0.22"
@@ -61,6 +61,7 @@ async-std-runtime = ["async-std", "async-tungstenite/async-std-runtime"]
 tokio-runtime = ["tokio", "async-tungstenite/tokio-runtime"]
 fetcher = []
 bytes = ["dep:bytes"]
+serde0 = []
 
 # Temporary features until cargo weak dependencies bug is fixed
 # See https://github.com/rust-lang/cargo/issues/10801

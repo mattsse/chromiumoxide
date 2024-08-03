@@ -141,7 +141,7 @@ impl NetworkManager {
                 self.on_request(&request_will_be_sent, Some(event.request_id.clone().into()));
             } else {
                 self.request_id_to_interception_id
-                    .insert(network_id.clone().into(), event.request_id.clone().into());
+                    .insert(network_id.clone(), event.request_id.clone().into());
             }
         }
     }
