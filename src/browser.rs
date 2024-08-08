@@ -17,6 +17,8 @@ use chromiumoxide_cdp::cdp::browser_protocol::target::{
 };
 use chromiumoxide_cdp::cdp::{CdpEventMessage, IntoEventKind};
 use chromiumoxide_types::*;
+use chromiumoxide_cdp::cdp::browser_protocol::network::{Cookie, CookieParam};
+use chromiumoxide_cdp::cdp::browser_protocol::storage::{ClearCookiesParams, GetCookiesParams, SetCookiesParams};
 
 use crate::async_process::{self, Child, ExitStatus, Stdio};
 use crate::cmd::{to_command_response, CommandMessage};
@@ -479,6 +481,33 @@ impl Browser {
             .await?;
 
         Ok(())
+    }
+
+    /// Clears cookies.
+    pub async fn clear_cookies(&self) -> Result<()> {
+        self.execute(ClearCookiesParams::default()).await?;
+        Ok(())
+    }
+
+    /// Returns all browser cookies.
+    pub async fn get_cookies(&self) -> Result<Vec<Cookie>> {
+        Ok(self
+            .execute(GetCookiesParams::default())
+            .await?
+            .result
+            .cookies)
+    }
+
+    /// Sets given cookies.
+    pub async fn set_cookies(&self, mut cookies: Vec<CookieParam>) -> Result<&Self> {
+        for cookie in &mut cookies {
+            if let Some(url) = cookie.url.as_ref() {
+                crate::page::validate_cookie_url(url)?;
+            }
+        }
+
+        self.execute(SetCookiesParams::new(cookies)).await?;
+        Ok(self)
     }
 }
 

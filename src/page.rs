@@ -1235,7 +1235,7 @@ impl From<Arc<PageInner>> for Page {
     }
 }
 
-fn validate_cookie_url(url: &str) -> Result<()> {
+pub(crate) fn validate_cookie_url(url: &str) -> Result<()> {
     if url.starts_with("data:") {
         Err(CdpError::msg("Data URL page can not have cookie"))
     } else if url == "about:blank" {
