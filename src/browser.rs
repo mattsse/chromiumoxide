@@ -11,14 +11,16 @@ use futures::channel::oneshot::channel as oneshot_channel;
 use futures::select;
 use futures::SinkExt;
 
+use chromiumoxide_cdp::cdp::browser_protocol::network::{Cookie, CookieParam};
+use chromiumoxide_cdp::cdp::browser_protocol::storage::{
+    ClearCookiesParams, GetCookiesParams, SetCookiesParams,
+};
 use chromiumoxide_cdp::cdp::browser_protocol::target::{
     CreateBrowserContextParams, CreateTargetParams, DisposeBrowserContextParams, TargetId,
     TargetInfo,
 };
 use chromiumoxide_cdp::cdp::{CdpEventMessage, IntoEventKind};
 use chromiumoxide_types::*;
-use chromiumoxide_cdp::cdp::browser_protocol::network::{Cookie, CookieParam};
-use chromiumoxide_cdp::cdp::browser_protocol::storage::{ClearCookiesParams, GetCookiesParams, SetCookiesParams};
 
 use crate::async_process::{self, Child, ExitStatus, Stdio};
 use crate::cmd::{to_command_response, CommandMessage};
