@@ -78,6 +78,10 @@ required-features = ["tokio-runtime"]
 name = "iframe-workaround"
 required-features = ["tokio-runtime", "tokio"]
 
+[[example]]
+name = "storage-cookie"
+required-features = ["tokio-runtime"]
+
 
 [[example]]
 name = "httpfuture"
