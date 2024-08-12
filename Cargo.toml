@@ -1,6 +1,6 @@
 [package]
 name = "chromiumoxide"
-version = "0.6.0"
+version = "0.7.0"
 rust-version = "1.70"
 authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
 edition = "2021"
@@ -20,9 +20,9 @@ async-std = { version = "1.5", features = [
     "unstable",
 ], optional = true }
 futures = "0.3"
-chromiumoxide_types = { path = "chromiumoxide_types", version = "0.6" }
-chromiumoxide_cdp = { path = "chromiumoxide_cdp", version = "0.6" }
-chromiumoxide_fetcher = { path = "chromiumoxide_fetcher", version = "0.6", default-features = false, optional = true }
+chromiumoxide_types = { path = "chromiumoxide_types", version = "0.7" }
+chromiumoxide_cdp = { path = "chromiumoxide_cdp", version = "0.7" }
+chromiumoxide_fetcher = { path = "chromiumoxide_fetcher", version = "0.7", default-features = false, optional = true }
 serde_json = "1"
 which = "6"
 thiserror = "1"

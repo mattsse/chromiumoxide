@@ -1,6 +1,6 @@
 [package]
 name = "chromiumoxide_cdp"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
 edition = "2021"
 rust-version = "1.70"
@@ -15,12 +15,12 @@ include = ["src/**/*", "*.pdl", "LICENSE-*"]
 serde0 = []
 
 [dev-dependencies]
-chromiumoxide_pdl = { path = "../chromiumoxide_pdl", version = "0.6" }
+chromiumoxide_pdl = { path = "../chromiumoxide_pdl", version = "0.7" }
 ureq = "2.10.0"
 tempfile = "3.10.1"
 
 [dependencies]
-chromiumoxide_pdl = { path = "../chromiumoxide_pdl", version = "0.6" }
-chromiumoxide_types = { path = "../chromiumoxide_types", version = "0.6" }
+chromiumoxide_pdl = { path = "../chromiumoxide_pdl", version = "0.7" }
+chromiumoxide_types = { path = "../chromiumoxide_types", version = "0.7" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
