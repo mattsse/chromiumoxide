@@ -644,6 +644,21 @@ impl Page {
         Ok(self)
     }
 
+    /// Changes the CSS media type of the page
+    // Based on https://pptr.dev/api/puppeteer.page.emulatemediatype
+    pub async fn emulate_media_type(
+        &self,
+        media_type: impl Into<MediaTypeParams>,
+    ) -> Result<&Self> {
+        self.execute(
+            SetEmulatedMediaParams::builder()
+                .media(media_type.into())
+                .build(),
+        )
+        .await?;
+        Ok(self)
+    }
+
     /// Overrides default host system timezone
     pub async fn emulate_timezone(
         &self,
@@ -1345,6 +1360,26 @@ impl From<CaptureScreenshotParams> for ScreenshotParams {
         Self {
             cdp_params,
             ..Default::default()
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub enum MediaTypeParams {
+    /// Default CSS media type behavior for page and print
+    #[default]
+    Null,
+    /// Force screen CSS media type for page and print
+    Screen,
+    /// Force print CSS media type for page and print
+    Print,
+}
+impl From<MediaTypeParams> for String {
+    fn from(media_type: MediaTypeParams) -> Self {
+        match media_type {
+            MediaTypeParams::Null => "null".to_string(),
+            MediaTypeParams::Screen => "screen".to_string(),
+            MediaTypeParams::Print => "print".to_string(),
         }
     }
 }
