@@ -138,7 +138,7 @@ trait RequestIdExt {
     fn as_network_id(&self) -> network::RequestId;
 }
 
-impl RequestIdExt for fetch::RequestId {
+impl RequestIdExt for network::RequestId {
     fn as_network_id(&self) -> network::RequestId {
         network::RequestId::new(self.inner().clone())
     }
