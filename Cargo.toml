@@ -1,6 +1,6 @@
 [package]
 name = "chromiumoxide"
-version = "0.5.7"
+version = "0.7.0"
 rust-version = "1.70"
 authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
 edition = "2021"
@@ -13,21 +13,21 @@ keywords = ["chrome", "chromedriver", "puppeteer", "automation"]
 categories = ["web-programming", "api-bindings", "development-tools::testing"]
 
 [dependencies]
-async-tungstenite = "0.23"
+async-tungstenite = "0.27.0"
 serde = { version = "1", features = ["derive"] }
 async-std = { version = "1.5", features = [
     "attributes",
     "unstable",
 ], optional = true }
 futures = "0.3"
-chromiumoxide_types = { path = "chromiumoxide_types", version = "0.5" }
-chromiumoxide_cdp = { path = "chromiumoxide_cdp", version = "0.5" }
-chromiumoxide_fetcher = { path = "chromiumoxide_fetcher", version = "0.5", default-features = false, optional = true }
+chromiumoxide_types = { path = "chromiumoxide_types", version = "0.7" }
+chromiumoxide_cdp = { path = "chromiumoxide_cdp", version = "0.7" }
+chromiumoxide_fetcher = { path = "chromiumoxide_fetcher", version = "0.7", default-features = false, optional = true }
 serde_json = "1"
-which = "4"
+which = "6"
 thiserror = "1"
 url = "2"
-base64 = "0.21"
+base64 = "0.22"
 fnv = "1"
 futures-timer = "3"
 cfg-if = "1"
@@ -42,11 +42,11 @@ tokio = { version = "1", features = [
 tracing = "0.1"
 pin-project-lite = "0.2"
 dunce = "1"
-bytes = { version = "1.4.0", features = ["serde"], optional = true }
-reqwest = { version = "0.11.20", default-features = false }
+bytes = { version = "1", features = ["serde"], optional = true }
+reqwest = { version = "0.12", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
-winreg = "0.51"
+winreg = "0.52"
 
 [dev-dependencies]
 quote = "1"
@@ -61,6 +61,7 @@ async-std-runtime = ["async-std", "async-tungstenite/async-std-runtime"]
 tokio-runtime = ["tokio", "async-tungstenite/tokio-runtime"]
 fetcher = []
 bytes = ["dep:bytes"]
+serde0 = []
 
 # Temporary features until cargo weak dependencies bug is fixed
 # See https://github.com/rust-lang/cargo/issues/10801
@@ -76,6 +77,10 @@ required-features = ["tokio-runtime"]
 [[example]]
 name = "iframe-workaround"
 required-features = ["tokio-runtime", "tokio"]
+
+[[example]]
+name = "storage-cookie"
+required-features = ["tokio-runtime"]
 
 
 [[example]]
