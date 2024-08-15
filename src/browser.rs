@@ -11,6 +11,10 @@ use futures::channel::oneshot::channel as oneshot_channel;
 use futures::select;
 use futures::SinkExt;
 
+use chromiumoxide_cdp::cdp::browser_protocol::network::{Cookie, CookieParam};
+use chromiumoxide_cdp::cdp::browser_protocol::storage::{
+    ClearCookiesParams, GetCookiesParams, SetCookiesParams,
+};
 use chromiumoxide_cdp::cdp::browser_protocol::target::{
     CreateBrowserContextParams, CreateTargetParams, DisposeBrowserContextParams, TargetId,
     TargetInfo,
@@ -480,6 +484,33 @@ impl Browser {
 
         Ok(())
     }
+
+    /// Clears cookies.
+    pub async fn clear_cookies(&self) -> Result<()> {
+        self.execute(ClearCookiesParams::default()).await?;
+        Ok(())
+    }
+
+    /// Returns all browser cookies.
+    pub async fn get_cookies(&self) -> Result<Vec<Cookie>> {
+        Ok(self
+            .execute(GetCookiesParams::default())
+            .await?
+            .result
+            .cookies)
+    }
+
+    /// Sets given cookies.
+    pub async fn set_cookies(&self, mut cookies: Vec<CookieParam>) -> Result<&Self> {
+        for cookie in &mut cookies {
+            if let Some(url) = cookie.url.as_ref() {
+                crate::page::validate_cookie_url(url)?;
+            }
+        }
+
+        self.execute(SetCookiesParams::new(cookies)).await?;
+        Ok(self)
+    }
 }
 
 impl Drop for Browser {
@@ -559,11 +590,22 @@ async fn ws_url_from_output(
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum HeadlessMode {
+    /// The "headful" mode.
+    False,
+    /// The old headless mode.
+    #[default]
+    True,
+    /// The new headless mode. See also: https://developer.chrome.com/docs/chromium/new-headless
+    New,
+}
+
 #[derive(Debug, Clone)]
 pub struct BrowserConfig {
     /// Determines whether to run headless version of the browser. Defaults to
     /// true.
-    headless: bool,
+    headless: HeadlessMode,
     /// Determines whether to run the browser with a sandbox.
     sandbox: bool,
     /// Launch the browser with a specific window width and height.
@@ -619,7 +661,7 @@ pub struct BrowserConfig {
 
 #[derive(Debug, Clone)]
 pub struct BrowserConfigBuilder {
-    headless: bool,
+    headless: HeadlessMode,
     sandbox: bool,
     window_size: Option<(u32, u32)>,
     port: u16,
@@ -652,7 +694,7 @@ impl BrowserConfig {
 impl Default for BrowserConfigBuilder {
     fn default() -> Self {
         Self {
-            headless: true,
+            headless: HeadlessMode::True,
             sandbox: true,
             window_size: None,
             port: 0,
@@ -686,7 +728,17 @@ impl BrowserConfigBuilder {
     }
 
     pub fn with_head(mut self) -> Self {
-        self.headless = false;
+        self.headless = HeadlessMode::False;
+        self
+    }
+
+    pub fn new_headless_mode(mut self) -> Self {
+        self.headless = HeadlessMode::New;
+        self
+    }
+
+    pub fn headless_mode(mut self, mode: HeadlessMode) -> Self {
+        self.headless = mode;
         self
     }
 
@@ -889,8 +941,14 @@ impl BrowserConfig {
             cmd.args(["--no-sandbox", "--disable-setuid-sandbox"]);
         }
 
-        if self.headless {
-            cmd.args(["--headless", "--hide-scrollbars", "--mute-audio"]);
+        match self.headless {
+            HeadlessMode::False => (),
+            HeadlessMode::True => {
+                cmd.args(["--headless", "--hide-scrollbars", "--mute-audio"]);
+            }
+            HeadlessMode::New => {
+                cmd.args(["--headless=new", "--hide-scrollbars", "--mute-audio"]);
+            }
         }
 
         if self.incognito {
