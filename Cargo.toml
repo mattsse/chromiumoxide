@@ -82,6 +82,9 @@ required-features = ["tokio-runtime", "tokio"]
 name = "storage-cookie"
 required-features = ["tokio-runtime"]
 
+[[example]]
+name = "console-logs"
+required-features = ["tokio-runtime"]
 
 [[example]]
 name = "httpfuture"
