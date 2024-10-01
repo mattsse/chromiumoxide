@@ -32,7 +32,11 @@ pub(crate) async fn canonicalize<P: AsRef<Path> + Unpin>(path: P) -> std::io::Re
 /// Absolute path
 ///
 pub(crate) fn absolute(path: PathBuf) -> std::io::Result<PathBuf> {
-    let path = if path.is_absolute() { path } else { std::env::current_dir()?.join(path) };
+    let path = if path.is_absolute() {
+        path
+    } else {
+        std::env::current_dir()?.join(path)
+    };
     Ok(dunce::simplified(&path).to_path_buf())
 }
 
@@ -43,9 +47,12 @@ pub(crate) async fn canonicalize_except_snap(path: PathBuf) -> std::io::Result<P
     let executable_cleaned: PathBuf = canonicalize(&path).await?;
 
     // Handle case where executable is provided by snap, ignore canonicalize result and only make path absolute
-    Ok(if executable_cleaned.to_str().unwrap().ends_with("/snap") { absolute(path).unwrap() } else { executable_cleaned })
+    Ok(if executable_cleaned.to_str().unwrap().ends_with("/snap") {
+        absolute(path).unwrap()
+    } else {
+        executable_cleaned
+    })
 }
-
 
 pub(crate) mod base64 {
     use base64::engine::general_purpose::STANDARD;
