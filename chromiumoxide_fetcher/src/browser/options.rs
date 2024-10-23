@@ -36,6 +36,7 @@ impl BrowserFetcherOptions {
         BrowserFetcherOptionsBuilder::default()
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn default() -> Result<Self> {
         Self::builder().build()
     }
@@ -84,7 +85,7 @@ impl BrowserFetcherOptionsBuilder {
 
         let platform =
             self.platform
-                .or_else(|| Platform::current())
+                .or_else(Platform::current)
                 .ok_or(FetcherError::UnsupportedOs(
                     std::env::consts::OS,
                     std::env::consts::ARCH,
