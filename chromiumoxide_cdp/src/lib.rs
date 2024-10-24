@@ -8,13 +8,14 @@ use crate::cdp::js_protocol::runtime::{
 };
 use crate::revision::Revision;
 
+#[allow(clippy::multiple_bound_locations)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[allow(unreachable_patterns)]
 pub mod cdp;
 pub mod revision;
 
 /// Currently built CDP revision
-pub const CURRENT_REVISION: Revision = Revision(1045489);
+pub const CURRENT_REVISION: Revision = Revision(1359167);
 
 /// convenience fixups
 impl Default for CreateTargetParams {
@@ -75,6 +76,7 @@ impl DeleteCookiesParams {
             url: param.url.clone(),
             domain: param.domain.clone(),
             path: param.path.clone(),
+            partition_key: param.partition_key.clone(),
         }
     }
 }
@@ -93,7 +95,8 @@ impl From<EvaluateParams> for CallFunctionOnParams {
             execution_context_id: params.context_id,
             object_group: params.object_group,
             throw_on_side_effect: None,
-            generate_web_driver_value: None,
+            unique_context_id: None,
+            serialization_options: None,
         }
     }
 }

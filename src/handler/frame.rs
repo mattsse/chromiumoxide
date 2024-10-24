@@ -113,7 +113,7 @@ impl Frame {
     }
 
     fn navigated(&mut self, frame: &CdpFrame) {
-        self.name = frame.name.clone();
+        self.name.clone_from(&frame.name);
         let url = if let Some(ref fragment) = frame.url_fragment {
             format!("{}{fragment}", frame.url)
         } else {
@@ -145,10 +145,10 @@ impl Frame {
         self.secondary_world.take_context();
     }
 
-    pub fn destroy_context(&mut self, ctx: ExecutionContextId) {
-        if self.main_world.execution_context() == Some(ctx) {
+    pub fn destroy_context(&mut self, ctx_unique_id: &str) {
+        if self.main_world.execution_context_unique_id() == Some(ctx_unique_id) {
             self.main_world.take_context();
-        } else if self.secondary_world.execution_context() == Some(ctx) {
+        } else if self.secondary_world.execution_context_unique_id() == Some(ctx_unique_id) {
             self.secondary_world.take_context();
         }
     }
@@ -187,7 +187,7 @@ pub struct FrameManager {
     main_frame: Option<FrameId>,
     frames: HashMap<FrameId, Frame>,
     /// The contexts mapped with their frames
-    context_ids: HashMap<ExecutionContextId, FrameId>,
+    context_ids: HashMap<String, FrameId>,
     isolated_worlds: HashSet<String>,
     /// Timeout after which an anticipated event (related to navigation) doesn't
     /// arrive results in an error
@@ -458,13 +458,18 @@ impl FrameManager {
                     .and_then(|v| v["isDefault"].as_bool())
                     .unwrap_or_default()
                 {
-                    frame.main_world.set_context(event.context.id);
+                    frame
+                        .main_world
+                        .set_context(event.context.id, event.context.unique_id.clone());
                 } else if event.context.name == UTILITY_WORLD_NAME
                     && frame.secondary_world.execution_context().is_none()
                 {
-                    frame.secondary_world.set_context(event.context.id);
+                    frame
+                        .secondary_world
+                        .set_context(event.context.id, event.context.unique_id.clone());
                 }
-                self.context_ids.insert(event.context.id, frame.id.clone());
+                self.context_ids
+                    .insert(event.context.unique_id.clone(), frame.id.clone());
             }
         }
         if event
@@ -480,9 +485,9 @@ impl FrameManager {
 
     /// Issued when execution context is destroyed
     pub fn on_frame_execution_context_destroyed(&mut self, event: &EventExecutionContextDestroyed) {
-        if let Some(id) = self.context_ids.remove(&event.execution_context_id) {
+        if let Some(id) = self.context_ids.remove(&event.execution_context_unique_id) {
             if let Some(frame) = self.frames.get_mut(&id) {
-                frame.destroy_context(event.execution_context_id);
+                frame.destroy_context(&event.execution_context_unique_id);
             }
         }
     }

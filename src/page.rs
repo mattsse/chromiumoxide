@@ -26,6 +26,7 @@ use chromiumoxide_cdp::cdp::js_protocol::runtime::{
 use chromiumoxide_cdp::cdp::{browser_protocol, IntoEventKind};
 use chromiumoxide_types::*;
 
+use crate::auth::Credentials;
 use crate::element::Element;
 use crate::error::{CdpError, Result};
 use crate::handler::commandfuture::CommandFuture;
@@ -84,6 +85,7 @@ impl Page {
             source: "window.chrome = { runtime: {} };".to_string(),
             world_name: None,
             include_command_line_api: None,
+            run_immediately: None,
         })
         .await?;
         Ok(())
@@ -110,6 +112,7 @@ impl Page {
                 .to_string(),
                 world_name: None,
                 include_command_line_api: None,
+                run_immediately: None,
             })
             .await?;
         Ok(())
@@ -134,6 +137,7 @@ impl Page {
             .to_string(),
             world_name: None,
             include_command_line_api: None,
+            run_immediately: None,
         })
         .await?;
         Ok(())
@@ -153,6 +157,7 @@ impl Page {
             .to_string(),
             world_name: None,
             include_command_line_api: None,
+            run_immediately: None,
         })
         .await?;
         Ok(())
@@ -171,6 +176,7 @@ impl Page {
             .to_string(),
             world_name: None,
             include_command_line_api: None,
+            run_immediately: None,
         })
         .await?;
         Ok(())
@@ -325,6 +331,11 @@ impl Page {
         self.inner.session_id()
     }
 
+    /// The identifier of the `Session` target of this page is attached to
+    pub fn opener_id(&self) -> &Option<TargetId> {
+        self.inner.opener_id()
+    }
+
     /// Returns the name of the frame
     pub async fn frame_name(&self, frame_id: FrameId) -> Result<Option<String>> {
         let (tx, rx) = oneshot_channel();
@@ -337,6 +348,16 @@ impl Page {
             }))
             .await?;
         Ok(rx.await?)
+    }
+
+    pub async fn authenticate(&self, credentials: Credentials) -> Result<()> {
+        self.inner
+            .sender()
+            .clone()
+            .send(TargetMessage::Authenticate(credentials))
+            .await?;
+
+        Ok(())
     }
 
     /// Returns the current url of the page
@@ -620,6 +641,21 @@ impl Page {
     pub async fn emulate_media_features(&self, features: Vec<MediaFeature>) -> Result<&Self> {
         self.execute(SetEmulatedMediaParams::builder().features(features).build())
             .await?;
+        Ok(self)
+    }
+
+    /// Changes the CSS media type of the page
+    // Based on https://pptr.dev/api/puppeteer.page.emulatemediatype
+    pub async fn emulate_media_type(
+        &self,
+        media_type: impl Into<MediaTypeParams>,
+    ) -> Result<&Self> {
+        self.execute(
+            SetEmulatedMediaParams::builder()
+                .media(media_type.into())
+                .build(),
+        )
+        .await?;
         Ok(self)
     }
 
@@ -1219,7 +1255,7 @@ impl From<Arc<PageInner>> for Page {
     }
 }
 
-fn validate_cookie_url(url: &str) -> Result<()> {
+pub(crate) fn validate_cookie_url(url: &str) -> Result<()> {
     if url.starts_with("data:") {
         Err(CdpError::msg("Data URL page can not have cookie"))
     } else if url == "about:blank" {
@@ -1324,6 +1360,26 @@ impl From<CaptureScreenshotParams> for ScreenshotParams {
         Self {
             cdp_params,
             ..Default::default()
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub enum MediaTypeParams {
+    /// Default CSS media type behavior for page and print
+    #[default]
+    Null,
+    /// Force screen CSS media type for page and print
+    Screen,
+    /// Force print CSS media type for page and print
+    Print,
+}
+impl From<MediaTypeParams> for String {
+    fn from(media_type: MediaTypeParams) -> Self {
+        match media_type {
+            MediaTypeParams::Null => "null".to_string(),
+            MediaTypeParams::Screen => "screen".to_string(),
+            MediaTypeParams::Print => "print".to_string(),
         }
     }
 }
