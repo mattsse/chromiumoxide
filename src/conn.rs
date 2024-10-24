@@ -139,7 +139,7 @@ impl<T: EventMessage + Unpin> Stream for Connection<T> {
             }
 
             // read from the ws
-            match ready!(pin.ws.poll_next_unpin(cx)) {
+            return match ready!(pin.ws.poll_next_unpin(cx)) {
                 Some(Ok(WsMessage::Text(text))) => {
                     let ready = match serde_json::from_str::<Message<T>>(&text) {
                         Ok(msg) => {
@@ -154,21 +154,21 @@ impl<T: EventMessage + Unpin> Stream for Connection<T> {
                             continue;
                         }
                     };
-                    return Poll::Ready(Some(ready));
+                    Poll::Ready(Some(ready))
                 }
-                Some(Ok(WsMessage::Close(_))) => return Poll::Ready(None),
+                Some(Ok(WsMessage::Close(_))) => Poll::Ready(None),
                 // ignore ping and pong
                 Some(Ok(WsMessage::Ping(_))) | Some(Ok(WsMessage::Pong(_))) => {
                     cx.waker().wake_by_ref();
-                    return Poll::Pending;
+                    Poll::Pending
                 }
-                Some(Ok(msg)) => return Poll::Ready(Some(Err(CdpError::UnexpectedWsMessage(msg)))),
-                Some(Err(err)) => return Poll::Ready(Some(Err(CdpError::Ws(err)))),
+                Some(Ok(msg)) => Poll::Ready(Some(Err(CdpError::UnexpectedWsMessage(msg)))),
+                Some(Err(err)) => Poll::Ready(Some(Err(CdpError::Ws(err)))),
                 None => {
                     // ws connection closed
-                    return Poll::Ready(None);
+                    Poll::Ready(None)
                 }
-            }
+            };
         }
     }
 }
