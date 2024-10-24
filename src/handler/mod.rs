@@ -624,6 +624,13 @@ impl Stream for Handler {
                     Ok(Message::Event(ev)) => {
                         pin.on_event(ev);
                     }
+                    Err(err @ CdpError::InvalidMessage(_, _)) => {
+                        if pin.config.ignore_invalid_messages {
+                            tracing::warn!("WS Invalid message: {}", err);
+                        } else {
+                            return Poll::Ready(Some(Err(err)));
+                        }
+                    }
                     Err(err) => {
                         tracing::error!("WS Connection error: {:?}", err);
                         return Poll::Ready(Some(Err(err)));
@@ -650,6 +657,8 @@ impl Stream for Handler {
 pub struct HandlerConfig {
     /// Whether the `NetworkManager`s should ignore https errors
     pub ignore_https_errors: bool,
+    /// Whether to ignore invalid messages
+    pub ignore_invalid_messages: bool,
     /// Window and device settings
     pub viewport: Option<Viewport>,
     /// Context ids to set from the get go
@@ -666,6 +675,7 @@ impl Default for HandlerConfig {
     fn default() -> Self {
         Self {
             ignore_https_errors: true,
+            ignore_invalid_messages: true,
             viewport: Default::default(),
             context_ids: Vec::new(),
             request_timeout: Duration::from_millis(REQUEST_TIMEOUT),

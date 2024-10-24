@@ -210,6 +210,7 @@ impl Browser {
 
         let handler_config = HandlerConfig {
             ignore_https_errors: config.ignore_https_errors,
+            ignore_invalid_messages: config.ignore_invalid_messages,
             viewport: config.viewport.clone(),
             context_ids: Vec::new(),
             request_timeout: config.request_timeout,
@@ -642,6 +643,8 @@ pub struct BrowserConfig {
 
     /// Ignore https errors, default is true
     ignore_https_errors: bool,
+    /// Ignore invalid messages, default is true
+    ignore_invalid_messages: bool,
     viewport: Option<Viewport>,
     /// The duration after a request with no response should time out
     request_timeout: Duration,
@@ -673,6 +676,7 @@ pub struct BrowserConfigBuilder {
     incognito: bool,
     launch_timeout: Duration,
     ignore_https_errors: bool,
+    ignore_invalid_events: bool,
     viewport: Option<Viewport>,
     request_timeout: Duration,
     args: Vec<String>,
@@ -706,6 +710,7 @@ impl Default for BrowserConfigBuilder {
             incognito: false,
             launch_timeout: Duration::from_millis(LAUNCH_TIMEOUT),
             ignore_https_errors: true,
+            ignore_invalid_events: true,
             viewport: Some(Default::default()),
             request_timeout: Duration::from_millis(REQUEST_TIMEOUT),
             args: Vec::new(),
@@ -749,6 +754,13 @@ impl BrowserConfigBuilder {
 
     pub fn respect_https_errors(mut self) -> Self {
         self.ignore_https_errors = false;
+        self
+    }
+
+    /// The browser handler will return [CdpError::InvalidMessage] if a received
+    /// message cannot be parsed.
+    pub fn surface_invalid_messages(mut self) -> Self {
+        self.ignore_invalid_events = false;
         self
     }
 
@@ -887,6 +899,7 @@ impl BrowserConfigBuilder {
             incognito: self.incognito,
             launch_timeout: self.launch_timeout,
             ignore_https_errors: self.ignore_https_errors,
+            ignore_invalid_messages: self.ignore_invalid_events,
             viewport: self.viewport,
             request_timeout: self.request_timeout,
             args: self.args,

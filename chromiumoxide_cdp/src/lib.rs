@@ -147,3 +147,21 @@ impl fmt::Display for StackTrace {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use chromiumoxide_types::Message;
+
+    use super::cdp::CdpEventMessage;
+
+    // This makes sure we can parse arbitrary numbers (timestamp) as f64
+    // and that the Message untagged union works core
+    #[test]
+    fn test_event_deserialize_f64() {
+        let raw = r#"{"method":"Page.lifecycleEvent","params":{"frameId":"B0FCF18A982213C9947D313EAA8F934A","loaderId":"547DA6CC3D4A41314EA08A88BFA62B21","name":"commit","timestamp":1531.878478},"sessionId":"E0BCD37484373226136272710B8CB432"}"#;
+
+        let event = serde_json::from_str::<Message<CdpEventMessage>>(raw).unwrap();
+
+        assert!(matches!(event, Message::Event(_)));
+    }
+}
