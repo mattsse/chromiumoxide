@@ -21,7 +21,7 @@ pub use self::revision::Revision;
 // To map a revision to a chromium version you can use the site https://chromiumdash.appspot.com/commits.
 
 /// Currently downloaded chromium revision
-pub const CURRENT_REVISION: Revision = Revision(1362488);
+pub const CURRENT_REVISION: Revision = Revision(1355984);
 
 mod browser;
 mod error;
