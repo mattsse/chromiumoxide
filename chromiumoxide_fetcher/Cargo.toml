@@ -11,6 +11,9 @@ repository = "https://github.com/mattsse/chromiumoxide"
 readme = "../README.md"
 include = ["src/**/*", "LICENSE-*"]
 
+[dev-dependencies]
+ureq = "2.10.0"
+
 [dependencies]
 thiserror = "1"
 anyhow = "1"

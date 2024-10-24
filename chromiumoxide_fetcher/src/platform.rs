@@ -13,7 +13,8 @@ pub enum Platform {
 }
 
 impl Platform {
-    pub(crate) fn download_url(&self, host: &str, revision: &Revision) -> String {
+    #[doc(hidden)] // internal API
+    pub fn download_url(&self, host: &str, revision: &Revision) -> String {
         let archive = self.archive_name(revision);
         let name = match self {
             Self::Linux => "Linux_x64",

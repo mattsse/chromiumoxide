@@ -14,8 +14,22 @@ use crate::revision::Revision;
 pub mod cdp;
 pub mod revision;
 
+// The CDP is not a stable API, it changes from time to time and sometimes
+// in backward incompatible ways.
+//
+// When the CDP changes, the chromium team pushes a commit to the repository
+// https://github.com/ChromeDevTools/devtools-protocol. There you can find
+// valid CDP revisions. That number corresponds to a chromium revision.
+// It is a monotonic version number referring to the chromium master commit position.
+//
+// To map a revision to a chromium version you can use the site
+// https://chromiumdash.appspot.com/commits. We should not necessarily
+// always use the latest revision, as this will mean only the newest chromium
+// browser can be used. Apart from breaking changes, using an older CDP
+// is generally a good idea.
+
 /// Currently built CDP revision
-pub const CURRENT_REVISION: Revision = Revision(1359167);
+pub const CURRENT_REVISION: Revision = Revision(1354347);
 
 /// convenience fixups
 impl Default for CreateTargetParams {

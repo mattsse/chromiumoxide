@@ -48,7 +48,7 @@ impl<R: Read + Seek> ZipArchive<R> {
             } else {
                 if let Some(p) = outpath.parent() {
                     if !p.exists() {
-                        fs::create_dir_all(&p)?;
+                        fs::create_dir_all(p)?;
                     }
                 }
 
