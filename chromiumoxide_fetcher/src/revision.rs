@@ -24,7 +24,7 @@ impl std::str::FromStr for Revision {
     type Err = ParseIntError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.parse::<u32>().map(|v| Self(v))
+        s.parse::<u32>().map(Self)
     }
 }
 
