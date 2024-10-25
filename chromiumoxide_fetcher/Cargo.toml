@@ -12,7 +12,10 @@ readme = "../README.md"
 include = ["src/**/*", "LICENSE-*"]
 
 [dev-dependencies]
-ureq = "2.10.0"
+reqwest = { version = "0.12", features = [
+  "rustls-tls",
+], default-features = false }
+tokio = { version = "1", features = ["rt", "fs", "macros"] }
 
 [dependencies]
 thiserror = "1"
