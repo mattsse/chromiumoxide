@@ -119,6 +119,7 @@ impl NetworkManager {
         }
         self.update_protocol_cache_disabled();
         if enabled {
+            self.protocol_request_interception_enabled = true;
             self.push_cdp_request(
                 fetch::EnableParams::builder()
                     .handle_auth_requests(true)
@@ -126,6 +127,7 @@ impl NetworkManager {
                     .build(),
             )
         } else {
+            self.protocol_request_interception_enabled = false;
             self.push_cdp_request(DisableParams::default())
         }
     }
