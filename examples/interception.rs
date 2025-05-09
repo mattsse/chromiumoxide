@@ -64,7 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Navigate to target
-    page.goto(TARGET).await?;
+    page.goto(TARGET, None).await?;
     page.wait_for_navigation().await?;
     let content = page.content().await?;
     if content == CONTENT {
@@ -72,7 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Navigate to other
-    page.goto("https://google.com").await?;
+    page.goto("https://google.com", None).await?;
     page.wait_for_navigation().await?;
     let content = page.content().await?;
     if content != CONTENT {

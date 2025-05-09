@@ -1,3 +1,8 @@
+use crate::cmd::{to_command_response, CommandMessage};
+use crate::error::Result;
+use crate::handler::target::TargetMessage;
+use chromiumoxide_cdp::cdp::browser_protocol::target::SessionId;
+use chromiumoxide_types::{Command, CommandResponse, MethodId, Response};
 use futures::channel::{
     mpsc,
     oneshot::{self, channel as oneshot_channel},
@@ -7,12 +12,7 @@ use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-
-use crate::cmd::{to_command_response, CommandMessage};
-use crate::error::Result;
-use crate::handler::target::TargetMessage;
-use chromiumoxide_cdp::cdp::browser_protocol::target::SessionId;
-use chromiumoxide_types::{Command, CommandResponse, MethodId, Response};
+use std::time::Duration;
 
 pin_project! {
     pub struct CommandFuture<T, M = Result<Response>> {
@@ -39,17 +39,18 @@ impl<T: Command> CommandFuture<T> {
         cmd: T,
         target_sender: mpsc::Sender<TargetMessage>,
         session: Option<SessionId>,
+        timeout: Option<Duration>,
     ) -> Result<Self> {
         let (tx, rx_command) = oneshot_channel::<Result<Response>>();
         let method = cmd.identifier();
 
         let message = Some(TargetMessage::Command(CommandMessage::with_session(
-            cmd, tx, session,
+            cmd, tx, session, timeout,
         )?));
 
-        let delay = futures_timer::Delay::new(std::time::Duration::from_millis(
-            crate::handler::REQUEST_TIMEOUT,
-        ));
+        let delay = futures_timer::Delay::new(
+            timeout.unwrap_or(Duration::from_millis(crate::handler::REQUEST_TIMEOUT)),
+        );
 
         Ok(Self {
             target_sender,

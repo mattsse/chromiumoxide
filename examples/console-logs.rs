@@ -40,7 +40,7 @@ async fn main() {
         }
     });
 
-    let _ = page.goto(TARGET).await.expect("failed to navigate");
+    let _ = page.goto(TARGET, None).await.expect("failed to navigate");
 
     tokio::time::sleep(Duration::from_secs(3)).await;
 

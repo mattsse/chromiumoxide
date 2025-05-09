@@ -657,11 +657,13 @@ pub struct FrameNavigationRequest {
 }
 
 impl FrameNavigationRequest {
-    pub fn new(id: NavigationId, req: Request) -> Self {
+    pub fn new(id: NavigationId, req: Request, timeout: impl Into<Option<Duration>>) -> Self {
         Self {
             id,
             req,
-            timeout: Duration::from_millis(REQUEST_TIMEOUT),
+            timeout: timeout
+                .into()
+                .unwrap_or(Duration::from_millis(REQUEST_TIMEOUT)),
         }
     }
 

@@ -1,9 +1,9 @@
-use std::path::Path;
-use std::sync::Arc;
-
 use futures::channel::mpsc::unbounded;
 use futures::channel::oneshot::channel as oneshot_channel;
 use futures::{stream, SinkExt, StreamExt};
+use std::path::Path;
+use std::sync::Arc;
+use std::time::Duration;
 
 use chromiumoxide_cdp::cdp::browser_protocol::dom::*;
 use chromiumoxide_cdp::cdp::browser_protocol::emulation::{
@@ -184,12 +184,24 @@ impl Page {
 
     /// Execute a command and return the `Command::Response`
     pub async fn execute<T: Command>(&self, cmd: T) -> Result<CommandResponse<T::Response>> {
-        self.command_future(cmd)?.await
+        self.command_future(cmd, None)?.await
+    }
+
+    pub async fn execute_with_timeout<T: Command>(
+        &self,
+        cmd: T,
+        timeout: impl Into<Option<Duration>>,
+    ) -> Result<CommandResponse<T::Response>> {
+        self.command_future(cmd, timeout)?.await
     }
 
     /// Execute a command and return the `Command::Response`
-    pub fn command_future<T: Command>(&self, cmd: T) -> Result<CommandFuture<T>> {
-        self.inner.command_future(cmd)
+    pub fn command_future<T: Command>(
+        &self,
+        cmd: T,
+        timeout: impl Into<Option<Duration>>,
+    ) -> Result<CommandFuture<T>> {
+        self.inner.command_future(cmd, timeout)
     }
 
     /// Execute a command and return the `Command::Response`
@@ -312,8 +324,12 @@ impl Page {
     /// Navigate directly to the given URL.
     ///
     /// This resolves directly after the requested URL is fully loaded.
-    pub async fn goto(&self, params: impl Into<NavigateParams>) -> Result<&Self> {
-        let res = self.execute(params.into()).await?;
+    pub async fn goto(
+        &self,
+        params: impl Into<NavigateParams>,
+        timeout: impl Into<Option<Duration>>,
+    ) -> Result<&Self> {
+        let res = self.execute_with_timeout(params.into(), timeout).await?;
         if let Some(err) = res.result.error_text {
             return Err(CdpError::ChromeMessage(err));
         }
@@ -583,7 +599,7 @@ impl Page {
     /// # use chromiumoxide::error::Result;
     /// # use chromiumoxide_cdp::cdp::browser_protocol::page::CaptureScreenshotFormat;
     /// # async fn demo(page: Page) -> Result<()> {
-    ///         page.goto("http://example.com")
+    ///         page.goto("http://example.com",None)
     ///             .await?
     ///             .save_screenshot(
     ///             ScreenshotParams::builder()

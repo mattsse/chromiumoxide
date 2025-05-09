@@ -1,9 +1,9 @@
-use std::sync::Arc;
-
 use futures::channel::mpsc::{channel, Receiver, Sender};
 use futures::channel::oneshot::channel as oneshot_channel;
 use futures::stream::Fuse;
 use futures::{SinkExt, StreamExt};
+use std::sync::Arc;
+use std::time::Duration;
 
 use chromiumoxide_cdp::cdp::browser_protocol::browser::{GetVersionParams, GetVersionReturns};
 use chromiumoxide_cdp::cdp::browser_protocol::dom::{
@@ -80,8 +80,17 @@ impl PageInner {
     }
 
     /// Create a PDL command future
-    pub(crate) fn command_future<T: Command>(&self, cmd: T) -> Result<CommandFuture<T>> {
-        CommandFuture::new(cmd, self.sender.clone(), Some(self.session_id.clone()))
+    pub(crate) fn command_future<T: Command>(
+        &self,
+        cmd: T,
+        timeout: impl Into<Option<Duration>>,
+    ) -> Result<CommandFuture<T>> {
+        CommandFuture::new(
+            cmd,
+            self.sender.clone(),
+            Some(self.session_id.clone()),
+            timeout.into(),
+        )
     }
 
     /// This creates navigation future with the final http response when the page is loaded
@@ -94,7 +103,7 @@ impl PageInner {
     pub(crate) fn http_future<T: Command>(&self, cmd: T) -> Result<HttpFuture<T>> {
         Ok(HttpFuture::new(
             self.sender.clone(),
-            self.command_future(cmd)?,
+            self.command_future(cmd, None)?,
         ))
     }
 
@@ -447,7 +456,7 @@ pub(crate) async fn execute<T: Command>(
 ) -> Result<CommandResponse<T::Response>> {
     let (tx, rx) = oneshot_channel();
     let method = cmd.identifier();
-    let msg = CommandMessage::with_session(cmd, tx, session)?;
+    let msg = CommandMessage::with_session(cmd, tx, session, None)?;
 
     sender.send(TargetMessage::Command(msg)).await?;
     let resp = rx.await??;

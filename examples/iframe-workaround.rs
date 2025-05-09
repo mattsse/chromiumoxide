@@ -38,7 +38,10 @@ async fn main() {
     //     .expect("failed to navigate");
 
     let _ = page
-        .goto("https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe")
+        .goto(
+            "https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe",
+            None,
+        )
         .await
         .expect("failed to navigate");
 }

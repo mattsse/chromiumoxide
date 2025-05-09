@@ -339,9 +339,10 @@ impl Handler {
     fn on_target_message(&mut self, target: &mut Target, msg: CommandMessage, now: Instant) {
         // if let some
         if msg.is_navigation() {
+            let timeout = msg.timeout.clone();
             let (req, tx) = msg.split();
             let id = self.next_navigation_id();
-            target.goto(FrameNavigationRequest::new(id, req));
+            target.goto(FrameNavigationRequest::new(id, req, timeout));
             self.navigations.insert(
                 id,
                 NavigationRequest::Navigate(NavigationInProgress::new(tx)),
