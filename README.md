@@ -101,7 +101,7 @@ It is possible to download and install one automatically for some platforms usin
 Ther features are currently a bit messy due to a Cargo bug and will be changed once it is resolved.
 Based on your runtime and TLS configuration you should enable one of the following:
 - `_fetcher-rustls-async-std`
-- `_fetcher-rusttls-tokio`
+- `_fetcher-rustls-tokio`
 - `_fetcher-native-async-std`
 - `_fetcher-native-tokio`
 
