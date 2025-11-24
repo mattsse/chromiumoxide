@@ -12,18 +12,23 @@ readme = "../README.md"
 include = ["src/**/*", "LICENSE-*"]
 
 [dev-dependencies]
-ureq = "2.10.0"
+reqwest = { version = "0.12", features = [
+  "rustls-tls",
+], default-features = false }
+tokio = { version = "1", features = ["rt", "fs", "macros"] }
 
 [dependencies]
 thiserror = "1"
 anyhow = "1"
-directories = "5"
-os_info = { version = "3", default-features = false }
+directories = "6"
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
 async-std = { version = "1.5", features = ["unstable"], optional = true }
 tokio = { version = "1", features = ["fs"], optional = true }
 reqwest = { version = "0.12", default-features = false, optional = true }
 surf = { version = "2.3", default-features = false, optional = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-version = "0.1"
 
 [features]
 default = ["_native-async-std"]

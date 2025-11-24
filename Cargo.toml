@@ -46,7 +46,7 @@ bytes = { version = "1", features = ["serde"], optional = true }
 reqwest = { version = "0.12", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
-winreg = "0.52"
+windows-registry = "0.5"
 
 [dev-dependencies]
 quote = "1"
@@ -65,9 +65,15 @@ serde0 = []
 
 # Temporary features until cargo weak dependencies bug is fixed
 # See https://github.com/rust-lang/cargo/issues/10801
-_fetcher-rustls-async-std = ["fetcher", "chromiumoxide_fetcher/_rustls-async-std"]
+_fetcher-rustls-async-std = [
+    "fetcher",
+    "chromiumoxide_fetcher/_rustls-async-std",
+]
 _fetcher-rustls-tokio = ["fetcher", "chromiumoxide_fetcher/_rustls-tokio"]
-_fetcher-native-async-std = ["fetcher", "chromiumoxide_fetcher/_native-async-std"]
+_fetcher-native-async-std = [
+    "fetcher",
+    "chromiumoxide_fetcher/_native-async-std",
+]
 _fetcher-native-tokio = ["fetcher", "chromiumoxide_fetcher/_native-tokio"]
 
 [[example]]

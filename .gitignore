@@ -2,3 +2,4 @@
 /download
 Cargo.lock
 .idea/
+.cache/

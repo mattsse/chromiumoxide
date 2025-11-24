@@ -84,14 +84,33 @@ impl Platform {
             Some(Self::Win64)
         } else if cfg!(all(target_os = "windows", target_arch = "aarch64")) {
             // x64 emulation is available for windows 11
-            if let os_info::Version::Semantic(major, _, _) = os_info::get().version() {
-                if *major > 10 {
-                    return Some(Self::Win64);
-                }
+            if is_windows_11() {
+                Some(Self::Win64)
+            } else {
+                None
             }
-            None
         } else {
             None
         }
     }
+}
+
+#[cfg(target_os = "windows")]
+fn is_windows_11() -> bool {
+    // Windows 11 shares dwMajorVersion with Windows 10
+    // this workaround tries to disambiguate that by checking
+    // if the dwBuildNumber is from Windows 11 releases (>= 22000).
+    let version = windows_version::OsVersion::current();
+    if version.major > 10 {
+        true
+    } else if version.major == 10 && version.build >= 22000 {
+        true
+    } else {
+        false
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn is_windows_11() -> bool {
+    false
 }

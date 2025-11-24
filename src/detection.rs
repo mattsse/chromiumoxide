@@ -151,13 +151,13 @@ fn get_by_path(options: &DetectionOptions) -> Option<PathBuf> {
 
 #[cfg(windows)]
 fn get_by_registry() -> Option<PathBuf> {
-    winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE)
-        .open_subkey("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\chrome.exe")
+    windows_registry::LOCAL_MACHINE
+        .open("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\chrome.exe")
         .or_else(|_| {
-            winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
-                .open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\chrome.exe")
+            windows_registry::CURRENT_USER
+                .open("Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\chrome.exe")
         })
-        .and_then(|key| key.get_value::<String, _>(""))
+        .and_then(|key| key.get_string(""))
         .map(PathBuf::from)
         .ok()
 }
