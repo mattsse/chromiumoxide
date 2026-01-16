@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Use a struct `Arg` for arguments to combine flags automatically
+- Browser process no longer inherits stdout
 
 ### Added
 

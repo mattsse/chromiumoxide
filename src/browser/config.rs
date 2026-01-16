@@ -448,7 +448,7 @@ impl BrowserConfig {
         if let Some(ref envs) = self.process_envs {
             cmd.envs(envs);
         }
-        cmd.stderr(Stdio::piped()).spawn()
+        cmd.stdout(Stdio::null()).stderr(Stdio::piped()).spawn()
     }
 }
 

@@ -54,6 +54,11 @@ impl Command {
         self
     }
 
+    pub fn stdout<T: Into<Stdio>>(&mut self, cfg: T) -> &mut Self {
+        self.inner.stdout(cfg);
+        self
+    }
+
     pub fn stderr<T: Into<Stdio>>(&mut self, cfg: T) -> &mut Self {
         self.inner.stderr(cfg);
         self
