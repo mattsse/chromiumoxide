@@ -192,29 +192,7 @@ impl PageInner {
     /// Performs a mouse click event at the point's location
     pub async fn click(&self, point: Point) -> Result<&Self> {
         let default_opts = chromiumoxide_types::ClickOptions::default();
-        let cmd = DispatchMouseEventParams::builder()
-            .x(point.x)
-            .y(point.y)
-            .button(MouseButton::Left)
-            .click_count(default_opts.click_count);
-
-        self.move_mouse(point)
-            .await?
-            .execute(
-                cmd.clone()
-                    .r#type(DispatchMouseEventType::MousePressed)
-                    .build()
-                    .unwrap(),
-            )
-            .await?;
-
-        self.execute(
-            cmd.r#type(DispatchMouseEventType::MouseReleased)
-                .build()
-                .unwrap(),
-        )
-        .await?;
-        Ok(self)
+        self.click_with(point, default_opts).await
     }
 
     /// Performs a mouse click event at the point's location with custom options
