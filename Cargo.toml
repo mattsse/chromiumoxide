@@ -64,7 +64,7 @@ zip8 = ["dep:chromiumoxide_fetcher", "chromiumoxide_fetcher/zip8"]
 
 [[example]]
 name = "fetcher"
-required-features = ["fetcher", "zip8", "rustls"]
+required-features = ["fetcher"]
 
 [[test]]
 name = "chromiumoxide_tests"
