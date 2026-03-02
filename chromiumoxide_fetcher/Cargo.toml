@@ -48,3 +48,5 @@ default = ["rustls", "zip8"]
 
 rustls = ["reqwest/rustls"]
 native-tls = ["reqwest/native-tls"]
+zip0 = ["dep:zip0"]
+zip8 = ["dep:zip8"]

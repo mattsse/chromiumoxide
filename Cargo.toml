@@ -53,14 +53,14 @@ tokio = { version = "1", features = ["rt-multi-thread", "time", "macros"] }
 
 [features]
 default = ["bytes"]
-fetcher = ["chromiumoxide_fetcher"]
+fetcher = ["rustls","zip8"] # If that feature enabled, fetcher + default features automatically enabled
 bytes = ["dep:bytes"]
 
-rustls = ["chromiumoxide_fetcher/rustls"]
-native-tls = ["chromiumoxide_fetcher/native-tls"]
+rustls = ["dep:chromiumoxide_fetcher", "chromiumoxide_fetcher/rustls"]
+native-tls = ["dep:chromiumoxide_fetcher", "chromiumoxide_fetcher/native-tls"]
 
-zip0 = ["chromiumoxide_fetcher/zip0"]
-zip8 = ["chromiumoxide_fetcher/zip8"]
+zip0 = ["dep:chromiumoxide_fetcher", "chromiumoxide_fetcher/zip0"]
+zip8 = ["dep:chromiumoxide_fetcher", "chromiumoxide_fetcher/zip8"]
 
 [[example]]
 name = "fetcher"
