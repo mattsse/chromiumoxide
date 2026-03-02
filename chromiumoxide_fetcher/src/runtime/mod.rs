@@ -23,7 +23,7 @@ impl Runtime {
         let url = url
             .parse::<reqwest::Url>()
             .context("Invalid metadata url")?;
-        let res = reqwest::get(url)
+        let res = request_get(url)
             .await
             .context("Failed to send request to host")?;
         if res.status() != reqwest::StatusCode::OK {
@@ -40,7 +40,7 @@ impl Runtime {
         let url = url
             .parse::<reqwest::Url>()
             .context("Invalid metadata url")?;
-        let res = reqwest::get(url)
+        let res = request_get(url)
             .await
             .context("Failed to send request to host")?;
         if res.status() != reqwest::StatusCode::OK {
@@ -59,7 +59,7 @@ impl Runtime {
 
         // Download
         let url = url.parse::<reqwest::Url>().context("Invalid archive url")?;
-        let mut res = reqwest::get(url)
+        let mut res = request_get(url)
             .await
             .context("Failed to send request to host")?;
         if res.status() != reqwest::StatusCode::OK {
@@ -80,6 +80,16 @@ impl Runtime {
     pub async fn unzip(archive_path: PathBuf, folder_path: PathBuf) -> anyhow::Result<()> {
         tokio::task::spawn_blocking(move || do_unzip(&archive_path, &folder_path)).await?
     }
+}
+
+async fn request_get(url: reqwest::Url) -> anyhow::Result<reqwest::Response> {
+    let builder = reqwest::Client::builder();
+    #[cfg(feature = "native-tls")]
+    let builder = builder.use_native_tls();
+    #[cfg(all(not(feature = "native-tls"), feature = "rustls"))]
+    let builder = builder.use_rustls_tls();
+    let client = builder.build().context("Failed to build HTTP client")?;
+    client.get(url).send().await.context("Request failed")
 }
 
 fn do_unzip(archive_path: &Path, folder_path: &Path) -> anyhow::Result<()> {
