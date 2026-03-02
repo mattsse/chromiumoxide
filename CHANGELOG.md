@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed feature configuration for `zip0` and `zip8` backends to prevent simultaneous activation.
+- Added compile-time guard to enforce mutual exclusivity between `zip0` and `zip8`.
+- Corrected feature propagation for the `fetcher` backend selection.
+
 ## [0.9.1] 2026-02-25
 
 ### Fixed
