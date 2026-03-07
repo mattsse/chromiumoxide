@@ -1,6 +1,8 @@
 use std::time::Duration;
 
 use chromiumoxide::{BrowserConfig, Page};
+use chromiumoxide_cdp::cdp::browser_protocol::page::CreateIsolatedWorldParams;
+use chromiumoxide_cdp::cdp::js_protocol::runtime::EvaluateParams;
 use serde::Deserialize;
 use tokio::time::sleep;
 
@@ -29,6 +31,7 @@ async fn test_bot_detection() {
         test_sourceurlleak(&page).await;
         test_runtimeenableleak(&page).await;
         test_exposefnleak(&page).await;
+        test_mainworldexecution_isolated_world(&page).await;
         test_navigator_webdriver(&page).await;
         test_viewport(&page).await;
         test_initscripts(&page).await;
@@ -69,6 +72,16 @@ async fn test_runtimeenableleak(page: &Page) {
     let result = get_result(page, "runtimeEnableLeak").await.unwrap();
     assert!(result.rating < 0.0, "{}", result.note)
 }
+
+// can be skipped
+async fn test_mainworldexecution_isolated_world(page: &Page) {
+    eval_in_isolated_world(page, "document.getElementsByClassName('div')")
+        .await
+        .unwrap();
+    let result = get_result(page, "mainWorldExecution").await.unwrap();
+    assert!(result.rating <= 0.0, "{}", result.note)
+}
+
 async fn test_sourceurlleak(page: &Page) {
     page.evaluate("document.getElementById('detections-json')")
         .await
@@ -81,6 +94,37 @@ async fn test_dummyfn(page: &Page) {
     page.evaluate("window.dummyFn()").await.unwrap();
     let result = get_result(page, "dummyFn").await.unwrap();
     assert!(result.rating < 0.0, "{}", result.note)
+}
+
+async fn eval_in_isolated_world(page: &Page, script: &str) -> chromiumoxide::error::Result<()> {
+    let frame_id = page
+        .mainframe()
+        .await?
+        .ok_or(chromiumoxide::error::CdpError::NotFound)?;
+
+    let isolated_world = page
+        .execute(
+            CreateIsolatedWorldParams::builder()
+                .frame_id(frame_id)
+                .world_name("rebrowser_test_world")
+                .grant_univeral_access(true)
+                .build()
+                .unwrap(),
+        )
+        .await?;
+
+    page.execute(
+        EvaluateParams::builder()
+            .expression(script)
+            .context_id(isolated_world.result.execution_context_id)
+            .await_promise(true)
+            .return_by_value(true)
+            .build()
+            .unwrap(),
+    )
+    .await?;
+
+    Ok(())
 }
 
 async fn get_result(page: &Page, target_kind: &str) -> Option<DetectionRow> {
