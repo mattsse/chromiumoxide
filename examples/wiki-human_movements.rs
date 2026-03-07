@@ -15,7 +15,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    let page = browser.new_page("https://en.wikipedia.org").await?;
+    let page = browser.new_page("about:blank").await?;
     // Add mouse dot injection script to see human-like mouse movements
     page.evaluate_on_new_document(
         r#"
@@ -52,6 +52,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "#,
     )
     .await?;
+    page.goto("https://en.wikipedia.org").await?;
     let human_click = ClickOptions::builder()
         .movement_behavior(Some(MovementBehavior::BezierPath))
         .build();
