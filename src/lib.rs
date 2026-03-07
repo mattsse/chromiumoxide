@@ -73,9 +73,9 @@ pub use crate::element::Element;
 pub use crate::error::Result;
 #[cfg(feature = "fetcher")]
 pub use crate::fetcher::{BrowserFetcher, BrowserFetcherOptions};
+pub use crate::handler::{ClickOptions, ClickOptionsBuilder};
 pub use crate::handler::Handler;
 pub use crate::handler::movement::MovementBehavior;
-pub use crate::handler::page::ClickOptions;
 pub use crate::page::Page;
 
 pub mod types {
@@ -85,7 +85,7 @@ pub mod types {
         since = "0.9.1",
         note = "Use `chromiumoxide::ClickOptions` instead of `chromiumoxide::types::ClickOptions`."
     )]
-    pub use crate::ClickOptions;
+    pub use crate::{ClickOptions, ClickOptionsBuilder};
 }
 
 pub mod auth;

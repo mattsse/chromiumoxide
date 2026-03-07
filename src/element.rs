@@ -19,8 +19,8 @@ use chromiumoxide_cdp::cdp::js_protocol::runtime::{
 };
 
 use crate::error::{CdpError, Result};
+use crate::handler::ClickOptions;
 use crate::handler::PageInner;
-use crate::handler::page::ClickOptions;
 use crate::layout::{BoundingBox, BoxModel, ElementQuad, Point};
 use crate::utils;
 
