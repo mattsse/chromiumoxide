@@ -40,8 +40,6 @@ use crate::js::EvaluationResult;
 use crate::layout::Point;
 use crate::page::ScreenshotParams;
 use crate::{ArcHttpRequest, keys, utils};
-#[cfg(feature = "human_movements")]
-use rand::RngExt;
 
 /// Options that control how a click action is performed.
 #[derive(Clone, Debug)]
@@ -260,6 +258,76 @@ impl PageInner {
         Ok(self)
     }
 
+    /// Scrolls the page by the given signed vertical delta at a point.
+    ///
+    /// Positive values scroll down, negative values scroll up.
+    pub async fn scroll(&self, point: Point, delta_y: i32) -> Result<&Self> {
+        #[cfg(feature = "human_movements")]
+        {
+            // Number of scroll steps (more steps = smoother)
+            let steps = (delta_y.abs() / 50).clamp(3, 15) as usize;
+            let mut remaining = delta_y;
+
+            for i in 0..steps {
+                // Ease-in/ease-out: scroll less at start and end
+                let progress = i as f64 / steps as f64;
+                let ease = if progress < 0.3 {
+                    progress / 0.3 * 0.5 + 0.5
+                } else if progress > 0.7 {
+                    (1.0 - progress) / 0.3 * 0.5 + 0.5
+                } else {
+                    1.0
+                };
+
+                let base_step = remaining / (steps - i) as i32;
+                let jitter = rand::random_range(-10..10);
+                let step = ((base_step as f64 * ease) as i32 + jitter).clamp(-200, 200);
+
+                if step == 0 {
+                    continue;
+                }
+
+                self.execute(
+                    DispatchMouseEventParams::builder()
+                        .r#type(DispatchMouseEventType::MouseWheel)
+                        .x(point.x)
+                        .y(point.y)
+                        .button(MouseButton::None)
+                        .delta_x(0.0)
+                        .delta_y(step as f64)
+                        .build()
+                        .unwrap(),
+                )
+                .await?;
+                remaining -= step;
+
+                // Variable delay between scroll events (16-50ms for 60-20 FPS feel)
+                tokio::time::sleep(tokio::time::Duration::from_millis(rand::random_range(
+                    16..50,
+                )))
+                .await;
+            }
+        }
+
+        #[cfg(not(feature = "human_movements"))]
+        {
+            self.execute(
+                DispatchMouseEventParams::builder()
+                    .r#type(DispatchMouseEventType::MouseWheel)
+                    .x(point.x)
+                    .y(point.y)
+                    .button(MouseButton::None)
+                    .delta_x(0.0)
+                    .delta_y(delta_y as f64)
+                    .build()
+                    .unwrap(),
+            )
+            .await?;
+        }
+
+        Ok(self)
+    }
+
     /// Returns the current mouse position tracked by this page.
     pub fn mouse_pos(&self) -> Point {
         *self.mouse_position.lock().unwrap()
@@ -285,9 +353,8 @@ impl PageInner {
             {
                 //TODO: Make it optionable
                 // Target Selection Jitter: don't land exactly on the pixel
-                let mut rng = rand::rng();
-                let jitter_x = rng.random_range(-2.0..2.0);
-                let jitter_y = rng.random_range(-2.0..2.0);
+                let jitter_x = rand::random_range(-2.0..2.0);
+                let jitter_y = rand::random_range(-2.0..2.0);
 
                 Point {
                     x: point.x + jitter_x,

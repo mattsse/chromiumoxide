@@ -680,6 +680,28 @@ impl Page {
         Ok(self)
     }
 
+    /// Scrolls the page by a signed vertical delta at the given point.
+    ///
+    /// Positive values scroll down, negative values scroll up.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use chromiumoxide::page::Page;
+    /// # use chromiumoxide::error::Result;
+    /// # use chromiumoxide::layout::Point;
+    /// # async fn demo(page: Page) -> Result<()> {
+    ///     let point = Point::new(400.0, 300.0);
+    ///     page.scroll(point, 600).await?;
+    ///     page.scroll(point, -250).await?;
+    ///     # Ok(())
+    /// # }
+    /// ```
+    pub async fn scroll(&self, point: Point, delta_y: i32) -> Result<&Self> {
+        self.inner.scroll(point, delta_y).await?;
+        Ok(self)
+    }
+
     /// Returns the current mouse position tracked by this page.
     pub fn mouse_pos(&self) -> Point {
         self.inner.mouse_pos()
