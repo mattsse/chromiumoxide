@@ -680,6 +680,11 @@ impl Page {
         Ok(self)
     }
 
+    /// Returns the current mouse position tracked by this page.
+    pub fn mouse_pos(&self) -> Point {
+        self.inner.mouse_pos()
+    }
+
     /// Take a screenshot of the current page
     pub async fn screenshot(&self, params: impl Into<ScreenshotParams>) -> Result<Vec<u8>> {
         self.inner.screenshot(params).await

@@ -260,6 +260,11 @@ impl PageInner {
         Ok(self)
     }
 
+    /// Returns the current mouse position tracked by this page.
+    pub fn mouse_pos(&self) -> Point {
+        *self.mouse_position.lock().unwrap()
+    }
+
     /// Performs a mouse click event at the point's location
     pub async fn click(&self, point: Point) -> Result<&Self> {
         let default_opts = ClickOptions::default();
