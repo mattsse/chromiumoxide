@@ -33,6 +33,7 @@ use crate::handler::PageInner;
 use crate::handler::commandfuture::CommandFuture;
 use crate::handler::domworld::DOMWorldKind;
 use crate::handler::httpfuture::HttpFuture;
+use crate::handler::page::ClickOptions;
 use crate::handler::target::{GetName, GetParent, GetUrl, TargetMessage};
 use crate::js::{Evaluation, EvaluationResult};
 use crate::layout::Point;
@@ -152,12 +153,12 @@ impl Page {
                 });
                 Object.defineProperty(fakePlugins, 'length', { value: plugins.length, enumerable: true });
                 // Add methods
-                Object.defineProperty(fakePlugins, 'item', { 
+                Object.defineProperty(fakePlugins, 'item', {
                     value: function(index) { return this[index] || null; },
                     enumerable: false
                 });
-                Object.defineProperty(fakePlugins, 'namedItem', { 
-                    value: function(name) { 
+                Object.defineProperty(fakePlugins, 'namedItem', {
+                    value: function(name) {
                         for (let i = 0; i < this.length; i++) {
                             if (this[i].name === name) return this[i];
                         }
@@ -166,7 +167,7 @@ impl Page {
                     enumerable: false
                 });
 
-                Object.defineProperty(fakePlugins, 'refresh', { 
+                Object.defineProperty(fakePlugins, 'refresh', {
                     value: function() {},
                     enumerable: false
                 });
@@ -577,10 +578,11 @@ impl Page {
     /// # use chromiumoxide::page::Page;
     /// # use chromiumoxide::error::Result;
     /// # use chromiumoxide::layout::Point;
-    /// # use chromiumoxide::types::ClickOptions;
+    /// # use chromiumoxide::{ClickOptions, MovementBehavior};
     /// # async fn demo(page: Page, point: Point) -> Result<()> {
     ///     let options = ClickOptions::builder()
     ///         .click_count(2)
+    ///         .movement_behavior(Some(MovementBehavior::LinearPath))
     ///         .build();
     ///
     ///     page.click_with(point, options).await?;
@@ -651,10 +653,11 @@ impl Page {
     /// # use chromiumoxide::page::Page;
     /// # use chromiumoxide::error::Result;
     /// # use chromiumoxide::layout::Point;
-    /// # use chromiumoxide::types::ClickOptions;
+    /// # use chromiumoxide::{ClickOptions, MovementBehavior};
     /// # async fn demo(page: Page, point: Point) -> Result<()> {
     ///     let options = ClickOptions::builder()
     ///         .click_count(2)
+    ///         .movement_behavior(MovementBehavior::LinearPath)
     ///         .build();
     ///
     ///     page.click_with(point, options)

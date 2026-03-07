@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use futures::channel::mpsc::{Receiver, Sender, channel};
 use futures::channel::oneshot::channel as oneshot_channel;
@@ -32,12 +32,83 @@ use crate::error::{CdpError, Result};
 use crate::handler::commandfuture::CommandFuture;
 use crate::handler::domworld::DOMWorldKind;
 use crate::handler::httpfuture::HttpFuture;
+use crate::handler::movement::{MovementBehavior, movement_path};
 use crate::handler::target::{GetExecutionContext, TargetMessage};
 use crate::handler::target_message_future::TargetMessageFuture;
 use crate::js::EvaluationResult;
 use crate::layout::Point;
 use crate::page::ScreenshotParams;
 use crate::{ArcHttpRequest, keys, utils};
+
+/// Options that control how a click action is performed.
+#[derive(Clone, Debug)]
+pub struct ClickOptions {
+    /// Number of times the click action should be executed.
+    ///
+    /// A value of `1` represents a single click.
+    pub click_count: i64,
+    /// Optional movement behavior for cursor path.
+    ///
+    /// `None` disables behavior-based path generation.
+    pub movement_behavior: Option<MovementBehavior>,
+}
+
+impl Default for ClickOptions {
+    fn default() -> Self {
+        Self {
+            click_count: 1,
+            movement_behavior: None,
+        }
+    }
+}
+
+impl ClickOptions {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn builder() -> ClickOptionsBuilder {
+        ClickOptionsBuilder::default()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ClickOptionsBuilder {
+    click_count: i64,
+    movement_behavior: Option<MovementBehavior>,
+}
+
+impl Default for ClickOptionsBuilder {
+    fn default() -> Self {
+        Self {
+            click_count: 1,
+            movement_behavior: None,
+        }
+    }
+}
+
+impl ClickOptionsBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn click_count(mut self, count: impl Into<i64>) -> Self {
+        self.click_count = count.into();
+        self
+    }
+
+    pub fn movement_behavior(mut self, behavior: Option<impl Into<MovementBehavior>>) -> Self {
+        self.movement_behavior = behavior.map(Into::into);
+        self
+    }
+
+    pub fn build(self) -> ClickOptions {
+        ClickOptions {
+            click_count: self.click_count,
+            movement_behavior: self.movement_behavior,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct PageHandle {
@@ -53,6 +124,7 @@ impl PageHandle {
             session_id,
             opener_id,
             sender: commands,
+            mouse_position: Mutex::new(Point::new(0.0, 0.0)),
         };
         Self {
             rx: rx.fuse(),
@@ -71,6 +143,7 @@ pub(crate) struct PageInner {
     session_id: SessionId,
     opener_id: Option<TargetId>,
     sender: Sender<TargetMessage>,
+    mouse_position: Mutex<Point>,
 }
 
 impl PageInner {
@@ -115,6 +188,21 @@ impl PageInner {
 
     pub(crate) fn sender(&self) -> &Sender<TargetMessage> {
         &self.sender
+    }
+
+    fn mouse_position(&self) -> Point {
+        *self
+            .mouse_position
+            .lock()
+            .expect("mouse_position lock poisoned")
+    }
+
+    fn set_mouse_position(&self, point: Point) {
+        let mut guard = self
+            .mouse_position
+            .lock()
+            .expect("mouse_position lock poisoned");
+        *guard = point;
     }
 
     /// Returns the first element in the node which matches the given CSS
@@ -180,42 +268,36 @@ impl PageInner {
 
     /// Moves the mouse to this point (dispatches a mouseMoved event)
     pub async fn move_mouse(&self, point: Point) -> Result<&Self> {
-        self.execute(DispatchMouseEventParams::new(
-            DispatchMouseEventType::MouseMoved,
-            point.x,
-            point.y,
-        ))
-        .await?;
+        self.move_mouse_with_behavior(point, None).await?;
         Ok(self)
     }
 
     /// Performs a mouse click event at the point's location
     pub async fn click(&self, point: Point) -> Result<&Self> {
-        let default_opts = chromiumoxide_types::ClickOptions::default();
+        let default_opts = ClickOptions::default();
         self.click_with(point, default_opts).await
     }
 
     /// Performs a mouse click event at the point's location with custom options
-    pub async fn click_with(
-        &self,
-        point: Point,
-        options: chromiumoxide_types::ClickOptions,
-    ) -> Result<&Self> {
+    pub async fn click_with(&self, point: Point, options: ClickOptions) -> Result<&Self> {
+        let movement_behavior = options.movement_behavior.as_ref();
+
         let cmd = DispatchMouseEventParams::builder()
             .x(point.x)
             .y(point.y)
             .button(MouseButton::Left)
             .click_count(options.click_count);
 
-        self.move_mouse(point)
-            .await?
-            .execute(
-                cmd.clone()
-                    .r#type(DispatchMouseEventType::MousePressed)
-                    .build()
-                    .unwrap(),
-            )
+        self.move_mouse_with_behavior(point, movement_behavior)
             .await?;
+
+        self.execute(
+            cmd.clone()
+                .r#type(DispatchMouseEventType::MousePressed)
+                .build()
+                .unwrap(),
+        )
+        .await?;
 
         self.execute(
             cmd.r#type(DispatchMouseEventType::MouseReleased)
@@ -273,6 +355,44 @@ impl PageInner {
         self.execute(cmd.r#type(DispatchKeyEventType::KeyUp).build().unwrap())
             .await?;
         Ok(self)
+    }
+
+    async fn move_mouse_with_behavior(
+        &self,
+        point: Point,
+        behavior: Option<&MovementBehavior>,
+    ) -> Result<()> {
+        match behavior {
+            Some(behavior) => {
+                let start = self.mouse_position();
+                let path = movement_path(start, point, behavior);
+                for (idx, path_point) in path.iter().enumerate() {
+                    let (x, y) = (path_point.x, path_point.y);
+
+                    self.execute(DispatchMouseEventParams::new(
+                        DispatchMouseEventType::MouseMoved,
+                        x,
+                        y,
+                    ))
+                    .await?;
+
+                    if idx + 1 != path.len() {
+                        tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+                    }
+                }
+            }
+            None => {
+                self.execute(DispatchMouseEventParams::new(
+                    DispatchMouseEventType::MouseMoved,
+                    point.x,
+                    point.y,
+                ))
+                .await?;
+            }
+        }
+
+        self.set_mouse_position(point);
+        Ok(())
     }
 
     /// Calls function with given declaration on the remote object with the

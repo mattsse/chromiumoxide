@@ -65,7 +65,7 @@ use std::sync::Arc;
 
 /// reexport the generated cdp types
 pub use chromiumoxide_cdp::cdp;
-pub use chromiumoxide_types::{self as types, Binary, Command, Method, MethodType};
+pub use chromiumoxide_types::{Binary, Command, Method, MethodType};
 
 pub use crate::browser::{Browser, BrowserConfig};
 pub use crate::conn::Connection;
@@ -74,7 +74,19 @@ pub use crate::error::Result;
 #[cfg(feature = "fetcher")]
 pub use crate::fetcher::{BrowserFetcher, BrowserFetcherOptions};
 pub use crate::handler::Handler;
+pub use crate::handler::movement::MovementBehavior;
+pub use crate::handler::page::ClickOptions;
 pub use crate::page::Page;
+
+pub mod types {
+    pub use chromiumoxide_types::*;
+
+    #[deprecated(
+        since = "0.9.1",
+        note = "Use `chromiumoxide::ClickOptions` instead of `chromiumoxide::types::ClickOptions`."
+    )]
+    pub use crate::ClickOptions;
+}
 
 pub mod auth;
 pub mod browser;
