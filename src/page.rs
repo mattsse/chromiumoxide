@@ -29,6 +29,7 @@ use chromiumoxide_types::*;
 use crate::auth::Credentials;
 use crate::element::Element;
 use crate::error::{CdpError, Result};
+use crate::handler::ClickOptions;
 use crate::handler::PageInner;
 use crate::handler::commandfuture::CommandFuture;
 use crate::handler::domworld::DOMWorldKind;
@@ -152,12 +153,12 @@ impl Page {
                 });
                 Object.defineProperty(fakePlugins, 'length', { value: plugins.length, enumerable: true });
                 // Add methods
-                Object.defineProperty(fakePlugins, 'item', { 
+                Object.defineProperty(fakePlugins, 'item', {
                     value: function(index) { return this[index] || null; },
                     enumerable: false
                 });
-                Object.defineProperty(fakePlugins, 'namedItem', { 
-                    value: function(name) { 
+                Object.defineProperty(fakePlugins, 'namedItem', {
+                    value: function(name) {
                         for (let i = 0; i < this.length; i++) {
                             if (this[i].name === name) return this[i];
                         }
@@ -166,7 +167,7 @@ impl Page {
                     enumerable: false
                 });
 
-                Object.defineProperty(fakePlugins, 'refresh', { 
+                Object.defineProperty(fakePlugins, 'refresh', {
                     value: function() {},
                     enumerable: false
                 });
@@ -577,10 +578,11 @@ impl Page {
     /// # use chromiumoxide::page::Page;
     /// # use chromiumoxide::error::Result;
     /// # use chromiumoxide::layout::Point;
-    /// # use chromiumoxide::types::ClickOptions;
+    /// # use chromiumoxide::{ClickOptions, MovementBehavior};
     /// # async fn demo(page: Page, point: Point) -> Result<()> {
     ///     let options = ClickOptions::builder()
     ///         .click_count(2)
+    ///         .movement_behavior(Some(MovementBehavior::LinearPath))
     ///         .build();
     ///
     ///     page.click_with(point, options).await?;
@@ -651,10 +653,11 @@ impl Page {
     /// # use chromiumoxide::page::Page;
     /// # use chromiumoxide::error::Result;
     /// # use chromiumoxide::layout::Point;
-    /// # use chromiumoxide::types::ClickOptions;
+    /// # use chromiumoxide::{ClickOptions, MovementBehavior};
     /// # async fn demo(page: Page, point: Point) -> Result<()> {
     ///     let options = ClickOptions::builder()
     ///         .click_count(2)
+    ///         .movement_behavior(MovementBehavior::LinearPath)
     ///         .build();
     ///
     ///     page.click_with(point, options)
@@ -675,6 +678,33 @@ impl Page {
     pub async fn move_mouse(&self, point: Point) -> Result<&Self> {
         self.inner.move_mouse(point).await?;
         Ok(self)
+    }
+
+    /// Scrolls the page by a signed vertical delta at the given point.
+    ///
+    /// Positive values scroll down, negative values scroll up.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use chromiumoxide::page::Page;
+    /// # use chromiumoxide::error::Result;
+    /// # use chromiumoxide::layout::Point;
+    /// # async fn demo(page: Page) -> Result<()> {
+    ///     let point = Point::new(400.0, 300.0);
+    ///     page.scroll(point, 600).await?;
+    ///     page.scroll(point, -250).await?;
+    ///     # Ok(())
+    /// # }
+    /// ```
+    pub async fn scroll(&self, point: Point, delta_y: i32) -> Result<&Self> {
+        self.inner.scroll(point, delta_y).await?;
+        Ok(self)
+    }
+
+    /// Returns the current mouse position tracked by this page.
+    pub fn mouse_pos(&self) -> Point {
+        self.inner.mouse_pos()
     }
 
     /// Take a screenshot of the current page

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add `scroll` method to `Page`
+- Add simulated mouse movement
+- Add `human_movements` feature for human like mouse movement and click jitter
+- Add `mouse_pos` method to `Page`
+
+### Changed
+
+- Moved `ClickOptions` and `ClickOptionsBuilder` to `chromiumoxide::handler`
+
 ## [0.9.1] 2026-02-25
 
 ### Fixed

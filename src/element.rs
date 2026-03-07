@@ -4,7 +4,6 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use chromiumoxide_types::ClickOptions;
 use futures::{Future, FutureExt, Stream, future};
 
 use chromiumoxide_cdp::cdp::browser_protocol::dom::{
@@ -20,6 +19,7 @@ use chromiumoxide_cdp::cdp::js_protocol::runtime::{
 };
 
 use crate::error::{CdpError, Result};
+use crate::handler::ClickOptions;
 use crate::handler::PageInner;
 use crate::layout::{BoundingBox, BoxModel, ElementQuad, Point};
 use crate::utils;

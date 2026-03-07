@@ -16,6 +16,7 @@ use chromiumoxide_cdp::cdp::events::CdpEventMessage;
 use chromiumoxide_types::{CallId, Message, Method, Response};
 use chromiumoxide_types::{MethodId, Request as CdpRequest};
 pub(crate) use page::PageInner;
+pub use {page::ClickOptions, page::ClickOptionsBuilder};
 
 use crate::cmd::{CommandMessage, to_command_response};
 use crate::conn::Connection;
@@ -41,6 +42,7 @@ pub mod frame;
 pub mod http;
 pub mod httpfuture;
 mod job;
+pub mod movement;
 pub mod network;
 mod page;
 mod session;
