@@ -1,4 +1,5 @@
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use futures::channel::mpsc::{Receiver, Sender, channel};
 use futures::channel::oneshot::channel as oneshot_channel;
@@ -39,6 +40,8 @@ use crate::js::EvaluationResult;
 use crate::layout::Point;
 use crate::page::ScreenshotParams;
 use crate::{ArcHttpRequest, keys, utils};
+#[cfg(feature = "human_movements")]
+use rand::RngExt;
 
 /// Options that control how a click action is performed.
 #[derive(Clone, Debug)]
@@ -282,8 +285,8 @@ impl PageInner {
                 let jitter_y = rng.random_range(-2.0..2.0);
 
                 Point {
-                    x: end.x + jitter_x,
-                    y: end.y + jitter_y,
+                    x: point.x + jitter_x,
+                    y: point.y + jitter_y,
                 }
             }
         };
@@ -300,8 +303,7 @@ impl PageInner {
         {
             // Small pause before clicking (humans don't click instantly after arriving)
             if movement_behavior.is_some() {
-                let mut rng = rand::thread_rng();
-                tokio::time::sleep(Duration::from_millis(rng.gen_range(50..=150))).await;
+                tokio::time::sleep(Duration::from_millis(rand::random_range(50..=150))).await;
             }
         }
         self.execute(
@@ -322,8 +324,7 @@ impl PageInner {
         {
             // Small pause after clicking
             if movement_behavior.is_some() {
-                let mut rng = rand::thread_rng();
-                tokio::time::sleep(Duration::from_millis(rng.gen_range(35..=110))).await;
+                tokio::time::sleep(Duration::from_millis(rand::random_range(35..=110))).await;
             }
         }
         Ok(self)
@@ -351,7 +352,11 @@ impl PageInner {
         let key_definition = keys::get_key_definition(key)
             .ok_or_else(|| CdpError::msg(format!("Key not found: {key}")))?;
         let mut cmd = DispatchKeyEventParams::builder();
-
+        #[cfg(feature = "human_movements")]
+        {
+            // Small delay to simulate human typing (humans doesnt directly type +300WPM)
+            tokio::time::sleep(Duration::from_millis(rand::random_range(12..=60))).await;
+        }
         // See https://github.com/GoogleChrome/puppeteer/blob/62da2366c65b335751896afbb0206f23c61436f1/lib/Input.js#L114-L115
         // And https://github.com/GoogleChrome/puppeteer/blob/62da2366c65b335751896afbb0206f23c61436f1/lib/Input.js#L52
         let key_down_event_type = if let Some(txt) = key_definition.text {
@@ -375,6 +380,11 @@ impl PageInner {
             .await?;
         self.execute(cmd.r#type(DispatchKeyEventType::KeyUp).build().unwrap())
             .await?;
+        #[cfg(feature = "human_movements")]
+        {
+            // Small delay to simulate human typing
+            tokio::time::sleep(Duration::from_millis(rand::random_range(24..=65))).await;
+        }
         Ok(self)
     }
 
@@ -383,8 +393,6 @@ impl PageInner {
         point: Point,
         behavior: Option<&MovementBehavior>,
     ) -> Result<()> {
-        #[cfg(feature = "human_movements")]
-        let mut rng = rand::rng();
         match behavior {
             Some(behavior) => {
                 let start = { *self.mouse_position.lock().unwrap() };
@@ -403,12 +411,9 @@ impl PageInner {
                     // Tiny delay to simulate physical movement
                     if idx + 1 != path.len() {
                         #[cfg(feature = "human_movements")]
-                        tokio::time::sleep(tokio::time::Duration::from_millis(
-                            rng.random_range(5..15),
-                        ))
-                        .await;
+                        tokio::time::sleep(Duration::from_millis(rand::random_range(5..15))).await;
                         #[cfg(not(feature = "human_movements"))]
-                        tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+                        tokio::time::sleep(Duration::from_millis(1)).await;
                     }
                 }
             }

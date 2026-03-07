@@ -1,6 +1,4 @@
 use crate::layout::Point;
-#[cfg(feature = "human_movements")]
-use rand::Rng;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MovementBehavior {
@@ -23,7 +21,7 @@ fn linear_path(start: Point, target: Point) -> Vec<Point> {
     let dx = target.x - start.x;
     let dy = target.y - start.y;
     let distance = (dx * dx + dy * dy).sqrt();
-    let steps = ((distance / 32.0).ceil() as usize).clamp(2, 24);
+    let steps = ((distance / 32.0).ceil() as usize).clamp(2, 32);
 
     let mut points = Vec::with_capacity(steps);
     for step in 1..=steps {
@@ -41,34 +39,37 @@ fn bezier_path(start: Point, target: Point) -> Vec<Point> {
 
 #[cfg(feature = "human_movements")]
 fn bezier_path(start: Point, target: Point) -> Vec<Point> {
-    let mut rng = rand::rng();
+    let dx = target.x - start.x;
+    let dy = target.y - start.y;
+    let distance = (dx * dx + dy * dy).sqrt();
+    let steps = ((distance / 32.0).ceil() as usize).clamp(2, 32);
     let mut path = Vec::with_capacity(steps);
 
     // Calculate distance for offset scaling
-    let dist = ((end.x - start.x).powi(2) + (end.y - start.y).powi(2)).sqrt();
+    let dist = ((target.x - start.x).powi(2) + (target.y - start.y).powi(2)).sqrt();
     let offset_range = dist * 0.3;
 
     // First control point (25% along the path with random offset)
     let p1 = Point {
-        x: start.x + (end.x - start.x) * 0.25 + rng.random_range(-offset_range..offset_range),
-        y: start.y + (end.y - start.y) * 0.25 + rng.random_range(-offset_range..offset_range),
+        x: start.x + (target.x - start.x) * 0.25 + rand::random_range(-offset_range..offset_range),
+        y: start.y + (target.y - start.y) * 0.25 + rand::random_range(-offset_range..offset_range),
     };
 
     // Second control point (75% along the path with random offset)
     // 20% chance of overshoot
     let mut p2 = Point {
-        x: start.x + (end.x - start.x) * 0.75 + rng.random_range(-offset_range..offset_range),
-        y: start.y + (end.y - start.y) * 0.75 + rng.random_range(-offset_range..offset_range),
+        x: start.x + (target.x - start.x) * 0.75 + rand::random_range(-offset_range..offset_range),
+        y: start.y + (target.y - start.y) * 0.75 + rand::random_range(-offset_range..offset_range),
     };
 
-    if rng.random_bool(0.20) {
+    if rand::random_bool(0.20) {
         let overshoot_amt = dist * 0.05;
-        p2.x += if end.x > start.x {
+        p2.x += if target.x > start.x {
             overshoot_amt
         } else {
             -overshoot_amt
         };
-        p2.y += if end.y > start.y {
+        p2.y += if target.y > start.y {
             overshoot_amt
         } else {
             -overshoot_amt
@@ -83,12 +84,12 @@ fn bezier_path(start: Point, target: Point) -> Vec<Point> {
         let x = (1.0 - t).powi(3) * start.x
             + 3.0 * (1.0 - t).powi(2) * t * p1.x
             + 3.0 * (1.0 - t) * t.powi(2) * p2.x
-            + t.powi(3) * end.x;
+            + t.powi(3) * target.x;
 
         let y = (1.0 - t).powi(3) * start.y
             + 3.0 * (1.0 - t).powi(2) * t * p1.y
             + 3.0 * (1.0 - t) * t.powi(2) * p2.y
-            + t.powi(3) * end.y;
+            + t.powi(3) * target.y;
 
         path.push(Point { x, y });
     }
