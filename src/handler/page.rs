@@ -190,21 +190,6 @@ impl PageInner {
         &self.sender
     }
 
-    fn mouse_position(&self) -> Point {
-        *self
-            .mouse_position
-            .lock()
-            .expect("mouse_position lock poisoned")
-    }
-
-    fn set_mouse_position(&self, point: Point) {
-        let mut guard = self
-            .mouse_position
-            .lock()
-            .expect("mouse_position lock poisoned");
-        *guard = point;
-    }
-
     /// Returns the first element in the node which matches the given CSS
     /// selector.
     pub async fn find_element(&self, selector: impl Into<String>, node: NodeId) -> Result<NodeId> {
@@ -282,6 +267,26 @@ impl PageInner {
     pub async fn click_with(&self, point: Point, options: ClickOptions) -> Result<&Self> {
         let movement_behavior = options.movement_behavior.as_ref();
 
+        let point = {
+            #[cfg(not(feature = "human_movements"))]
+            {
+                point
+            }
+
+            #[cfg(feature = "human_movements")]
+            {
+                //TODO: Make it optionable
+                // Target Selection Jitter: don't land exactly on the pixel
+                let mut rng = rand::rng();
+                let jitter_x = rng.random_range(-2.0..2.0);
+                let jitter_y = rng.random_range(-2.0..2.0);
+
+                Point {
+                    x: end.x + jitter_x,
+                    y: end.y + jitter_y,
+                }
+            }
+        };
         let cmd = DispatchMouseEventParams::builder()
             .x(point.x)
             .y(point.y)
@@ -291,6 +296,14 @@ impl PageInner {
         self.move_mouse_with_behavior(point, movement_behavior)
             .await?;
 
+        #[cfg(feature = "human_movements")]
+        {
+            // Small pause before clicking (humans don't click instantly after arriving)
+            if movement_behavior.is_some() {
+                let mut rng = rand::thread_rng();
+                tokio::time::sleep(Duration::from_millis(rng.gen_range(50..=150))).await;
+            }
+        }
         self.execute(
             cmd.clone()
                 .r#type(DispatchMouseEventType::MousePressed)
@@ -305,6 +318,14 @@ impl PageInner {
                 .unwrap(),
         )
         .await?;
+        #[cfg(feature = "human_movements")]
+        {
+            // Small pause after clicking
+            if movement_behavior.is_some() {
+                let mut rng = rand::thread_rng();
+                tokio::time::sleep(Duration::from_millis(rng.gen_range(35..=110))).await;
+            }
+        }
         Ok(self)
     }
 
@@ -362,9 +383,11 @@ impl PageInner {
         point: Point,
         behavior: Option<&MovementBehavior>,
     ) -> Result<()> {
+        #[cfg(feature = "human_movements")]
+        let mut rng = rand::rng();
         match behavior {
             Some(behavior) => {
-                let start = self.mouse_position();
+                let start = { *self.mouse_position.lock().unwrap() };
                 let path = movement_path(start, point, behavior);
                 for (idx, path_point) in path.iter().enumerate() {
                     let (x, y) = (path_point.x, path_point.y);
@@ -375,8 +398,16 @@ impl PageInner {
                         y,
                     ))
                     .await?;
+                    *self.mouse_position.lock().unwrap() = point;
 
+                    // Tiny delay to simulate physical movement
                     if idx + 1 != path.len() {
+                        #[cfg(feature = "human_movements")]
+                        tokio::time::sleep(tokio::time::Duration::from_millis(
+                            rng.random_range(5..15),
+                        ))
+                        .await;
+                        #[cfg(not(feature = "human_movements"))]
                         tokio::time::sleep(std::time::Duration::from_millis(1)).await;
                     }
                 }
@@ -388,10 +419,10 @@ impl PageInner {
                     point.y,
                 ))
                 .await?;
+                *self.mouse_position.lock().unwrap() = point;
             }
         }
 
-        self.set_mouse_position(point);
         Ok(())
     }
 

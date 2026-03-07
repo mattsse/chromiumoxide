@@ -40,6 +40,7 @@ pin-project-lite = "0.2"
 dunce = "1"
 bytes = { version = "1", features = ["serde"], optional = true }
 reqwest = { version = "0.13", default-features = false }
+rand = { version = "0.10", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-registry = "0.6"
@@ -55,6 +56,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "time", "macros"] }
 default = ["bytes"]
 fetcher = ["chromiumoxide_fetcher"]
 bytes = ["dep:bytes"]
+human_movements = ["dep:rand"]
 
 rustls = ["chromiumoxide_fetcher/rustls"]
 native-tls = ["chromiumoxide_fetcher/native-tls"]
