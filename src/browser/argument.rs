@@ -92,19 +92,23 @@ impl From<(&str, &[&str])> for Arg {
 
 impl From<&str> for Arg {
     fn from(value: &str) -> Self {
-        Self {
-            key: value.to_string(),
-            values: Vec::new(),
+        let value = value.strip_prefix("--").unwrap_or(value);
+        match value.split_once('=') {
+            Some((key, val)) => Self {
+                key: key.to_string(),
+                values: vec![val.to_string()],
+            },
+            None => Self {
+                key: value.to_string(),
+                values: Vec::new(),
+            },
         }
     }
 }
 
 impl From<String> for Arg {
     fn from(value: String) -> Self {
-        Self {
-            key: value,
-            values: Vec::new(),
-        }
+        Arg::from(value.as_str())
     }
 }
 
@@ -130,5 +134,27 @@ impl ArgConst {
 
     pub const fn values(key: &'static str, values: &'static [&'static str]) -> Self {
         Self { key, values }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn arg_from_str_parses_key_value() {
+        let mut builder = ArgsBuilder::new();
+        builder.arg("--kiosk=about:blank");
+        let result = builder.into_iter().next().unwrap();
+        assert_eq!(result, "--kiosk=about:blank");
+    }
+
+    #[test]
+    fn arg_from_str_merges_with_existing() {
+        let mut builder = ArgsBuilder::new();
+        builder.arg("--disable-features=Foo");
+        builder.arg(Arg::value("disable-features", "Bar"));
+        let result = builder.into_iter().next().unwrap();
+        assert_eq!(result, "--disable-features=Foo,Bar");
     }
 }
