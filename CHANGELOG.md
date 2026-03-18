@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Properly parse from single string into `Arg` regardless of `--` or `=` for flag's key and value
+
 ## [0.9.1] 2026-02-25
 
 ### Fixed
