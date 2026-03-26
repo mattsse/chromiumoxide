@@ -162,8 +162,12 @@ impl Target {
     fn create_page(&mut self) {
         if self.page.is_none() {
             if let Some(session) = self.session_id.clone() {
-                let handle =
-                    PageHandle::new(self.target_id().clone(), session, self.opener_id().cloned());
+                let handle = PageHandle::new(
+                    self.target_id().clone(),
+                    session,
+                    self.opener_id().cloned(),
+                    self.config.request_timeout,
+                );
                 self.page = Some(handle);
             }
         }
