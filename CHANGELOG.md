@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add `Element::call_js_fn_with_args` for puppeteer-style argument passing via CDP `arguments`
+
 ## [0.9.1] 2026-02-25
 
 ### Fixed
