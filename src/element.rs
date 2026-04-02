@@ -15,8 +15,8 @@ use chromiumoxide_cdp::cdp::browser_protocol::page::{
     CaptureScreenshotFormat, CaptureScreenshotParams, Viewport,
 };
 use chromiumoxide_cdp::cdp::js_protocol::runtime::{
-    CallFunctionOnReturns, GetPropertiesParams, PropertyDescriptor, RemoteObjectId,
-    RemoteObjectType,
+    CallArgument, CallFunctionOnParams, CallFunctionOnReturns, GetPropertiesParams,
+    PropertyDescriptor, RemoteObjectId, RemoteObjectType,
 };
 
 use crate::error::{CdpError, Result};
@@ -197,6 +197,34 @@ impl Element {
                 self.remote_object_id.clone(),
             )
             .await
+    }
+
+    /// Calls a JS function on this element, passing the element itself as the
+    /// **first argument** (puppeteer-style: `(el, ...extraArgs) => …`).
+    ///
+    /// This allows arrow functions like `el => el.value` to work correctly,
+    /// since the element is provided via CDP `arguments` rather than only
+    /// through `this`.
+    pub async fn call_js_fn_with_args(
+        &self,
+        function_declaration: impl Into<String>,
+        await_promise: bool,
+        arguments: Vec<CallArgument>,
+    ) -> Result<CallFunctionOnReturns> {
+        let resp = self
+            .tab
+            .execute(
+                CallFunctionOnParams::builder()
+                    .object_id(self.remote_object_id.clone())
+                    .function_declaration(function_declaration)
+                    .arguments(arguments)
+                    .generate_preview(true)
+                    .await_promise(await_promise)
+                    .build()
+                    .unwrap(),
+            )
+            .await?;
+        Ok(resp.result)
     }
 
     /// Returns a JSON representation of this element.
