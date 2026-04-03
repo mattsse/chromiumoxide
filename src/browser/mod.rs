@@ -327,7 +327,7 @@ impl Browser {
     pub async fn start_incognito_context(&mut self) -> Result<&mut Self> {
         if !self.is_incognito_configured() {
             let browser_context_id = self
-                .create_browser_context(CreateBrowserContextParams::default())
+                .create_browser_context_inner(CreateBrowserContextParams::default())
                 .await?;
             self.browser_context = BrowserContext::from(browser_context_id);
             self.sender
@@ -346,7 +346,7 @@ impl Browser {
     /// incognito context.
     pub async fn quit_incognito_context(&mut self) -> Result<&mut Self> {
         if let Some(id) = self.browser_context.take() {
-            self.dispose_browser_context(id.clone()).await?;
+            self.dispose_browser_context_inner(id.clone()).await?;
             self.sender
                 .clone()
                 .send(HandlerMessage::DisposeContext(BrowserContext::from(id)))
@@ -458,6 +458,19 @@ impl Browser {
         &self,
         params: CreateBrowserContextParams,
     ) -> Result<BrowserContextId> {
+        let browser_context_id = self.create_browser_context_inner(params).await?;
+        let browser_context = BrowserContext::from(browser_context_id.clone());
+        self.sender
+            .clone()
+            .send(HandlerMessage::InsertContext(browser_context))
+            .await?;
+        Ok(browser_context_id)
+    }
+
+    async fn create_browser_context_inner(
+        &self,
+        params: CreateBrowserContextParams,
+    ) -> Result<BrowserContextId> {
         let response = self.execute(params).await?;
         Ok(response.result.browser_context_id)
     }
@@ -467,9 +480,24 @@ impl Browser {
         &self,
         browser_context_id: impl Into<BrowserContextId>,
     ) -> Result<()> {
+        let browser_context_id = browser_context_id.into();
+        self.dispose_browser_context_inner(browser_context_id.clone())
+            .await?;
+        self.sender
+            .clone()
+            .send(HandlerMessage::DisposeContext(BrowserContext::from(
+                browser_context_id,
+            )))
+            .await?;
+        Ok(())
+    }
+
+    async fn dispose_browser_context_inner(
+        &self,
+        browser_context_id: impl Into<BrowserContextId>,
+    ) -> Result<()> {
         self.execute(DisposeBrowserContextParams::new(browser_context_id))
             .await?;
-
         Ok(())
     }
 
