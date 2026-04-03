@@ -341,7 +341,11 @@ impl Handler {
         if msg.is_navigation() {
             let (req, tx) = msg.split();
             let id = self.next_navigation_id();
-            target.goto(FrameNavigationRequest::new(id, req));
+            target.goto(FrameNavigationRequest::new(
+                id,
+                req,
+                self.config.request_timeout,
+            ));
             self.navigations.insert(
                 id,
                 NavigationRequest::Navigate(NavigationInProgress::new(tx)),

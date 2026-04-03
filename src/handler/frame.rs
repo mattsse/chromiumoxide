@@ -20,7 +20,6 @@ use chromiumoxide_cdp::cdp::{
 use chromiumoxide_types::{Method, MethodId, Request};
 
 use crate::error::DeadlineExceeded;
-use crate::handler::REQUEST_TIMEOUT;
 use crate::handler::domworld::DOMWorld;
 use crate::handler::http::HttpRequest;
 use crate::{ArcHttpRequest, cmd::CommandChain};
@@ -657,12 +656,8 @@ pub struct FrameNavigationRequest {
 }
 
 impl FrameNavigationRequest {
-    pub fn new(id: NavigationId, req: Request) -> Self {
-        Self {
-            id,
-            req,
-            timeout: Duration::from_millis(REQUEST_TIMEOUT),
-        }
+    pub fn new(id: NavigationId, req: Request, timeout: Duration) -> Self {
+        Self { id, req, timeout }
     }
 
     /// This will set the id of the frame into the `params` `frameId` field.
