@@ -237,6 +237,30 @@ impl Handler {
                         }
                     }
                 }
+                PendingRequest::CreateBrowserContext(tx) => {
+                    match to_command_response::<CreateBrowserContextParams>(resp, method) {
+                        Ok(resp) => {
+                            self.browser_contexts
+                                .insert(BrowserContext::from(resp.browser_context_id.clone()));
+                            let _ = tx.send(Ok(resp.browser_context_id.clone())).ok();
+                        }
+                        Err(err) => {
+                            let _ = tx.send(Err(err)).ok();
+                        }
+                    }
+                }
+                PendingRequest::DisposeBrowserContext(browser_context_id, tx) => {
+                    match to_command_response::<DisposeBrowserContextParams>(resp, method) {
+                        Ok(_resp) => {
+                            self.browser_contexts
+                                .remove(&BrowserContext::from(browser_context_id));
+                            let _ = tx.send(Ok(())).ok();
+                        }
+                        Err(err) => {
+                            let _ = tx.send(Err(err)).ok();
+                        }
+                    }
+                }
                 PendingRequest::Navigate(id) => {
                     self.on_navigation_response(id, resp);
                 }
@@ -395,6 +419,63 @@ impl Handler {
         }
     }
 
+    fn create_browser_context(
+        &mut self,
+        params: CreateBrowserContextParams,
+        tx: OneshotSender<Result<BrowserContextId>>,
+    ) {
+        let method = params.identifier();
+        match serde_json::to_value(params) {
+            Ok(params) => match self.conn.submit_command(method.clone(), None, params) {
+                Ok(call_id) => {
+                    self.pending_commands.insert(
+                        call_id,
+                        (
+                            PendingRequest::CreateBrowserContext(tx),
+                            method,
+                            Instant::now(),
+                        ),
+                    );
+                }
+                Err(err) => {
+                    let _ = tx.send(Err(err.into())).ok();
+                }
+            },
+            Err(err) => {
+                let _ = tx.send(Err(err.into())).ok();
+            }
+        }
+    }
+
+    fn dispose_browser_context(
+        &mut self,
+        params: DisposeBrowserContextParams,
+        tx: OneshotSender<Result<()>>,
+    ) {
+        let method = params.identifier();
+        let browser_context_id = params.browser_context_id.clone();
+        match serde_json::to_value(params) {
+            Ok(params) => match self.conn.submit_command(method.clone(), None, params) {
+                Ok(call_id) => {
+                    self.pending_commands.insert(
+                        call_id,
+                        (
+                            PendingRequest::DisposeBrowserContext(browser_context_id, tx),
+                            method,
+                            Instant::now(),
+                        ),
+                    );
+                }
+                Err(err) => {
+                    let _ = tx.send(Err(err.into())).ok();
+                }
+            },
+            Err(err) => {
+                let _ = tx.send(Err(err.into())).ok();
+            }
+        }
+    }
+
     /// Process an incoming event read from the websocket
     fn on_event(&mut self, event: CdpEventMessage) {
         if let Some(ref session_id) = event.session_id {
@@ -495,6 +576,12 @@ impl Handler {
                     PendingRequest::GetTargets(tx) => {
                         let _ = tx.send(Err(CdpError::Timeout));
                     }
+                    PendingRequest::CreateBrowserContext(tx) => {
+                        let _ = tx.send(Err(CdpError::Timeout));
+                    }
+                    PendingRequest::DisposeBrowserContext(_browser_context_id, tx) => {
+                        let _ = tx.send(Err(CdpError::Timeout));
+                    }
                     PendingRequest::Navigate(nav) => {
                         if let Some(nav) = self.navigations.remove(&nav) {
                             match nav {
@@ -556,11 +643,11 @@ impl Stream for Handler {
                             .collect();
                         let _ = tx.send(pages);
                     }
-                    HandlerMessage::InsertContext(ctx) => {
-                        pin.browser_contexts.insert(ctx);
+                    HandlerMessage::CreateBrowserContext(params, tx) => {
+                        pin.create_browser_context(params, tx);
                     }
-                    HandlerMessage::DisposeContext(ctx) => {
-                        pin.browser_contexts.remove(&ctx);
+                    HandlerMessage::DisposeBrowserContext(params, tx) => {
+                        pin.dispose_browser_context(params, tx);
                     }
                     HandlerMessage::GetPage(target_id, tx) => {
                         let page = pin
@@ -733,6 +820,10 @@ enum PendingRequest {
     CreateTarget(OneshotSender<Result<Page>>),
     /// A Request to fetch old `Target`s created before connection
     GetTargets(OneshotSender<Result<Vec<TargetInfo>>>),
+    /// A Request to create a new `BrowserContext`.
+    CreateBrowserContext(OneshotSender<Result<BrowserContextId>>),
+    /// A Request to dispose an old `BrowserContext`.
+    DisposeBrowserContext(BrowserContextId, OneshotSender<Result<()>>),
     /// A Request to navigate a specific `Target`.
     ///
     /// Navigation requests are not automatically completed once the response to
@@ -756,8 +847,11 @@ enum PendingRequest {
 pub(crate) enum HandlerMessage {
     CreatePage(CreateTargetParams, OneshotSender<Result<Page>>),
     FetchTargets(OneshotSender<Result<Vec<TargetInfo>>>),
-    InsertContext(BrowserContext),
-    DisposeContext(BrowserContext),
+    CreateBrowserContext(
+        CreateBrowserContextParams,
+        OneshotSender<Result<BrowserContextId>>,
+    ),
+    DisposeBrowserContext(DisposeBrowserContextParams, OneshotSender<Result<()>>),
     GetPages(OneshotSender<Vec<Page>>),
     Command(CommandMessage),
     GetPage(TargetId, OneshotSender<Option<Page>>),

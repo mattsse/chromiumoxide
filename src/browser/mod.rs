@@ -330,10 +330,6 @@ impl Browser {
                 .create_browser_context(CreateBrowserContextParams::default())
                 .await?;
             self.browser_context = BrowserContext::from(browser_context_id);
-            self.sender
-                .clone()
-                .send(HandlerMessage::InsertContext(self.browser_context.clone()))
-                .await?;
         }
 
         Ok(self)
@@ -346,11 +342,7 @@ impl Browser {
     /// incognito context.
     pub async fn quit_incognito_context(&mut self) -> Result<&mut Self> {
         if let Some(id) = self.browser_context.take() {
-            self.dispose_browser_context(id.clone()).await?;
-            self.sender
-                .clone()
-                .send(HandlerMessage::DisposeContext(BrowserContext::from(id)))
-                .await?;
+            self.dispose_browser_context(id).await?;
         }
         Ok(self)
     }
@@ -458,8 +450,14 @@ impl Browser {
         &self,
         params: CreateBrowserContextParams,
     ) -> Result<BrowserContextId> {
-        let response = self.execute(params).await?;
-        Ok(response.result.browser_context_id)
+        let (tx, rx) = oneshot_channel();
+
+        self.sender
+            .clone()
+            .send(HandlerMessage::CreateBrowserContext(params, tx))
+            .await?;
+
+        rx.await?
     }
 
     /// Deletes a browser context.
@@ -467,10 +465,15 @@ impl Browser {
         &self,
         browser_context_id: impl Into<BrowserContextId>,
     ) -> Result<()> {
-        self.execute(DisposeBrowserContextParams::new(browser_context_id))
+        let (tx, rx) = oneshot_channel();
+
+        let params = DisposeBrowserContextParams::new(browser_context_id);
+        self.sender
+            .clone()
+            .send(HandlerMessage::DisposeBrowserContext(params, tx))
             .await?;
 
-        Ok(())
+        rx.await?
     }
 
     /// Clears cookies.
