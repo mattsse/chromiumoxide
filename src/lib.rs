@@ -6,7 +6,7 @@
 //! # Example
 //! ```no_run
 //! use futures::StreamExt;
-//! use chromiumoxide::{Browser, BrowserConfig};
+//! use chaser_oxide::{Browser, BrowserConfig};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {

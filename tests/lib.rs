@@ -1,11 +1,19 @@
 use std::panic;
+use std::sync::OnceLock;
 
-use chromiumoxide::{Browser, BrowserConfig};
+use chaser_oxide::{Browser, BrowserConfig};
 use futures::{FutureExt, StreamExt};
+use tokio::sync::Semaphore;
 
 mod basic;
 mod config;
 mod page;
+
+static BROWSER_SEMAPHORE: OnceLock<Semaphore> = OnceLock::new();
+
+fn browser_semaphore() -> &'static Semaphore {
+    BROWSER_SEMAPHORE.get_or_init(|| Semaphore::new(1))
+}
 
 pub async fn test<T>(test: T)
 where
@@ -18,6 +26,7 @@ pub async fn test_config<T>(config: BrowserConfig, test: T)
 where
     T: for<'a> AsyncFnOnce(&'a mut Browser),
 {
+    let _permit = browser_semaphore().acquire().await.unwrap();
     let (mut browser, mut handler) = Browser::launch(config).await.unwrap();
 
     let handle = tokio::spawn(async move {

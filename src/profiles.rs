@@ -6,7 +6,7 @@
 //! # Example
 //!
 //! ```rust
-//! use chaser-oxide::profiles::{ChaserProfile, Gpu};
+//! use chaser_oxide::profiles::{ChaserProfile, Gpu};
 //!
 //! let profile = ChaserProfile::windows()
 //!     .chrome_version(130)
@@ -109,6 +109,23 @@ impl Os {
             Os::Linux => "Linux",
         }
     }
+
+    /// Returns the UA-CH platformVersion string
+    pub fn platform_version(&self) -> &'static str {
+        match self {
+            Os::Windows => "15.0.0",             // Windows 11
+            Os::MacOSIntel | Os::MacOSArm => "15.3.1", // macOS Sequoia
+            Os::Linux => "",
+        }
+    }
+
+    /// Returns the UA-CH architecture string
+    pub fn architecture(&self) -> &'static str {
+        match self {
+            Os::Windows | Os::MacOSIntel | Os::Linux => "x86",
+            Os::MacOSArm => "arm",
+        }
+    }
 }
 
 /// A builder for creating consistent browser fingerprint profiles.
@@ -116,7 +133,7 @@ impl Os {
 /// # Example
 ///
 /// ```rust
-/// use chaser-oxide::profiles::{ChaserProfile, Gpu, Os};
+/// use chaser_oxide::profiles::{ChaserProfile, Gpu, Os};
 ///
 /// // Quick preset
 /// let profile = ChaserProfile::windows().build();
@@ -146,7 +163,7 @@ pub struct ChaserProfile {
 
 impl Default for ChaserProfile {
     fn default() -> Self {
-        Self::windows().build()
+        Self::native().build()
     }
 }
 
@@ -192,6 +209,15 @@ impl ChaserProfile {
         Self::new(Os::Linux)
     }
 
+    /// Create a profile matching the current host OS, with optional Chrome version auto-detection.
+    /// Reads actual system RAM and tries to detect the installed Chrome version.
+    pub fn native() -> ChaserProfileBuilder {
+        let os = detect_current_os();
+        let chrome = detect_chrome_version().unwrap_or(131);
+        let memory = detect_system_memory_gb();
+        Self::new(os).chrome_version(chrome).memory_gb(memory)
+    }
+
     // Getters
     pub fn os(&self) -> Os {
         self.os
@@ -219,6 +245,17 @@ impl ChaserProfile {
     }
     pub fn screen_height(&self) -> u32 {
         self.screen_height
+    }
+
+    /// Returns the valid `navigator.deviceMemory` value (spec allows: 0.25, 0.5, 1, 2, 4, 8).
+    fn device_memory_value(&self) -> f32 {
+        match self.memory_gb {
+            0 => 0.25,
+            1 => 1.0,
+            2 => 2.0,
+            3 | 4 => 4.0,
+            _ => 8.0,
+        }
     }
 
     /// Generate the User-Agent string for this profile
@@ -276,7 +313,7 @@ impl ChaserProfile {
                     configurable: true
                 }});
                 Object.defineProperty(Navigator.prototype, 'deviceMemory', {{
-                    get: () => {memory},
+                    get: () => {device_memory},
                     configurable: true
                 }});
                 Object.defineProperty(Navigator.prototype, 'maxTouchPoints', {{
@@ -316,11 +353,12 @@ impl ChaserProfile {
                     value: async function(hints) {{
                         const values = {{}};
                         for (const hint of hints) {{
-                            if (hint === 'platform') values.platform = "{platform}";
-                            else if (hint === 'platformVersion') values.platformVersion = "19.0.0";
-                            else if (hint === 'architecture') values.architecture = "x86";
+                            if (hint === 'platform') values.platform = "{hints_platform}";
+                            else if (hint === 'platformVersion') values.platformVersion = "{platform_version}";
+                            else if (hint === 'architecture') values.architecture = "{architecture}";
                             else if (hint === 'model') values.model = "";
                             else if (hint === 'bitness') values.bitness = "64";
+                            else if (hint === 'uaFullVersion') values.uaFullVersion = "{chrome_ver}.0.0.0";
                         }}
                         return values;
 
@@ -437,11 +475,13 @@ impl ChaserProfile {
             ua = self.user_agent(),
             platform = self.os.platform(),
             cores = self.cpu_cores,
-            memory = self.memory_gb,
+            device_memory = self.device_memory_value(),
             webgl_vendor = self.gpu.vendor(),
             webgl_renderer = self.gpu.renderer(),
             chrome_ver = self.chrome_version,
             hints_platform = self.os.hints_platform(),
+            platform_version = self.os.platform_version(),
+            architecture = self.os.architecture(),
         );
 
         // Prevent CDP detection via worker threads
@@ -574,6 +614,97 @@ impl ChaserProfileBuilder {
             screen_height: self.screen_height,
         }
     }
+}
+
+/// Detect the host OS at runtime (distinguishes ARM vs Intel on macOS).
+pub fn detect_current_os() -> Os {
+    #[cfg(target_os = "macos")]
+    {
+        let is_arm = std::process::Command::new("uname")
+            .arg("-m")
+            .output()
+            .map(|o| {
+                let arch = String::from_utf8_lossy(&o.stdout);
+                arch.contains("arm64") || arch.contains("aarch64")
+            })
+            .unwrap_or(false);
+        if is_arm { Os::MacOSArm } else { Os::MacOSIntel }
+    }
+    #[cfg(target_os = "windows")]
+    { Os::Windows }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    { Os::Linux }
+}
+
+/// Try to detect the installed Chrome major version from the system binary.
+/// Returns `None` if Chrome cannot be found or its version parsed.
+pub fn detect_chrome_version() -> Option<u32> {
+    let path = which::which("google-chrome")
+        .or_else(|_| which::which("chromium-browser"))
+        .or_else(|_| which::which("chromium"))
+        .ok()
+        .map(|p| p.to_string_lossy().into_owned());
+
+    #[cfg(target_os = "macos")]
+    let path = path.or_else(|| {
+        [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        ]
+        .iter()
+        .find(|p| std::path::Path::new(p).exists())
+        .map(|s| s.to_string())
+    });
+
+    let path = path?;
+    std::process::Command::new(&path)
+        .arg("--version")
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .and_then(|s| {
+            s.split_whitespace()
+                .find(|part| part.starts_with(|c: char| c.is_ascii_digit()))
+                .and_then(|v| v.split('.').next())
+                .and_then(|major| major.parse().ok())
+        })
+}
+
+/// Read total system RAM in GB (capped at 8 to match `navigator.deviceMemory` spec max).
+pub fn detect_system_memory_gb() -> u32 {
+    let gb = _read_system_memory_gb();
+    gb.min(8)
+}
+
+#[cfg(target_os = "macos")]
+fn _read_system_memory_gb() -> u32 {
+    std::process::Command::new("sysctl")
+        .args(["-n", "hw.memsize"])
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .and_then(|s| s.trim().parse::<u64>().ok())
+        .map(|bytes| (bytes / (1024 * 1024 * 1024)) as u32)
+        .unwrap_or(8)
+}
+
+#[cfg(target_os = "linux")]
+fn _read_system_memory_gb() -> u32 {
+    std::fs::read_to_string("/proc/meminfo")
+        .ok()
+        .and_then(|s| {
+            s.lines()
+                .find(|l| l.starts_with("MemTotal:"))
+                .and_then(|l| l.split_whitespace().nth(1))
+                .and_then(|v| v.parse::<u64>().ok())
+        })
+        .map(|kb| (kb / (1024 * 1024)) as u32)
+        .unwrap_or(8)
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+fn _read_system_memory_gb() -> u32 {
+    8
 }
 
 // Re-export the old trait-based system for backwards compatibility

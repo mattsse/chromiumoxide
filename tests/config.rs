@@ -1,4 +1,5 @@
-use crate::{test_config, BrowserConfig};
+use crate::test_config;
+use chaser_oxide::BrowserConfig;
 
 #[tokio::test]
 #[ignore] // For some reason, this test fails on CI but works locally

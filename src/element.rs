@@ -164,8 +164,8 @@ impl Element {
     /// # Example get the element as JSON object
     ///
     /// ```no_run
-    /// # use chromiumoxide::element::Element;
-    /// # use chromiumoxide::error::Result;
+    /// # use chaser_oxide::element::Element;
+    /// # use chaser_oxide::error::Result;
     /// # async fn demo(element: Element) -> Result<()> {
     ///     let js_fn = "function() { return this; }";
     ///     let element_json = element.call_js_fn(js_fn, false).await?;
@@ -176,8 +176,8 @@ impl Element {
     /// # Execute an async javascript function
     ///
     /// ```no_run
-    /// # use chromiumoxide::element::Element;
-    /// # use chromiumoxide::error::Result;
+    /// # use chaser_oxide::element::Element;
+    /// # use chaser_oxide::error::Result;
     /// # async fn demo(element: Element) -> Result<()> {
     ///     let js_fn = "async function() { return this; }";
     ///     let element_json = element.call_js_fn(js_fn, true).await?;
@@ -276,8 +276,8 @@ impl Element {
     /// # Example type text into an input element
     ///
     /// ```no_run
-    /// # use chromiumoxide::page::Page;
-    /// # use chromiumoxide::error::Result;
+    /// # use chaser_oxide::page::Page;
+    /// # use chaser_oxide::error::Result;
     /// # async fn demo(page: Page) -> Result<()> {
     ///     let element = page.find_element("input#searchInput").await?;
     ///     element.click().await?.type_str("this goes into the input field").await?;
@@ -294,8 +294,8 @@ impl Element {
     /// # Example type text into an input element and hit enter
     ///
     /// ```no_run
-    /// # use chromiumoxide::page::Page;
-    /// # use chromiumoxide::error::Result;
+    /// # use chaser_oxide::page::Page;
+    /// # use chaser_oxide::error::Result;
     /// # async fn demo(page: Page) -> Result<()> {
     ///     let element = page.find_element("input#searchInput").await?;
     ///     element.click().await?.type_str("this goes into the input field").await?

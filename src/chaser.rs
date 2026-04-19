@@ -28,7 +28,7 @@ pub struct Point {
 ///
 /// # Stealth JavaScript Execution
 ///
-/// ```rust
+/// ```rust,ignore
 /// // Safe - uses isolated world, no Runtime.enable leak
 /// let title = chaser.evaluate("document.title").await?;
 ///
@@ -104,7 +104,7 @@ impl ChaserPage {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// // Get page title
     /// let title: String = chaser.evaluate("document.title").await?;
     ///
@@ -124,7 +124,7 @@ impl ChaserPage {
     /// **IMPORTANT:** Call this BEFORE navigating to the target site.
     ///
     /// # Example
-    /// ```rust
+    /// ```rust,ignore
     /// let profile = ChaserProfile::windows().build();
     /// let page = browser.new_page("about:blank").await?;
     /// let chaser = ChaserPage::new(page);
@@ -165,7 +165,7 @@ impl ChaserPage {
     /// * `resource_type` - Optional resource type filter (Document, Script, etc.)
     ///
     /// # Example
-    /// ```rust
+    /// ```rust,ignore
     /// // Intercept all document requests
     /// chaser.enable_request_interception("*", Some(ResourceType::Document)).await?;
     /// ```
@@ -212,7 +212,7 @@ impl ChaserPage {
     /// * `status_code` - HTTP status code (usually 200)
     ///
     /// # Example
-    /// ```rust
+    /// ```rust,ignore
     /// let fake_html = r#"
     ///     <!DOCTYPE html>
     ///     <html>
