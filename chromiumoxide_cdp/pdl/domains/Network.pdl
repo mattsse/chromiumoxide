@@ -166,7 +166,7 @@ domain Network
       High
       VeryHigh
 
-  # The render blocking behavior of a resource request.
+  # The render-blocking behavior of a resource request.
   experimental type RenderBlockingBehavior extends string
     enum
       Blocking
@@ -333,37 +333,17 @@ domain Network
       # TODO(https://crbug.com/1263483): Remove this once frontend code does
       # not reference it anymore.
       PreflightInvalidAllowExternal
-      PreflightMissingAllowPrivateNetwork
-      PreflightInvalidAllowPrivateNetwork
       InvalidAllowMethodsPreflightResponse
       InvalidAllowHeadersPreflightResponse
       MethodDisallowedByPreflightResponse
       HeaderDisallowedByPreflightResponse
       RedirectContainsCredentials
       # Request was a private network request initiated by a non-secure context.
-      InsecurePrivateNetwork
+      InsecureLocalNetwork
       # Request carried a target IP address space property that did not match
       # the target resource's address space.
-      InvalidPrivateNetworkAccess
-      # Request was a private network request yet did not carry a target IP
-      # address space.
-      UnexpectedPrivateNetworkAccess
+      InvalidLocalNetworkAccess
       NoCorsRedirectModeNotFollow
-      # Request was a private network request and needed user permission yet did
-      # not carry `Private-Network-Access-Id` in the preflight response.
-      # https://github.com/WICG/private-network-access/blob/main/permission_prompt/explainer.md
-      PreflightMissingPrivateNetworkAccessId
-      # Request was a private network request and needed user permission yet did
-      # not carry `Private-Network-Access-Name` in the preflight response.
-      # https://github.com/WICG/private-network-access/blob/main/permission_prompt/explainer.md
-      PreflightMissingPrivateNetworkAccessName
-      # Request was a private network request and needed user permission yet not
-      # able to request for permission.
-      # https://github.com/WICG/private-network-access/blob/main/permission_prompt/explainer.md
-      PrivateNetworkAccessPermissionUnavailable
-      # Request was a private network request and is denied by user permission.
-      # https://github.com/WICG/private-network-access/blob/main/permission_prompt/explainer.md
-      PrivateNetworkAccessPermissionDenied
       # Request was a local network request and is denied by user permission.
       # https://wicg.github.io/local-network-access/
       LocalNetworkAccessPermissionDenied
@@ -622,8 +602,6 @@ domain Network
       optional CookieSameSite sameSite
       # Cookie Priority
       experimental CookiePriority priority
-      # True if cookie is SameParty.
-      experimental deprecated boolean sameParty
       # Cookie source scheme type.
       experimental CookieSourceScheme sourceScheme
       # Cookie source port. Valid values are {-1, [1, 65535]}, -1 indicates an unspecified port.
@@ -687,12 +665,6 @@ domain Network
       # value.
       # This is the "Schemeful Same-Site" version of the blocked reason.
       SchemefulSameSiteUnspecifiedTreatedAsLax
-      # The cookie had the "SameParty" attribute but came from a cross-party response.
-      SamePartyFromCrossPartyContext
-      # The cookie had the "SameParty" attribute but did not specify the "Secure" attribute
-      # (which is required in order to use "SameParty"); or specified the "SameSite=Strict"
-      # attribute (which is forbidden when using "SameParty").
-      SamePartyConflictsWithOtherAttributes
       # The cookie's name/value pair size exceeded the size limit defined in
       # RFC6265bis.
       NameValuePairExceedsMaxSize
@@ -749,8 +721,6 @@ domain Network
       # value.
       # This is the "Schemeful Same-Site" version of the blocked reason.
       SchemefulSameSiteUnspecifiedTreatedAsLax
-      # The cookie had the "SameParty" attribute and the request was made from a cross-party context.
-      SamePartyFromCrossPartyContext
       # The cookie's name/value pair size exceeded the size limit defined in
       # RFC6265bis.
       NameValuePairExceedsMaxSize
@@ -847,8 +817,6 @@ domain Network
       optional TimeSinceEpoch expires
       # Cookie Priority.
       experimental optional CookiePriority priority
-      # True if cookie is SameParty.
-      experimental optional boolean sameParty
       # Cookie source scheme type.
       experimental optional CookieSourceScheme sourceScheme
       # Cookie source port. Valid values are {-1, [1, 65535]}, -1 indicates an unspecified port.
@@ -1145,6 +1113,8 @@ domain Network
   command enable
     parameters
       # Buffer size in bytes to use when preserving network payloads (XHRs, etc).
+      # This is the maximum number of bytes that will be collected by this
+      # DevTools session.
       experimental optional integer maxTotalBufferSize
       # Per-resource buffer size in bytes to use when preserving network payloads (XHRs, etc).
       experimental optional integer maxResourceBufferSize
@@ -1216,6 +1186,8 @@ domain Network
     returns
       # Request body string, omitting files from multipart requests
       string postData
+      # True, if content was sent as base64.
+      boolean base64Encoded
 
   # Returns content served for the given currently intercepted request.
   experimental command getResponseBodyForInterception
@@ -1315,8 +1287,6 @@ domain Network
       optional TimeSinceEpoch expires
       # Cookie Priority type.
       experimental optional CookiePriority priority
-      # True if cookie is SameParty.
-      experimental optional boolean sameParty
       # Cookie source scheme type.
       experimental optional CookieSourceScheme sourceScheme
       # Cookie source port. Valid values are {-1, [1, 65535]}, -1 indicates an unspecified port.
@@ -1507,7 +1477,7 @@ domain Network
       optional Page.FrameId frameId
       # Whether the request is initiated by a user gesture. Defaults to false.
       optional boolean hasUserGesture
-      # The render blocking behavior of the request.
+      # The render-blocking behavior of the request.
       experimental optional RenderBlockingBehavior renderBlockingBehavior
 
   # Fired when resource loading priority is changed
@@ -1801,7 +1771,7 @@ domain Network
       DirectUDPMessage message
       MonotonicTime timestamp
 
-  experimental type PrivateNetworkRequestPolicy extends string
+  experimental type LocalNetworkAccessRequestPolicy extends string
     enum
       Allow
       BlockFromInsecureToMorePrivate
@@ -1827,7 +1797,7 @@ domain Network
     properties
       boolean initiatorIsSecureContext
       IPAddressSpace initiatorIPAddressSpace
-      PrivateNetworkRequestPolicy privateNetworkRequestPolicy
+      LocalNetworkAccessRequestPolicy localNetworkAccessRequestPolicy
 
   # Fired when additional information about a requestWillBeSent event is available from the
   # network stack. Not every requestWillBeSent event will have an additional
@@ -1844,6 +1814,8 @@ domain Network
       Headers headers
       # Connection timing information for the request.
       experimental ConnectTiming connectTiming
+      # How the request site's device bound sessions were used during this request.
+      optional array of DeviceBoundSessionWithUsage deviceBoundSessionUsages
       # The client security state set for the request.
       optional ClientSecurityState clientSecurityState
       # Whether the site has partitioned cookies stored in a partition different than the current one.
@@ -2065,6 +2037,20 @@ domain Network
       # The id of the session.
       string id
 
+  # How a device bound session was used during a request.
+  experimental type DeviceBoundSessionWithUsage extends object
+    properties
+      # The key for the session.
+      DeviceBoundSessionKey sessionKey
+      # How the session was used (or not used).
+      enum usage
+        NotInScope
+        InScopeRefreshNotYetNeeded
+        InScopeRefreshNotAllowed
+        ProactiveRefreshNotPossible
+        ProactiveRefreshAttempted
+        Deferred
+
   # A device bound session's cookie craving.
   experimental type DeviceBoundSessionCookieCraving extends object
     properties
@@ -2198,6 +2184,20 @@ domain Network
       FailedToUnwrapKey
       SessionDeletedDuringRefresh
 
+  # Details about a failed device bound session network request.
+  experimental type DeviceBoundSessionFailedRequest extends object
+    properties
+      # The failed request URL.
+      string requestUrl
+      # The net error of the response if it was not OK.
+      optional string netError
+      # The response code if the net error was OK and the response code was not
+      # 200.
+      optional integer responseError
+      # The body of the response if the net error was OK, the response code was
+      # not 200, and the response body was not empty.
+      optional string responseErrorBody
+
   # Session event details specific to creation.
   experimental type CreationEventDetails extends object
     properties
@@ -2206,6 +2206,9 @@ domain Network
       # The session if there was a newly created session. This is populated for
       # all successful creation events.
       optional DeviceBoundSession newSession
+      # Details about a failed device bound session network request if there was
+      # one.
+      optional DeviceBoundSessionFailedRequest failedRequest
 
   # Session event details specific to refresh.
   experimental type RefreshEventDetails extends object
@@ -2226,6 +2229,9 @@ domain Network
       optional DeviceBoundSession newSession
       # See comments on `net::device_bound_sessions::RefreshEventResult::was_fully_proactive_refresh`.
       boolean wasFullyProactiveRefresh
+      # Details about a failed device bound session network request if there was
+      # one.
+      optional DeviceBoundSessionFailedRequest failedRequest
 
   # Session event details specific to termination.
   experimental type TerminationEventDetails extends object

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Bump CDP to `r1596832`
 - Derive `Clone` for `Element`, `ScreenshotParams` and `ScreenshotParamsBuilder`
 
 ## [0.9.1] 2026-02-25

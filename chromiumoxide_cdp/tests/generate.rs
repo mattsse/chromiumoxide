@@ -39,6 +39,9 @@ fn generated_code_is_fresh() {
 async fn pdl_is_fresh() {
     const BASE_URL: &str = "https://raw.githubusercontent.com/ChromeDevTools/devtools-protocol";
 
+    // Some domain includes don't have the actual pdl files yet, so ignore them for now
+    const IGNORED_DOMAINS: &[&str] = &["SmartCardEmulation", "WebMCP"];
+
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut modified = false;
 
@@ -78,6 +81,24 @@ async fn pdl_is_fresh() {
     .await
     .unwrap();
     assert!(browser_proto_new.contains("The Chromium Authors"));
+
+    let browser_proto_new = browser_proto_new
+        .lines()
+        .map(|line| {
+            if !line.starts_with("include") {
+                return line.into();
+            }
+
+            for domain in IGNORED_DOMAINS {
+                if line.contains(domain) {
+                    return format!("# no actual pdl file -- {line}");
+                }
+            }
+
+            line.into()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
 
     if browser_proto_new != browser_proto_old {
         fs::write(browser_proto, &browser_proto_new).unwrap();

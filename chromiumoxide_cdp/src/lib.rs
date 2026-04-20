@@ -31,7 +31,7 @@ pub mod revision;
 // is generally a good idea.
 
 /// Currently built CDP revision
-pub const CURRENT_REVISION: Revision = Revision(1566079);
+pub const CURRENT_REVISION: Revision = Revision(1596832);
 
 /// convenience fixups
 impl Default for CreateTargetParams {

@@ -7,6 +7,7 @@
 # Audits domain allows investigation of page violations and possible improvements.
 experimental domain Audits
   depends on Network
+  depends on Runtime
 
   # Information about a cookie that is affected by an inspector issue.
   type AffectedCookie extends object
@@ -34,8 +35,6 @@ experimental domain Audits
       ExcludeSameSiteNoneInsecure
       ExcludeSameSiteLax
       ExcludeSameSiteStrict
-      ExcludeInvalidSameParty
-      ExcludeSamePartyCrossPartyContext
       ExcludeDomainNonASCII
       ExcludeThirdPartyCookieBlockedInFirstPartySet
       ExcludeThirdPartyPhaseout
@@ -106,6 +105,16 @@ experimental domain Audits
       optional AffectedRequest request
       # The recommended solution to the issue.
       optional CookieIssueInsight insight
+
+  type PerformanceIssueType extends string
+    enum
+      DocumentCookie
+
+  # Details for a performance issue.
+  type PerformanceIssueDetails extends object
+    properties
+      PerformanceIssueType performanceIssueType
+      optional SourceCodeLocation sourceCodeLocation
 
   type MixedContentResolutionStatus extends string
     enum
@@ -249,16 +258,6 @@ experimental domain Audits
       boolean isWarning
       SharedArrayBufferIssueType type
 
-  type LowTextContrastIssueDetails extends object
-    properties
-      DOM.BackendNodeId violatingNodeId
-      string violatingNodeSelector
-      number contrastRatio
-      number thresholdAA
-      number thresholdAAA
-      string fontSize
-      string fontWeight
-
   # Details for a CORS related issue, e.g. a warning or error related to
   # CORS RFC1918 enforcement.
   type CorsIssueDetails extends object
@@ -355,6 +354,15 @@ experimental domain Audits
       IncorrectDigestType
       IncorrectDigestLength
 
+  type ConnectionAllowlistError extends string
+    enum
+      InvalidHeader
+      MoreThanOneList
+      ItemNotInnerList
+      InvalidAllowlistItemType
+      ReportingEndpointNotToken
+      InvalidUrlPattern
+
   # Details for issues around "Attribution Reporting API" usage.
   # Explainer: https://github.com/WICG/attribution-reporting-api
   type AttributionReportingIssueDetails extends object
@@ -398,6 +406,11 @@ experimental domain Audits
       UnencodedDigestError error
       AffectedRequest request
 
+  type ConnectionAllowlistIssueDetails extends object
+    properties
+      ConnectionAllowlistError error
+      AffectedRequest request
+
   type GenericIssueErrorType extends string
     enum
       FormLabelForNameError
@@ -415,6 +428,7 @@ experimental domain Audits
       AutofillAndManualTextPolicyControlledFeaturesInfo
       AutofillPolicyControlledFeatureInfo
       ManualTextPolicyControlledFeatureInfo
+      FormModelContextParameterMissingTitleAndDescription
 
   # Depending on the concrete errorType, different properties are set.
   type GenericIssueDetails extends object
@@ -488,10 +502,6 @@ experimental domain Audits
       ConfigNoResponse
       ConfigInvalidResponse
       ConfigInvalidContentType
-      ClientMetadataHttpNotFound
-      ClientMetadataNoResponse
-      ClientMetadataInvalidResponse
-      ClientMetadataInvalidContentType
       IdpNotPotentiallyTrustworthy
       DisabledInSettings
       DisabledInFlags
@@ -513,11 +523,9 @@ experimental domain Audits
       Canceled
       RpPageNotVisible
       SilentMediationFailure
-      ThirdPartyCookiesBlocked
       NotSignedInWithIdp
       MissingTransientUserActivation
       ReplacedByActiveMode
-      InvalidFieldsSpecified
       RelyingPartyOriginIsOpaque
       TypeNotMatching
       UiDismissedNoEmbargo
@@ -680,6 +688,41 @@ experimental domain Audits
       # Used for messages about activation disabled reason
       optional string disableReason
 
+  # Metadata about the ad script that was on the stack that caused the current
+  # script in the `AdAncestry` to be considered ad related.
+  type AdScriptIdentifier extends object
+    properties
+      # The script's v8 identifier.
+      Runtime.ScriptId scriptId
+      # v8's debugging id for the v8::Context.
+      Runtime.UniqueDebuggerId debuggerId
+      # The script's url (or generated name based on id if inline script).
+      string name
+
+  # Providence about how an ad script was determined to be such. It is an ad
+  # because its url matched a filterlist rule, or because some other ad script
+  # was on the stack when this script was loaded.
+  type AdAncestry extends object
+    properties
+      # The ad-script in the stack when the offending script was loaded. This is
+      # recursive down to the root script that was tagged due to the filterlist
+      # rule.
+      array of AdScriptIdentifier adAncestryChain
+      # The filterlist rule that caused the root (last) script in
+      # `adAncestry` to be ad-tagged.
+      optional string rootScriptFilterlistRule
+
+  # The issue warns about blocked calls to privacy sensitive APIs via the
+  # Selective Permissions Intervention.
+  type SelectivePermissionsInterventionIssueDetails extends object
+    properties
+      # Which API was intervened on.
+      string apiName
+      # Why the ad script using the API is considered an ad.
+      AdAncestry adAncestry
+      # The stack trace at the time of the intervention.
+      optional Runtime.StackTrace stackTrace
+
   # A unique identifier for the type of issue. Each type may use one of the
   # optional fields in InspectorIssueDetails to convey more specific
   # information about the kind of issue.
@@ -691,7 +734,6 @@ experimental domain Audits
       HeavyAdIssue
       ContentSecurityPolicyIssue
       SharedArrayBufferIssue
-      LowTextContrastIssue
       CorsIssue
       AttributionReportingIssue
       QuirksModeIssue
@@ -711,8 +753,11 @@ experimental domain Audits
       ElementAccessibilityIssue
       SRIMessageSignatureIssue
       UnencodedDigestIssue
+      ConnectionAllowlistIssue
       UserReidentificationIssue
       PermissionElementIssue
+      PerformanceIssue
+      SelectivePermissionsInterventionIssue
 
   # This struct holds a list of optional fields with additional information
   # specific to the kind of issue. When adding a new issue code, please also
@@ -725,7 +770,6 @@ experimental domain Audits
       optional HeavyAdIssueDetails heavyAdIssueDetails
       optional ContentSecurityPolicyIssueDetails contentSecurityPolicyIssueDetails
       optional SharedArrayBufferIssueDetails sharedArrayBufferIssueDetails
-      optional LowTextContrastIssueDetails lowTextContrastIssueDetails
       optional CorsIssueDetails corsIssueDetails
       optional AttributionReportingIssueDetails attributionReportingIssueDetails
       optional QuirksModeIssueDetails quirksModeIssueDetails
@@ -744,8 +788,11 @@ experimental domain Audits
       optional ElementAccessibilityIssueDetails elementAccessibilityIssueDetails
       optional SRIMessageSignatureIssueDetails sriMessageSignatureIssueDetails
       optional UnencodedDigestIssueDetails unencodedDigestIssueDetails
+      optional ConnectionAllowlistIssueDetails connectionAllowlistIssueDetails
       optional UserReidentificationIssueDetails userReidentificationIssueDetails
       optional PermissionElementIssueDetails permissionElementIssueDetails
+      optional PerformanceIssueDetails performanceIssueDetails
+      optional SelectivePermissionsInterventionIssueDetails selectivePermissionsInterventionIssueDetails
 
   # A unique id for a DevTools inspector issue. Allows other entities (e.g.
   # exceptions, CDP message, console messages, etc.) to reference an issue.
@@ -789,13 +836,6 @@ experimental domain Audits
   # Enables issues domain, sends the issues collected so far to the client by means of the
   # `issueAdded` event.
   command enable
-
-  # Runs the contrast check for the target page. Found issues are reported
-  # using Audits.issueAdded event.
-  command checkContrast
-    parameters
-      # Whether to report WCAG AAA level issues. Default is false.
-      optional boolean reportAAA
 
   # Runs the form issues check for the target page. Found issues are reported
   # using Audits.issueAdded event.

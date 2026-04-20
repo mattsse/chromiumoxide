@@ -297,6 +297,21 @@ domain Emulation
       # to continuous.
       # Deprecated, use Emulation.setDevicePostureOverride.
       experimental deprecated optional DevicePosture devicePosture
+      # Scrollbar type. Default: `default`.
+      experimental optional enum scrollbarType
+        # Emulates scrollbars that float over the content, typically appearing
+        # only when scrolling.
+        overlay
+        # Restores the platform's default scrollbar behavior, which might be
+        # classic (occupying space within the layout) or overlay, depending
+        # on the platform. Note: if `mobile` is `true`, the default scrollbar type is `overlay`.
+        default
+      # If set to true, enables screen orientation lock emulation, which
+      # intercepts screen.orientation.lock() calls from the page and reports
+      # orientation changes via screenOrientationLockChanged events. This is
+      # useful for emulating mobile device orientation lock behavior in
+      # responsive design mode.
+      experimental optional boolean screenOrientationLockEmulation
 
   # Start reporting the given posture value to the Device Posture API.
   # This override can also be set in setDeviceMetricsOverride().
@@ -521,10 +536,21 @@ domain Emulation
   # Notification sent after the virtual time budget for the current VirtualTimePolicy has run out.
   experimental event virtualTimeBudgetExpired
 
+  # Fired when a page calls screen.orientation.lock() or screen.orientation.unlock()
+  # while device emulation is enabled. This allows the DevTools frontend to update the
+  # emulated device orientation accordingly.
+  experimental event screenOrientationLockChanged
+    parameters
+      # Whether the screen orientation is currently locked.
+      boolean locked
+      # The orientation lock type requested by the page. Only set when locked is true.
+      optional ScreenOrientation orientation
+
   # Enum of image types that can be disabled.
   experimental type DisabledImageType extends string
     enum
       avif
+      jxl
       webp
 
   experimental command setDisabledImageTypes
@@ -571,7 +597,8 @@ domain Emulation
       # of size 100lvh.
       integer difference
 
-  # Returns device's screen configuration.
+  # Returns device's screen configuration. In headful mode, the physical screens configuration is returned,
+  # whereas in headless mode, a virtual headless screen configuration is provided instead.
   experimental command getScreenInfos
     returns
       array of ScreenInfo screenInfos
@@ -602,7 +629,43 @@ domain Emulation
     returns
       ScreenInfo screenInfo
 
+  # Updates specified screen parameters. Only supported in headless mode.
+  experimental command updateScreen
+    parameters
+      # Target screen identifier.
+      ScreenId screenId
+      # Offset of the left edge of the screen in pixels.
+      optional integer left
+      # Offset of the top edge of the screen in pixels.
+      optional integer top
+      # The width of the screen in pixels.
+      optional integer width
+      # The height of the screen in pixels.
+      optional integer height
+      # Specifies the screen's work area.
+      optional WorkAreaInsets workAreaInsets
+      # Specifies the screen's device pixel ratio.
+      optional number devicePixelRatio
+      # Specifies the screen's rotation angle. Available values are 0, 90, 180 and 270.
+      optional integer rotation
+      # Specifies the screen's color depth in bits.
+      optional integer colorDepth
+      # Specifies the descriptive label for the screen.
+      optional string label
+      # Indicates whether the screen is internal to the device or external, attached to the device. Default is false.
+      optional boolean isInternal
+    returns
+      ScreenInfo screenInfo
+
   # Remove screen from the device. Only supported in headless mode.
   experimental command removeScreen
+    parameters
+      ScreenId screenId
+
+  # Set primary screen. Only supported in headless mode.
+  # Note that this changes the coordinate system origin to the top-left
+  # of the new primary screen, updating the bounds and work areas
+  # of all existing screens accordingly.
+  experimental command setPrimaryScreen
     parameters
       ScreenId screenId
