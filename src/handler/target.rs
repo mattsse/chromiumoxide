@@ -3,7 +3,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
 
-use chromiumoxide_cdp::cdp::browser_protocol::target::DetachFromTargetParams;
+
 use futures::channel::oneshot::Sender;
 use futures::stream::Stream;
 use futures::task::{Context, Poll};
@@ -92,6 +92,21 @@ pub struct Target {
     wait_for_frame_navigation: Vec<Sender<ArcHttpRequest>>,
     /// The sender who requested the page.
     initiator: Option<Sender<Result<Page>>>,
+    /// Worker sessions attached to this target (dedicated, service, shared).
+    worker_sessions: Vec<WorkerSession>,
+}
+
+/// A worker session attached to a page target.
+#[derive(Debug, Clone)]
+pub struct WorkerSession {
+    /// The target ID of the worker.
+    pub target_id: TargetId,
+    /// The CDP session ID for communicating with this worker.
+    pub session_id: SessionId,
+    /// The type of worker.
+    pub target_type: TargetType,
+    /// The URL of the worker script.
+    pub url: String,
 }
 
 impl Target {
@@ -120,6 +135,7 @@ impl Target {
             event_listeners: Default::default(),
             initiator: None,
             browser_context,
+            worker_sessions: Vec::new(),
         }
     }
 
@@ -190,6 +206,11 @@ impl Target {
     /// Get the target that opened this target. Top-level targets return `None`.
     pub fn opener_id(&self) -> Option<&TargetId> {
         self.info.opener_id.as_ref()
+    }
+
+    /// Get all worker sessions attached to this target.
+    pub fn worker_sessions(&self) -> &[WorkerSession] {
+        &self.worker_sessions
     }
 
     pub fn frame_manager(&self) -> &FrameManager {
@@ -267,16 +288,18 @@ impl Target {
                     }));
                 }
 
-                if "service_worker" == &ev.target_info.r#type {
-                    let detach_command = DetachFromTargetParams::builder()
-                        .session_id(ev.session_id.clone())
-                        .build();
-
-                    self.queued_events.push_back(TargetEvent::Request(Request {
-                        method: detach_command.identifier(),
-                        session_id: self.session_id.clone().map(Into::into),
-                        params: serde_json::to_value(detach_command).unwrap(),
-                    }));
+                // Store the worker session for evaluation.
+                // Previously, service workers were auto-detached here.
+                // Now all worker types are kept attached so they can be
+                // evaluated via Runtime.evaluate on their session.
+                let worker_type = TargetType::new(&ev.target_info.r#type);
+                if worker_type.is_any_worker() {
+                    self.worker_sessions.push(WorkerSession {
+                        target_id: ev.target_info.target_id.clone(),
+                        session_id: ev.session_id.clone(),
+                        target_type: worker_type,
+                        url: ev.target_info.url.clone(),
+                    });
                 }
             }
 
@@ -320,15 +343,22 @@ impl Target {
 
     /// Advance that target's state
     pub(crate) fn poll(&mut self, cx: &mut Context<'_>, now: Instant) -> Option<TargetEvent> {
-        if !self.is_page() {
-            // can only poll pages
+        if !self.is_page() && !self.r#type().is_any_worker() {
+            // Only pages and workers can be polled
             return None;
         }
         match &mut self.init_state {
             TargetInit::AttachToTarget => {
-                self.init_state = TargetInit::InitializingFrame(FrameManager::init_commands(
-                    self.config.request_timeout,
-                ));
+                // Workers don't need Frame/Network/Page/Emulation init —
+                // they only need Runtime, which is available as soon as
+                // the session is attached.
+                if self.r#type().is_any_worker() {
+                    self.init_state = TargetInit::Initialized;
+                } else {
+                    self.init_state = TargetInit::InitializingFrame(FrameManager::init_commands(
+                        self.config.request_timeout,
+                    ));
+                }
                 let params = AttachToTargetParams::builder()
                     .target_id(self.target_id().clone())
                     .flatten(true)
@@ -620,6 +650,7 @@ impl Default for TargetConfig {
 pub enum TargetType {
     Page,
     BackgroundPage,
+    Worker,
     ServiceWorker,
     SharedWorker,
     Other,
@@ -633,6 +664,7 @@ impl TargetType {
         match ty {
             "page" => TargetType::Page,
             "background_page" => TargetType::BackgroundPage,
+            "worker" => TargetType::Worker,
             "service_worker" => TargetType::ServiceWorker,
             "shared_worker" => TargetType::SharedWorker,
             "other" => TargetType::Other,
@@ -650,12 +682,24 @@ impl TargetType {
         matches!(self, TargetType::BackgroundPage)
     }
 
+    pub fn is_worker(&self) -> bool {
+        matches!(self, TargetType::Worker)
+    }
+
     pub fn is_service_worker(&self) -> bool {
         matches!(self, TargetType::ServiceWorker)
     }
 
     pub fn is_shared_worker(&self) -> bool {
         matches!(self, TargetType::SharedWorker)
+    }
+
+    /// Returns true for any worker type (dedicated, service, or shared).
+    pub fn is_any_worker(&self) -> bool {
+        matches!(
+            self,
+            TargetType::Worker | TargetType::ServiceWorker | TargetType::SharedWorker
+        )
     }
 
     pub fn is_other(&self) -> bool {
