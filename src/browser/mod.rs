@@ -20,7 +20,7 @@ use chromiumoxide_cdp::cdp::browser_protocol::target::{
 use chromiumoxide_cdp::cdp::{CdpEventMessage, IntoEventKind};
 use chromiumoxide_types::*;
 
-pub use self::config::{BrowserConfig, BrowserConfigBuilder, LAUNCH_TIMEOUT};
+pub use self::config::{BrowserConfig, BrowserConfigBuilder, LAUNCH_TIMEOUT, HeadlessMode};
 use crate::async_process::{Child, ExitStatus};
 use crate::cmd::{CommandMessage, to_command_response};
 use crate::conn::Connection;
