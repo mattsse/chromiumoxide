@@ -4,6 +4,8 @@ use std::pin::Pin;
 use std::task::ready;
 
 use async_tungstenite::tungstenite::Message as WsMessage;
+use async_tungstenite::tungstenite::client::IntoClientRequest;
+use async_tungstenite::tungstenite::http;
 use async_tungstenite::{WebSocketStream, tungstenite::protocol::WebSocketConfig};
 use futures::stream::Stream;
 use futures::task::{Context, Poll};
@@ -43,6 +45,38 @@ impl<T: EventMessage + Unpin> Connection<T> {
             Some(config),
         )
         .await?;
+
+        Ok(Self {
+            pending_commands: Default::default(),
+            ws,
+            next_id: 0,
+            needs_flush: false,
+            pending_flush: None,
+            _marker: Default::default(),
+        })
+    }
+
+    pub async fn connect_with_headers(
+        debug_ws_url: impl AsRef<str>,
+        headers: Vec<(String, String)>,
+    ) -> Result<Self> {
+        let config = WebSocketConfig::default()
+            .max_message_size(None)
+            .max_frame_size(None);
+
+        let mut request = debug_ws_url.as_ref().into_client_request()?;
+        let req_headers = request.headers_mut();
+        for (k, v) in &headers {
+            let name = http::HeaderName::try_from(k.as_str())
+                .map_err(|e| CdpError::ChromeMessage(format!("invalid header name '{k}': {e}")))?;
+            let value = http::HeaderValue::try_from(v.as_str()).map_err(|e| {
+                CdpError::ChromeMessage(format!("invalid header value for '{k}': {e}"))
+            })?;
+            req_headers.append(name, value);
+        }
+
+        let (ws, _) =
+            async_tungstenite::tokio::connect_async_with_config(request, Some(config)).await?;
 
         Ok(Self {
             pending_commands: Default::default(),

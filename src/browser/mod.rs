@@ -143,6 +143,81 @@ impl Browser {
         Ok((browser, fut))
     }
 
+    /// Same as [`Browser::connect`], but attaches the given HTTP headers to the
+    /// CDP WebSocket upgrade and to the `json/version` discovery request when
+    /// the URL is `http(s)://`. Required for authenticated remote CDP providers
+    /// (Cloudflare Browser Run, Browserless, etc.).
+    pub async fn connect_with_headers(
+        url: impl Into<String>,
+        headers: Vec<(String, String)>,
+    ) -> Result<(Self, Handler)> {
+        Self::connect_with_headers_and_config(url, HandlerConfig::default(), headers).await
+    }
+
+    /// Same as [`Browser::connect_with_config`], but attaches the given HTTP
+    /// headers. See [`Browser::connect_with_headers`] for details.
+    pub async fn connect_with_headers_and_config(
+        url: impl Into<String>,
+        config: HandlerConfig,
+        headers: Vec<(String, String)>,
+    ) -> Result<(Self, Handler)> {
+        let mut debug_ws_url = url.into();
+
+        if debug_ws_url.starts_with("http") {
+            let probe_url = if debug_ws_url.ends_with("/json/version")
+                || debug_ws_url.ends_with("/json/version/")
+            {
+                debug_ws_url.clone()
+            } else {
+                format!(
+                    "{}{}json/version",
+                    &debug_ws_url,
+                    if debug_ws_url.ends_with('/') { "" } else { "/" }
+                )
+            };
+
+            let mut req = reqwest::Client::new()
+                .get(probe_url)
+                .header("content-type", "application/json");
+            for (k, v) in &headers {
+                req = req.header(k, v);
+            }
+
+            match req.send().await {
+                Ok(resp) => {
+                    let socketaddr = resp.remote_addr().unwrap();
+                    let connection: BrowserConnection =
+                        serde_json::from_slice(&resp.bytes().await.unwrap_or_default())
+                            .unwrap_or_default();
+
+                    if !connection.web_socket_debugger_url.is_empty() {
+                        debug_ws_url = connection
+                            .web_socket_debugger_url
+                            .replace("127.0.0.1", &socketaddr.ip().to_string());
+                    }
+                }
+                Err(_) => return Err(CdpError::NoResponse),
+            }
+        }
+
+        let conn =
+            Connection::<CdpEventMessage>::connect_with_headers(&debug_ws_url, headers).await?;
+
+        let (tx, rx) = channel(1);
+
+        let fut = Handler::new(conn, rx, config);
+        let browser_context = fut.default_browser_context().clone();
+
+        let browser = Self {
+            sender: tx,
+            config: None,
+            child: None,
+            debug_ws_url,
+            browser_context,
+        };
+        Ok((browser, fut))
+    }
+
     /// Launches a new instance of `chromium` in the background and attaches to
     /// its debug web socket.
     ///
