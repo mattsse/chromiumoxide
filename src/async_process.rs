@@ -58,6 +58,15 @@ impl Command {
         self
     }
 
+    pub fn fd_mappings(
+        &mut self,
+        fd_mappings: Vec<command_fds::FdMapping>,
+    ) -> Result<&mut Self, command_fds::FdMappingCollision> {
+        use command_fds::CommandFdExt;
+        self.inner.fd_mappings(fd_mappings)?;
+        Ok(self)
+    }
+
     pub fn spawn(&mut self) -> std::io::Result<Child> {
         let inner = self.inner.spawn()?;
         Ok(Child::new(inner))

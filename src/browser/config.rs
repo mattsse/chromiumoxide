@@ -26,6 +26,14 @@ pub enum HeadlessMode {
 }
 
 #[derive(Debug, Clone)]
+pub enum PortOrPipes {
+    /// Use a port
+    Port(u16),
+    /// Create new pipes
+    Pipes,
+}
+
+#[derive(Debug, Clone)]
 pub struct BrowserConfig {
     /// Determines whether to run headless version of the browser. Defaults to
     /// true.
@@ -37,8 +45,9 @@ pub struct BrowserConfig {
     /// Launch the browser with a specific window width and height.
     pub(crate) window_size: Option<(u32, u32)>,
 
-    /// Launch the browser with a specific debugging port.
-    pub(crate) port: u16,
+    /// Launch the browser with a specific debugging port, or use pipes to communicate
+    /// with the browser instead of a port.
+    pub(crate) port_or_pipes: PortOrPipes,
 
     /// Path for Chrome or Chromium.
     ///
@@ -104,7 +113,7 @@ pub struct BrowserConfigBuilder {
     headless: HeadlessMode,
     sandbox: bool,
     window_size: Option<(u32, u32)>,
-    port: u16,
+    port_or_pipes: PortOrPipes,
     executable: Option<PathBuf>,
     executation_detection: DetectionOptions,
     extensions: Vec<String>,
@@ -137,10 +146,10 @@ impl BrowserConfig {
 impl Default for BrowserConfigBuilder {
     fn default() -> Self {
         Self {
-            headless: HeadlessMode::True,
+            headless: HeadlessMode::False,
             sandbox: true,
             window_size: None,
-            port: 0,
+            port_or_pipes: PortOrPipes::Port(0),
             executable: None,
             executation_detection: DetectionOptions::default(),
             extensions: Vec::new(),
@@ -206,7 +215,12 @@ impl BrowserConfigBuilder {
     }
 
     pub fn port(mut self, port: u16) -> Self {
-        self.port = port;
+        self.port_or_pipes = PortOrPipes::Port(port);
+        self
+    }
+
+    pub fn pipes(mut self) -> Self {
+        self.port_or_pipes = PortOrPipes::Pipes;
         self
     }
 
@@ -345,7 +359,7 @@ impl BrowserConfigBuilder {
             headless: self.headless,
             sandbox: self.sandbox,
             window_size: self.window_size,
-            port: self.port,
+            port_or_pipes: self.port_or_pipes,
             executable,
             extensions: self.extensions,
             process_envs: self.process_envs,
@@ -367,7 +381,9 @@ impl BrowserConfigBuilder {
 }
 
 impl BrowserConfig {
-    pub fn launch(&self) -> io::Result<Child> {
+    pub fn launch(
+        &self,
+    ) -> io::Result<(Child, Option<(std::io::PipeReader, std::io::PipeWriter)>)> {
         let mut builder = ArgsBuilder::new();
 
         if self.disable_default_args {
@@ -376,8 +392,17 @@ impl BrowserConfig {
             builder.args(DEFAULT_ARGS.clone()).args(self.args.clone());
         }
 
-        if !builder.has("remote-debugging-port") {
-            builder.arg(Arg::value("remote-debugging-port", self.port));
+        match &self.port_or_pipes {
+            PortOrPipes::Port(port) => {
+                if !builder.has("remote-debugging-port") {
+                    builder.arg(Arg::value("remote-debugging-port", *port));
+                }
+            }
+            PortOrPipes::Pipes => {
+                if !builder.has("remote-debugging-pipe") {
+                    builder.arg(Arg::key("remote-debugging-pipe"));
+                }
+            }
         }
 
         if self.extensions.is_empty() {
@@ -451,7 +476,35 @@ impl BrowserConfig {
         if let Some(ref envs) = self.process_envs {
             cmd.envs(envs);
         }
-        cmd.stdout(Stdio::null()).stderr(Stdio::piped()).spawn()
+
+        cmd.stdout(Stdio::null()).stderr(Stdio::piped());
+        match &self.port_or_pipes {
+            PortOrPipes::Port(_) => {
+                // Nothing to do, it's provided as args
+                let child = cmd.spawn()?;
+                Ok((child, None))
+            }
+            PortOrPipes::Pipes => {
+                // For debug pipes, they need to be provided as fd 3 (for chrome to read from)
+                // and fd 4 (for chrome to write into).
+                let (pipe_reader_3, pipe_writer_3) = std::io::pipe().unwrap();
+                let (pipe_reader_4, pipe_writer_4) = std::io::pipe().unwrap();
+                cmd.fd_mappings(vec![
+                    command_fds::FdMapping {
+                        parent_fd: pipe_reader_3.into(),
+                        child_fd: 3,
+                    },
+                    command_fds::FdMapping {
+                        parent_fd: pipe_writer_4.into(),
+                        child_fd: 4,
+                    },
+                ])
+                .expect("There should not be an error setting up fd mappings");
+
+                let child = cmd.spawn()?;
+                Ok((child, Some((pipe_reader_4, pipe_writer_3))))
+            }
+        }
     }
 }
 

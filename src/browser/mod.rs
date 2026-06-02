@@ -143,6 +143,34 @@ impl Browser {
         Ok((browser, fut))
     }
 
+    // Connect to an already running chromium instance with a given `HandlerConfig`.
+    ///
+    /// The write end of `read_pipe` must have been passed as fd 3 to the running chromium instance,
+    /// the read end of the `write_pipe` must have been passed as fd 4.
+    ///
+    /// Chromium must have been launched with `remote-debugging-pipe` enabled.
+    pub async fn connect_with_pipes_and_config(
+        read_pipe: std::io::PipeReader,
+        write_pipe: std::io::PipeWriter,
+        config: HandlerConfig,
+    ) -> Result<(Self, Handler)> {
+        let conn = Connection::<CdpEventMessage>::connect_with_pipes(write_pipe, read_pipe).await?;
+
+        let (tx, rx) = channel(1);
+
+        let fut = Handler::new(conn, rx, config);
+        let browser_context = fut.default_browser_context().clone();
+
+        let browser = Self {
+            sender: tx,
+            config: None,
+            child: None,
+            debug_ws_url: String::new(),
+            browser_context,
+        };
+        Ok((browser, fut))
+    }
+
     /// Launches a new instance of `chromium` in the background and attaches to
     /// its debug web socket.
     ///
@@ -156,7 +184,7 @@ impl Browser {
         config.executable = utils::canonicalize_except_snap(config.executable).await?;
 
         // Launch a new chromium instance
-        let mut child = config.launch()?;
+        let (mut child, pipes) = config.launch()?;
 
         /// Faillible initialization to run once the child process is created.
         ///
@@ -165,17 +193,28 @@ impl Browser {
         async fn with_child(
             config: &BrowserConfig,
             child: &mut Child,
+            pipes: Option<(std::io::PipeReader, std::io::PipeWriter)>,
         ) -> Result<(String, Connection<CdpEventMessage>)> {
             let dur = config.launch_timeout;
             let timeout_fut = Box::pin(tokio::time::sleep(dur));
 
-            // extract the ws:
-            let debug_ws_url = ws_url_from_output(child, timeout_fut).await?;
-            let conn = Connection::<CdpEventMessage>::connect(&debug_ws_url).await?;
-            Ok((debug_ws_url, conn))
+            match &config.port_or_pipes {
+                config::PortOrPipes::Port(_) => {
+                    // extract the ws:
+                    let debug_ws_url = ws_url_from_output(child, timeout_fut).await?;
+                    let conn = Connection::<CdpEventMessage>::connect(&debug_ws_url).await?;
+                    Ok((debug_ws_url, conn))
+                }
+                config::PortOrPipes::Pipes => {
+                    let pipes = pipes.unwrap();
+                    let conn =
+                        Connection::<CdpEventMessage>::connect_with_pipes(pipes.1, pipes.0).await?;
+                    Ok((String::new(), conn))
+                }
+            }
         }
 
-        let (debug_ws_url, conn) = match with_child(&config, &mut child).await {
+        let (debug_ws_url, conn) = match with_child(&config, &mut child, pipes).await {
             Ok(conn) => conn,
             Err(e) => {
                 // An initialization error occurred, clean up the process
@@ -193,7 +232,7 @@ impl Browser {
         // Only infaillible calls are allowed after this point to avoid clean-up issues with the
         // child process.
 
-        let (tx, rx) = channel(1);
+        let (tx, rx) = channel(100);
 
         let handler_config = HandlerConfig {
             ignore_https_errors: config.ignore_https_errors,

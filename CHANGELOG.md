@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Derive `Clone` for `Element`, `ScreenshotParams` and `ScreenshotParamsBuilder`
+- Allow using pipes to communicate with chromium, rather than websockets
 
 ## [0.9.1] 2026-02-25
 
