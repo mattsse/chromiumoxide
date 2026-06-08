@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 pub type MethodId = Cow<'static, str>;
 
 /// A Request sent by the client, identified by the `id`
-#[derive(Serialize, Debug, PartialEq, Eq)]
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 pub struct MethodCall {
     /// Identifier for this method call
     ///
