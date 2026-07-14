@@ -29,25 +29,38 @@ fn absolute(path: PathBuf) -> std::io::Result<PathBuf> {
     Ok(dunce::simplified(&path).to_path_buf())
 }
 
-/// Check if the given path is a Linux /proc/self/fd/N path
+/// Checks whether the path is a Linux procfs FD path of the form
+/// `/proc/self/fd/N` or `/proc/PID/fd/N`.
 #[cfg(any(target_os = "linux", test))]
-fn is_proc_self_fd_path(path: &Path) -> bool {
-    let Some(fd) = path
-        .to_str()
-        .and_then(|path| path.strip_prefix("/proc/self/fd/"))
-    else {
+fn is_proc_fd_path(path: &Path) -> bool {
+    let Some(path) = path.to_str().and_then(|path| path.strip_prefix("/proc/")) else {
         return false;
     };
 
-    fd.parse::<i32>()
-        .is_ok_and(|n| n >= 0 && n.to_string() == fd)
+    let mut components = path.split('/');
+    let (Some(pid), Some("fd"), Some(fd), None) = (
+        components.next(),
+        components.next(),
+        components.next(),
+        components.next(),
+    ) else {
+        return false;
+    };
+
+    fn is_canonical_i32(value: &str, minimum: i32) -> bool {
+        value
+            .parse::<i32>()
+            .is_ok_and(|n| n >= minimum && n.to_string() == value)
+    }
+
+    (pid == "self" || is_canonical_i32(pid, 1)) && is_canonical_i32(fd, 0)
 }
 
 /// Normalize an executable path without resolving Linux paths that must retain
 /// their original form.
 pub(crate) async fn normalize_executable_path(path: PathBuf) -> std::io::Result<PathBuf> {
     #[cfg(target_os = "linux")]
-    if is_proc_self_fd_path(&path) {
+    if is_proc_fd_path(&path) {
         return Ok(path);
     }
 
@@ -140,9 +153,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn recognizes_proc_self_fd_paths() {
-        assert!(is_proc_self_fd_path(Path::new("/proc/self/fd/0")));
-        assert!(is_proc_self_fd_path(Path::new("/proc/self/fd/123")));
+    fn recognizes_proc_fd_paths() {
+        for path in [
+            "/proc/self/fd/0",
+            "/proc/self/fd/123",
+            "/proc/1/fd/0",
+            "/proc/123/fd/456",
+            "/proc/2147483647/fd/2147483647",
+        ] {
+            assert!(is_proc_fd_path(Path::new(path)), "{path}");
+        }
 
         for path in [
             "/proc/self/fd/",
@@ -155,8 +175,21 @@ mod tests {
             "/proc/self/fd/123/extra",
             "/proc/self/fd/123/../../../456",
             "/proc/self/fd/999999999999999999999999",
+            "/proc//fd/1",
+            "/proc/0/fd/1",
+            "/proc/0001/fd/1",
+            "/proc/-1/fd/1",
+            "/proc/+1/fd/1",
+            "/proc/not-a-pid/fd/1",
+            "/proc/1/fd/0001",
+            "/proc/1/fd/-1",
+            "/proc/1/fd/+1",
+            "/proc/1/fd/not-a-fd",
+            "/proc/1/fd/1/extra",
+            "/proc/1/fd/1/../../../2",
+            "/proc/999999999999999999999999/fd/1",
         ] {
-            assert!(!is_proc_self_fd_path(Path::new(path)), "{path}");
+            assert!(!is_proc_fd_path(Path::new(path)), "{path}");
         }
     }
 
