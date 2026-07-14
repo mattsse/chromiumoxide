@@ -153,7 +153,7 @@ impl Browser {
     /// (20 seconds by default).
     pub async fn launch(mut config: BrowserConfig) -> Result<(Self, Handler)> {
         // Canonalize paths to reduce issues with sandboxing
-        config.executable = utils::canonicalize_except_snap(config.executable).await?;
+        config.executable = utils::normalize_executable_path(config.executable).await?;
 
         // Launch a new chromium instance
         let mut child = config.launch()?;

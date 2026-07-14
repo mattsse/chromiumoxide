@@ -29,9 +29,28 @@ fn absolute(path: PathBuf) -> std::io::Result<PathBuf> {
     Ok(dunce::simplified(&path).to_path_buf())
 }
 
-/// Canonicalize path except if target binary is snap, in this case only make the path absolute
-///
-pub(crate) async fn canonicalize_except_snap(path: PathBuf) -> std::io::Result<PathBuf> {
+/// Check if the given path is a Linux /proc/self/fd/N path
+#[cfg(any(target_os = "linux", test))]
+fn is_proc_self_fd_path(path: &Path) -> bool {
+    let Some(fd) = path
+        .to_str()
+        .and_then(|path| path.strip_prefix("/proc/self/fd/"))
+    else {
+        return false;
+    };
+
+    fd.parse::<i32>()
+        .is_ok_and(|n| n >= 0 && n.to_string() == fd)
+}
+
+/// Normalize an executable path without resolving Linux paths that must retain
+/// their original form.
+pub(crate) async fn normalize_executable_path(path: PathBuf) -> std::io::Result<PathBuf> {
+    #[cfg(target_os = "linux")]
+    if is_proc_self_fd_path(&path) {
+        return Ok(path);
+    }
+
     // Canonalize paths to reduce issues with sandboxing
     let executable_cleaned: PathBuf = canonicalize(&path).await?;
 
@@ -119,6 +138,27 @@ fn skip_args(input: &mut &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recognizes_proc_self_fd_paths() {
+        assert!(is_proc_self_fd_path(Path::new("/proc/self/fd/0")));
+        assert!(is_proc_self_fd_path(Path::new("/proc/self/fd/123")));
+
+        for path in [
+            "/proc/self/fd/",
+            "/proc/self/fd/0001",
+            "/proc/self/fd/-1",
+            "/proc/self/fd/+1",
+            "/proc/self/fd/not-a-fd",
+            "/proc/self/fd//123",
+            "/proc/self/fd/./123",
+            "/proc/self/fd/123/extra",
+            "/proc/self/fd/123/../../../456",
+            "/proc/self/fd/999999999999999999999999",
+        ] {
+            assert!(!is_proc_self_fd_path(Path::new(path)), "{path}");
+        }
+    }
 
     #[test]
     fn is_js_function() {
