@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Derive `Clone` for `Element`, `ScreenshotParams` and `ScreenshotParamsBuilder`
+- Preserve Linux `/proc/self/fd/N` and `/proc/PID/fd/N` executable paths
 
 ## [0.9.1] 2026-02-25
 

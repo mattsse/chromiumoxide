@@ -19,7 +19,8 @@ pub(crate) async fn canonicalize<P: AsRef<Path> + Unpin>(path: P) -> std::io::Re
 
 /// Absolute path
 ///
-pub(crate) fn absolute(path: PathBuf) -> std::io::Result<PathBuf> {
+#[cfg(target_os = "linux")]
+fn absolute(path: PathBuf) -> std::io::Result<PathBuf> {
     let path = if path.is_absolute() {
         path
     } else {
@@ -28,18 +29,51 @@ pub(crate) fn absolute(path: PathBuf) -> std::io::Result<PathBuf> {
     Ok(dunce::simplified(&path).to_path_buf())
 }
 
-/// Canonicalize path except if target binary is snap, in this case only make the path absolute
-///
-pub(crate) async fn canonicalize_except_snap(path: PathBuf) -> std::io::Result<PathBuf> {
+/// Checks whether the path is a Linux procfs FD path of the form
+/// `/proc/self/fd/N` or `/proc/PID/fd/N`.
+#[cfg(any(target_os = "linux", test))]
+fn is_proc_fd_path(path: &Path) -> bool {
+    let Some(path) = path.to_str().and_then(|path| path.strip_prefix("/proc/")) else {
+        return false;
+    };
+
+    let mut components = path.split('/');
+    let (Some(pid), Some("fd"), Some(fd), None) = (
+        components.next(),
+        components.next(),
+        components.next(),
+        components.next(),
+    ) else {
+        return false;
+    };
+
+    fn is_canonical_i32(value: &str, minimum: i32) -> bool {
+        value
+            .parse::<i32>()
+            .is_ok_and(|n| n >= minimum && n.to_string() == value)
+    }
+
+    (pid == "self" || is_canonical_i32(pid, 1)) && is_canonical_i32(fd, 0)
+}
+
+/// Normalize an executable path without resolving Linux paths that must retain
+/// their original form.
+pub(crate) async fn normalize_executable_path(path: PathBuf) -> std::io::Result<PathBuf> {
+    #[cfg(target_os = "linux")]
+    if is_proc_fd_path(&path) {
+        return Ok(path);
+    }
+
     // Canonalize paths to reduce issues with sandboxing
     let executable_cleaned: PathBuf = canonicalize(&path).await?;
 
     // Handle case where executable is provided by snap, ignore canonicalize result and only make path absolute
-    Ok(if executable_cleaned.to_str().unwrap().ends_with("/snap") {
-        absolute(path).unwrap()
-    } else {
-        executable_cleaned
-    })
+    #[cfg(target_os = "linux")]
+    if executable_cleaned.to_str().unwrap().ends_with("/snap") {
+        return Ok(absolute(path).unwrap());
+    }
+
+    Ok(executable_cleaned)
 }
 
 pub(crate) mod base64 {
@@ -117,6 +151,47 @@ fn skip_args(input: &mut &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recognizes_proc_fd_paths() {
+        for path in [
+            "/proc/self/fd/0",
+            "/proc/self/fd/123",
+            "/proc/1/fd/0",
+            "/proc/123/fd/456",
+            "/proc/2147483647/fd/2147483647",
+        ] {
+            assert!(is_proc_fd_path(Path::new(path)), "{path}");
+        }
+
+        for path in [
+            "/proc/self/fd/",
+            "/proc/self/fd/0001",
+            "/proc/self/fd/-1",
+            "/proc/self/fd/+1",
+            "/proc/self/fd/not-a-fd",
+            "/proc/self/fd//123",
+            "/proc/self/fd/./123",
+            "/proc/self/fd/123/extra",
+            "/proc/self/fd/123/../../../456",
+            "/proc/self/fd/999999999999999999999999",
+            "/proc//fd/1",
+            "/proc/0/fd/1",
+            "/proc/0001/fd/1",
+            "/proc/-1/fd/1",
+            "/proc/+1/fd/1",
+            "/proc/not-a-pid/fd/1",
+            "/proc/1/fd/0001",
+            "/proc/1/fd/-1",
+            "/proc/1/fd/+1",
+            "/proc/1/fd/not-a-fd",
+            "/proc/1/fd/1/extra",
+            "/proc/1/fd/1/../../../2",
+            "/proc/999999999999999999999999/fd/1",
+        ] {
+            assert!(!is_proc_fd_path(Path::new(path)), "{path}");
+        }
+    }
 
     #[test]
     fn is_js_function() {
