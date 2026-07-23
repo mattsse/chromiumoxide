@@ -1,10 +1,12 @@
 use chromiumoxide_cdp::cdp::browser_protocol::network::{InterceptionId, RequestId, Response};
 use chromiumoxide_cdp::cdp::browser_protocol::page::FrameId;
+use chromiumoxide_cdp::cdp::browser_protocol::target::SessionId;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct HttpRequest {
     request_id: RequestId,
+    session_id: Option<SessionId>,
     pub from_memory_cache: bool,
     pub failure_text: Option<String>,
     pub interception_id: Option<InterceptionId>,
@@ -29,8 +31,45 @@ impl HttpRequest {
         allow_interception: bool,
         redirect_chain: Vec<HttpRequest>,
     ) -> Self {
+        Self::new_inner(
+            request_id,
+            frame,
+            interception_id,
+            allow_interception,
+            redirect_chain,
+            None,
+        )
+    }
+
+    pub(crate) fn new_with_session(
+        request_id: RequestId,
+        frame: Option<FrameId>,
+        interception_id: Option<InterceptionId>,
+        allow_interception: bool,
+        redirect_chain: Vec<HttpRequest>,
+        session_id: SessionId,
+    ) -> Self {
+        Self::new_inner(
+            request_id,
+            frame,
+            interception_id,
+            allow_interception,
+            redirect_chain,
+            Some(session_id),
+        )
+    }
+
+    fn new_inner(
+        request_id: RequestId,
+        frame: Option<FrameId>,
+        interception_id: Option<InterceptionId>,
+        allow_interception: bool,
+        redirect_chain: Vec<HttpRequest>,
+        session_id: Option<SessionId>,
+    ) -> Self {
         Self {
             request_id,
+            session_id,
             from_memory_cache: false,
             failure_text: None,
             interception_id,
@@ -50,6 +89,10 @@ impl HttpRequest {
 
     pub fn request_id(&self) -> &RequestId {
         &self.request_id
+    }
+
+    pub(crate) fn session_id(&self) -> Option<&SessionId> {
+        self.session_id.as_ref()
     }
 
     pub(crate) fn set_response(&mut self, response: Response) {

@@ -4,7 +4,9 @@ use chromiumoxide::{Browser, BrowserConfig};
 use futures::{FutureExt, StreamExt};
 
 mod basic;
+mod compatibility;
 mod config;
+mod oopif;
 mod page;
 mod stealth;
 
@@ -15,10 +17,17 @@ where
     test_config(BrowserConfig::builder().build().unwrap(), test).await;
 }
 
-pub async fn test_config<T>(config: BrowserConfig, test: T)
+pub async fn test_config<T>(mut config: BrowserConfig, test: T)
 where
     T: for<'a> AsyncFnOnce(&'a mut Browser),
 {
+    let _profile = if config.user_data_dir.is_none() {
+        let profile = tempfile::tempdir().expect("temporary browser profile can be created");
+        config.user_data_dir = Some(profile.path().to_path_buf());
+        Some(profile)
+    } else {
+        None
+    };
     let (mut browser, mut handler) = Browser::launch(config).await.unwrap();
 
     let handle = tokio::spawn(async move {

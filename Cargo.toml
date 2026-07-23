@@ -48,6 +48,9 @@ windows-registry = "0.6"
 quote = "1"
 proc-macro2 = "1"
 chrono = "0.4.1"
+proptest = "1"
+static_assertions = "1"
+tempfile = "3.10"
 tracing-subscriber = "0.3"
 tokio = { version = "1", features = ["rt-multi-thread", "time", "macros"] }
 
@@ -64,7 +67,7 @@ zip8 = ["chromiumoxide_fetcher/zip8"]
 
 [[example]]
 name = "fetcher"
-required-features = ["fetcher", "zip8", "rustls"]
+required-features = ["fetcher", "zip8"]
 
 [[test]]
 name = "chromiumoxide_tests"

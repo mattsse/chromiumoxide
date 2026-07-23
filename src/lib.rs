@@ -73,8 +73,11 @@ pub use crate::element::Element;
 pub use crate::error::Result;
 #[cfg(feature = "fetcher")]
 pub use crate::fetcher::{BrowserFetcher, BrowserFetcherOptions};
+pub use crate::frame::Frame;
 pub use crate::handler::Handler;
-pub use crate::page::Page;
+pub use crate::page::{
+    ContinueRequestOverrides, FulfillResponse, Page, PausedRequest, PausedRequestStream,
+};
 
 pub mod auth;
 pub mod browser;
@@ -83,6 +86,7 @@ pub mod conn;
 pub mod detection;
 pub mod element;
 pub mod error;
+pub mod frame;
 #[cfg(feature = "fetcher")]
 pub mod fetcher {
     pub use chromiumoxide_fetcher::*;

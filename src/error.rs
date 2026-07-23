@@ -18,6 +18,7 @@ use chromiumoxide_cdp::cdp::js_protocol::runtime::ExceptionDetails;
 pub type Result<T, E = CdpError> = std::result::Result<T, E>;
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum CdpError {
     #[error("{0}")]
     Ws(#[from] tungstenite::Error),
@@ -47,6 +48,18 @@ pub enum CdpError {
     Timeout,
     #[error("FrameId {0:?} not found.")]
     FrameNotFound(FrameId),
+    /// The frame still has an identity, but its captured CDP session is no
+    /// longer usable or has not finished initializing yet.
+    #[error("The frame is not ready for session-scoped operations.")]
+    FrameNotReady,
+    /// Only one managed paused-request responder may own the response stream
+    /// for a page at a time.
+    #[error("A paused-request responder is already registered for this page.")]
+    PausedRequestResponderAlreadyRegistered,
+    /// An operation was rejected because it is not supported through the
+    /// entry point it was submitted to. The message names the supported path.
+    #[error("{0}")]
+    NotAllowed(String),
     /// Error message related to a cdp response that is not a
     /// `chromiumoxide_types::Error`
     #[error("{0}")]

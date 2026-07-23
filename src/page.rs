@@ -1,17 +1,22 @@
 use std::path::Path;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
-use futures::channel::mpsc::unbounded;
+use futures::channel::mpsc::{UnboundedReceiver, unbounded};
 use futures::channel::oneshot::channel as oneshot_channel;
-use futures::{SinkExt, StreamExt, stream};
+use futures::{SinkExt, Stream, StreamExt, stream};
 
 use chromiumoxide_cdp::cdp::browser_protocol::dom::*;
 use chromiumoxide_cdp::cdp::browser_protocol::emulation::{
     MediaFeature, SetEmulatedMediaParams, SetGeolocationOverrideParams, SetLocaleOverrideParams,
     SetTimezoneOverrideParams,
 };
+use chromiumoxide_cdp::cdp::browser_protocol::fetch::{
+    ContinueRequestParams, EventRequestPaused, FailRequestParams, FulfillRequestParams, HeaderEntry,
+};
 use chromiumoxide_cdp::cdp::browser_protocol::network::{
-    Cookie, CookieParam, DeleteCookiesParams, GetCookiesParams, SetCookiesParams,
+    Cookie, CookieParam, DeleteCookiesParams, ErrorReason, GetCookiesParams, SetCookiesParams,
     SetUserAgentOverrideParams,
 };
 use chromiumoxide_cdp::cdp::browser_protocol::page::*;
@@ -29,11 +34,13 @@ use chromiumoxide_types::*;
 use crate::auth::Credentials;
 use crate::element::Element;
 use crate::error::{CdpError, Result};
+use crate::frame::Frame;
 use crate::handler::PageInner;
 use crate::handler::commandfuture::CommandFuture;
 use crate::handler::domworld::DOMWorldKind;
+use crate::handler::frame::HTTP_RESPONSE_CODE_FAILURE;
 use crate::handler::httpfuture::HttpFuture;
-use crate::handler::target::{GetName, GetParent, GetUrl, TargetMessage};
+use crate::handler::target::{GetName, GetParent, GetUrl, InternalTargetMessage, TargetMessage};
 use crate::js::{Evaluation, EvaluationResult};
 use crate::layout::Point;
 use crate::listeners::{EventListenerRequest, EventStream};
@@ -42,6 +49,222 @@ use crate::{ArcHttpRequest, utils};
 #[derive(Debug, Clone)]
 pub struct Page {
     inner: Arc<PageInner>,
+}
+
+/// A Fetch-intercepted request and its at-most-once response capability.
+///
+/// Each response method consumes the handle and always addresses the request
+/// id and CDP session captured when Chrome emitted the pause. Dropping a handle
+/// does not continue the request; callers must explicitly continue, fulfill,
+/// or fail every delivered request they want to release.
+#[derive(Debug)]
+#[must_use = "an unanswered paused request blocks the page; call continue_request, fulfill, or fail to release it"]
+pub struct PausedRequest {
+    pub(crate) event: Arc<EventRequestPaused>,
+    pub(crate) session_id: SessionId,
+    pub(crate) commands: futures::channel::mpsc::Sender<TargetMessage>,
+}
+
+impl PausedRequest {
+    pub(crate) fn new(
+        event: Arc<EventRequestPaused>,
+        session_id: SessionId,
+        commands: futures::channel::mpsc::Sender<TargetMessage>,
+    ) -> Self {
+        Self {
+            event,
+            session_id,
+            commands,
+        }
+    }
+
+    /// Returns the original Fetch pause event for request inspection.
+    pub fn event(&self) -> &EventRequestPaused {
+        self.event.as_ref()
+    }
+
+    /// Continues the request without overriding any request fields.
+    pub async fn continue_request(self) -> Result<()> {
+        self.continue_with(ContinueRequestOverrides::default())
+            .await
+    }
+
+    /// Continues the request with optional URL, method, body, header, or
+    /// response-stage overrides.
+    pub async fn continue_with(self, overrides: ContinueRequestOverrides) -> Result<()> {
+        let ContinueRequestOverrides {
+            url,
+            method,
+            post_data,
+            headers,
+            intercept_response,
+        } = overrides;
+        let request_id = self.event.request_id.clone();
+        self.respond(ContinueRequestParams {
+            request_id,
+            url,
+            method,
+            post_data,
+            headers,
+            intercept_response,
+        })
+        .await
+    }
+
+    /// Completes the request with a synthetic response.
+    pub async fn fulfill(self, response: FulfillResponse) -> Result<()> {
+        let FulfillResponse {
+            response_code,
+            response_headers,
+            binary_response_headers,
+            body,
+            response_phrase,
+        } = response;
+        let request_id = self.event.request_id.clone();
+        self.respond(FulfillRequestParams {
+            request_id,
+            response_code,
+            response_headers,
+            binary_response_headers,
+            body,
+            response_phrase,
+        })
+        .await
+    }
+
+    /// Fails the request with the supplied network error reason.
+    pub async fn fail(self, reason: ErrorReason) -> Result<()> {
+        let request_id = self.event.request_id.clone();
+        self.respond(FailRequestParams::new(request_id, reason))
+            .await
+    }
+
+    async fn respond<T: Command>(self, command: T) -> Result<()> {
+        CommandFuture::new(command, self.commands, Some(self.session_id))?.await?;
+        Ok(())
+    }
+}
+
+/// Optional request-field replacements for [`PausedRequest::continue_with`].
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ContinueRequestOverrides {
+    /// Replaces the request URL without exposing the replacement to page code.
+    pub url: Option<String>,
+    /// Replaces the HTTP method.
+    pub method: Option<String>,
+    /// Replaces the request body. The value is base64 encoded for CDP.
+    pub post_data: Option<Binary>,
+    /// Replaces the complete request header list.
+    pub headers: Option<Vec<HeaderEntry>>,
+    /// Overrides whether the response stage should also be intercepted.
+    pub intercept_response: Option<bool>,
+}
+
+/// A synthetic response for [`PausedRequest::fulfill`].
+///
+/// Header fields are private so callers cannot set both text and binary header
+/// representations. Use [`FulfillResponse::builder`] when supplying headers.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FulfillResponse {
+    response_code: i64,
+    response_headers: Option<Vec<HeaderEntry>>,
+    binary_response_headers: Option<Binary>,
+    body: Option<Binary>,
+    response_phrase: Option<String>,
+}
+
+impl FulfillResponse {
+    /// Creates a response containing only its required status code.
+    pub fn new(response_code: i64) -> Self {
+        Self {
+            response_code,
+            response_headers: None,
+            binary_response_headers: None,
+            body: None,
+            response_phrase: None,
+        }
+    }
+
+    /// Creates a builder for an optional body, phrase, and one header format.
+    pub fn builder(response_code: i64) -> FulfillResponseBuilder {
+        FulfillResponseBuilder {
+            response_code,
+            response_headers: None,
+            binary_response_headers: None,
+            body: None,
+            response_phrase: None,
+        }
+    }
+}
+
+/// Builder for a [`FulfillResponse`] with mutually exclusive header formats.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FulfillResponseBuilder {
+    response_code: i64,
+    response_headers: Option<Vec<HeaderEntry>>,
+    binary_response_headers: Option<Binary>,
+    body: Option<Binary>,
+    response_phrase: Option<String>,
+}
+
+impl FulfillResponseBuilder {
+    /// Supplies UTF-8 response headers.
+    pub fn response_headers(mut self, headers: Vec<HeaderEntry>) -> Self {
+        self.response_headers = Some(headers);
+        self
+    }
+
+    /// Supplies NUL-separated binary response headers.
+    pub fn binary_response_headers(mut self, headers: Binary) -> Self {
+        self.binary_response_headers = Some(headers);
+        self
+    }
+
+    /// Supplies a base64-encoded response body.
+    pub fn body(mut self, body: Binary) -> Self {
+        self.body = Some(body);
+        self
+    }
+
+    /// Supplies a textual HTTP status phrase.
+    pub fn response_phrase(mut self, phrase: String) -> Self {
+        self.response_phrase = Some(phrase);
+        self
+    }
+
+    /// Validates the header representation and builds the response.
+    pub fn build(self) -> Result<FulfillResponse> {
+        if self.response_headers.is_some() && self.binary_response_headers.is_some() {
+            return Err(CdpError::msg(
+                "response_headers and binary_response_headers are mutually exclusive",
+            ));
+        }
+        Ok(FulfillResponse {
+            response_code: self.response_code,
+            response_headers: self.response_headers,
+            binary_response_headers: self.binary_response_headers,
+            body: self.body,
+            response_phrase: self.response_phrase,
+        })
+    }
+}
+
+/// The single managed stream of paused requests for a page.
+///
+/// Dropping the stream closes registration for future replacement but does not
+/// implicitly respond to requests already delivered into its buffer.
+#[derive(Debug)]
+#[must_use = "streams do nothing unless polled"]
+pub struct PausedRequestStream {
+    inner: UnboundedReceiver<PausedRequest>,
+}
+
+impl Stream for PausedRequestStream {
+    type Item = PausedRequest;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        Pin::new(&mut self.inner).poll_next(cx)
+    }
 }
 
 impl Page {
@@ -312,15 +535,42 @@ impl Page {
     /// ```
     pub async fn event_listener<T: IntoEventKind>(&self) -> Result<EventStream<T>> {
         let (tx, rx) = unbounded();
+        let (ack_tx, ack_rx) = oneshot_channel();
         self.inner
-            .sender()
+            .internal_sender()
             .clone()
-            .send(TargetMessage::AddEventListener(
-                EventListenerRequest::new::<T>(tx),
-            ))
+            .send(InternalTargetMessage::RegisterEventListener {
+                request: EventListenerRequest::new::<T>(tx),
+                tx: ack_tx,
+            })
             .await?;
+        ack_rx.await??;
 
         Ok(EventStream::new(rx))
+    }
+
+    /// Registers the page's single managed Fetch interception responder.
+    ///
+    /// Register the stream before enabling request interception when the first
+    /// navigation request must be observed. A second live stream is rejected;
+    /// after a stream is dropped, a later registration may replace it. Dropping
+    /// the stream or a delivered [`PausedRequest`] does not implicitly release
+    /// requests that have already been delivered.
+    pub async fn paused_requests(&self) -> Result<PausedRequestStream> {
+        let (events, inner) = unbounded();
+        let (tx, rx) = oneshot_channel();
+        self.inner
+            .internal_sender()
+            .clone()
+            .send(InternalTargetMessage::RegisterPausedRequestStream {
+                events,
+                commands: self.inner.sender().clone(),
+                tx,
+            })
+            .await?;
+        rx.await??;
+
+        Ok(PausedRequestStream { inner })
     }
 
     pub async fn expose_function(
@@ -364,7 +614,9 @@ impl Page {
     pub async fn goto(&self, params: impl Into<NavigateParams>) -> Result<&Self> {
         let res = self.execute(params.into()).await?;
         if let Some(err) = res.result.error_text {
-            return Err(CdpError::ChromeMessage(err));
+            if !err.is_empty() && err != HTTP_RESPONSE_CODE_FAILURE {
+                return Err(CdpError::ChromeMessage(err));
+            }
         }
 
         Ok(self)
@@ -399,12 +651,41 @@ impl Page {
         Ok(rx.await?)
     }
 
+    /// Sets credentials used to answer Fetch authentication challenges.
+    ///
+    /// On return, any required Fetch state change has been confirmed for the
+    /// main session and fully initialized child sessions visible at call time.
+    /// Await this before navigating a page or frame that requires credentials.
     pub async fn authenticate(&self, credentials: Credentials) -> Result<()> {
+        let (tx, rx) = oneshot_channel();
         self.inner
-            .sender()
+            .internal_sender()
             .clone()
-            .send(TargetMessage::Authenticate(credentials))
+            .send(InternalTargetMessage::SetCredentials { credentials, tx })
             .await?;
+        rx.await??;
+
+        Ok(())
+    }
+
+    /// Enables or disables managed Fetch request interception.
+    ///
+    /// On return, the setting has been confirmed by Chrome for the main
+    /// session and every fully initialized child session visible at call time.
+    ///
+    /// Response-confirmed, not deduplicated: every call re-emits and awaits a
+    /// real Chrome ACK, even when the value is unchanged. This is deliberate (a
+    /// short-circuit on an unchanged value could report success without Chrome
+    /// re-applying it after a prior failure), so avoid calling it redundantly in
+    /// a hot loop — each redundant call costs one CDP round-trip per session.
+    pub async fn set_request_interception(&self, enabled: bool) -> Result<()> {
+        let (tx, rx) = oneshot_channel();
+        self.inner
+            .internal_sender()
+            .clone()
+            .send(InternalTargetMessage::SetRequestInterception { enabled, tx })
+            .await?;
+        rx.await??;
 
         Ok(())
     }
@@ -467,6 +748,27 @@ impl Page {
         Ok(rx.await?)
     }
 
+    /// Return a session-pinned handle for the current main frame.
+    pub async fn main_frame(&self) -> Result<Option<Frame>> {
+        self.inner.main_frame().await
+    }
+
+    /// Return session-pinned handles for all currently bound frames.
+    ///
+    /// The returned list is a snapshot. Re-enumerate after frame attachment,
+    /// detachment, or a process swap before retrying a `FrameNotReady` operation.
+    pub async fn all_frames(&self) -> Result<Vec<Frame>> {
+        self.inner.all_frames().await
+    }
+
+    /// Return a fresh session-pinned handle for a frame identifier.
+    ///
+    /// A missing frame returns `Ok(None)`. A tracked frame that is temporarily
+    /// unbound returns [`CdpError::FrameNotReady`].
+    pub async fn frame_by_id(&self, frame_id: FrameId) -> Result<Option<Frame>> {
+        self.inner.frame_by_id(frame_id).await
+    }
+
     /// Allows overriding user agent with the given string.
     pub async fn set_user_agent(
         &self,
@@ -495,16 +797,28 @@ impl Page {
     ///
     /// Execute a query selector on the document's node.
     pub async fn find_element(&self, selector: impl Into<String>) -> Result<Element> {
+        let frame_id = self
+            .main_frame()
+            .await?
+            .ok_or(CdpError::FrameNotReady)?
+            .id()
+            .clone();
         let root = self.get_document().await?.node_id;
         let node_id = self.inner.find_element(selector, root).await?;
-        Element::new(Arc::clone(&self.inner), node_id).await
+        Element::new(Arc::clone(&self.inner), node_id, frame_id).await
     }
 
     /// Return all `Element`s in the document that match the given selector
     pub async fn find_elements(&self, selector: impl Into<String>) -> Result<Vec<Element>> {
+        let frame_id = self
+            .main_frame()
+            .await?
+            .ok_or(CdpError::FrameNotReady)?
+            .id()
+            .clone();
         let root = self.get_document().await?.node_id;
         let node_ids = self.inner.find_elements(selector, root).await?;
-        Element::from_nodes(&self.inner, &node_ids).await
+        Element::from_nodes(&self.inner, &node_ids, frame_id).await
     }
 
     /// Returns the first element in the document which matches the given xpath
@@ -512,16 +826,34 @@ impl Page {
     ///
     /// Execute a xpath selector on the document's node.
     pub async fn find_xpath(&self, selector: impl Into<String>) -> Result<Element> {
+        let frame_id = self
+            .main_frame()
+            .await?
+            .ok_or(CdpError::FrameNotReady)?
+            .id()
+            .clone();
         self.get_document().await?;
-        let node_id = self.inner.find_xpaths(selector).await?[0];
-        Element::new(Arc::clone(&self.inner), node_id).await
+        let node_id = self
+            .inner
+            .find_xpaths(selector)
+            .await?
+            .into_iter()
+            .next()
+            .ok_or(CdpError::NotFound)?;
+        Element::new(Arc::clone(&self.inner), node_id, frame_id).await
     }
 
     /// Return all `Element`s in the document that match the given xpath selector
     pub async fn find_xpaths(&self, selector: impl Into<String>) -> Result<Vec<Element>> {
+        let frame_id = self
+            .main_frame()
+            .await?
+            .ok_or(CdpError::FrameNotReady)?
+            .id()
+            .clone();
         self.get_document().await?;
         let node_ids = self.inner.find_xpaths(selector).await?;
-        Element::from_nodes(&self.inner, &node_ids).await
+        Element::from_nodes(&self.inner, &node_ids, frame_id).await
     }
 
     /// Describes node given its id
@@ -1258,6 +1590,15 @@ impl Page {
     /// - Injecting polyfills
     /// - Setting up global variables
     ///
+    /// The default CDP behavior is preserved: the script runs in future document
+    /// contexts and is not evaluated immediately in already-loaded frames. The
+    /// returned future completes after the main-session registration succeeds and
+    /// registrations for known child sessions have been queued.
+    ///
+    /// A timeout is inherently ambiguous because Chrome may have applied the main
+    /// command without delivering its response. In that rare case the script can
+    /// exist in the main session without being tracked for child-session replay.
+    ///
     /// # Example
     /// ```
     /// # use chromiumoxide::page::Page;
@@ -1275,7 +1616,16 @@ impl Page {
         &self,
         script: impl Into<AddScriptToEvaluateOnNewDocumentParams>,
     ) -> Result<ScriptIdentifier> {
-        Ok(self.execute(script.into()).await?.result.identifier)
+        let (tx, rx) = oneshot_channel();
+        self.inner
+            .internal_sender()
+            .clone()
+            .send(InternalTargetMessage::AddPreloadScript {
+                params: script.into(),
+                tx,
+            })
+            .await?;
+        rx.await?
     }
 
     /// Alias for `evaluate_on_new_document` - familiar to Playwright users.
@@ -1513,5 +1863,133 @@ impl From<MediaTypeParams> for String {
             MediaTypeParams::Screen => "screen".to_string(),
             MediaTypeParams::Print => "print".to_string(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::future::Future;
+
+    use futures::StreamExt;
+    use futures::channel::mpsc;
+    use futures::executor::block_on;
+    use serde_json::json;
+
+    use super::*;
+
+    #[derive(Debug)]
+    struct CapturedCommand {
+        method: String,
+        session_id: Option<SessionId>,
+        params: serde_json::Value,
+    }
+
+    fn paused_request(id: &str) -> EventRequestPaused {
+        serde_json::from_value(json!({
+            "requestId": id,
+            "request": {
+                "url": "https://paused.example/",
+                "method": "POST",
+                "headers": {},
+                "initialPriority": "High",
+                "referrerPolicy": "no-referrer"
+            },
+            "frameId": "frame",
+            "resourceType": "Document"
+        }))
+        .expect("requestPaused fixture is valid")
+    }
+
+    fn response_handle(
+        request_id: &str,
+        session_id: &str,
+    ) -> (PausedRequest, mpsc::Receiver<TargetMessage>) {
+        let (commands, receiver) = mpsc::channel(1);
+        (
+            PausedRequest::new(
+                Arc::new(paused_request(request_id)),
+                SessionId::new(session_id),
+                commands,
+            ),
+            receiver,
+        )
+    }
+
+    fn capture_response<F>(
+        future: F,
+        mut receiver: mpsc::Receiver<TargetMessage>,
+    ) -> CapturedCommand
+    where
+        F: Future<Output = Result<()>>,
+    {
+        let (result, command) = block_on(async {
+            futures::join!(future, async {
+                let message = receiver.next().await.expect("response command is sent");
+                let TargetMessage::Command(command) = message else {
+                    panic!("paused response uses the command path")
+                };
+                let captured = CapturedCommand {
+                    method: command.method.as_ref().to_owned(),
+                    session_id: command.session_id.clone(),
+                    params: command.params.clone(),
+                };
+                let _ = command.sender.send(Err(CdpError::FrameNotReady));
+                captured
+            })
+        });
+        assert!(matches!(result, Err(CdpError::FrameNotReady)));
+        command
+    }
+
+    #[test]
+    fn paused_request_response_methods_force_captured_request_and_session() {
+        let (paused, receiver) = response_handle("continue-id", "continue-session");
+        let command = capture_response(
+            paused.continue_with(ContinueRequestOverrides {
+                url: Some("https://override.example/".to_owned()),
+                method: Some("PUT".to_owned()),
+                post_data: Some(Binary::from("cGF5bG9hZA==".to_owned())),
+                headers: Some(vec![HeaderEntry::new("x-test", "continue")]),
+                intercept_response: Some(true),
+            }),
+            receiver,
+        );
+        assert_eq!(command.method, "Fetch.continueRequest");
+        assert_eq!(command.session_id, Some(SessionId::new("continue-session")));
+        assert_eq!(command.params["requestId"], "continue-id");
+        assert_eq!(command.params["method"], "PUT");
+        assert_eq!(command.params["interceptResponse"], true);
+
+        let (paused, receiver) = response_handle("fulfill-id", "fulfill-session");
+        let response = FulfillResponse::builder(201)
+            .response_headers(vec![HeaderEntry::new("content-type", "text/plain")])
+            .body(Binary::from("b2s=".to_owned()))
+            .response_phrase("Created".to_owned())
+            .build()
+            .expect("one header representation is valid");
+        let command = capture_response(paused.fulfill(response), receiver);
+        assert_eq!(command.method, "Fetch.fulfillRequest");
+        assert_eq!(command.session_id, Some(SessionId::new("fulfill-session")));
+        assert_eq!(command.params["requestId"], "fulfill-id");
+        assert_eq!(command.params["responseCode"], 201);
+        assert_eq!(command.params["body"], "b2s=");
+
+        let (paused, receiver) = response_handle("fail-id", "fail-session");
+        let command = capture_response(paused.fail(ErrorReason::Aborted), receiver);
+        assert_eq!(command.method, "Fetch.failRequest");
+        assert_eq!(command.session_id, Some(SessionId::new("fail-session")));
+        assert_eq!(command.params["requestId"], "fail-id");
+        assert_eq!(command.params["errorReason"], "Aborted");
+    }
+
+    #[test]
+    fn fulfill_response_rejects_both_header_representations() {
+        let result = FulfillResponse::builder(200)
+            .response_headers(vec![HeaderEntry::new("x-test", "text")])
+            .binary_response_headers(Binary::from("eC10ZXN0OiBiaW5hcnkA".to_owned()))
+            .build();
+        assert!(
+            matches!(result, Err(CdpError::ChromeMessage(message)) if message.contains("mutually exclusive"))
+        );
     }
 }

@@ -1205,20 +1205,42 @@ pub fn fmt(out_dir: impl AsRef<Path>) {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::fs;
 
     use super::*;
 
     #[test]
     fn test_serde_import() {
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        const PDL: &str = r#"version
+  major 1
+  minor 0
+
+domain Runtime
+  type RemoteObjectId extends string
+
+  command evaluate
+    parameters
+      string expression
+    returns
+      optional string result
+
+  event consoleAPICalled
+    parameters
+      string text
+"#;
+
+        let fixture = tempfile::tempdir().expect("temporary PDL fixture can be created");
+        let source = fixture.path().join("runtime.pdl");
+        fs::write(&source, PDL).expect("PDL fixture can be written");
+
         Generator::default()
-            .out_dir(dir.join("src"))
+            .out_dir(fixture.path())
             .serde(SerdeSupport::with_feature("serde0"))
-            .compile_pdls(&[
-                dir.join("js_protocol.pdl"),
-                dir.join("browser_protocol.pdl"),
-            ])
-            .unwrap();
+            .compile_pdls(&[source])
+            .expect("minimal PDL can be generated");
+
+        let generated = fs::read_to_string(fixture.path().join("cdp.rs"))
+            .expect("generated module can be read");
+        assert!(generated.contains("#[cfg(feature = \"serde0\")]"));
     }
 }

@@ -1,6 +1,6 @@
-// This example is for checking the iframe workaround.
-// a problem with the iframe workaround is that it will always fail to load the page
-// and goto will cause a timeout.
+// Historical regression reproducer for the old iframe workaround, retained so
+// its former timeout behavior can still be compared. New code should use the
+// session-pinned Frame APIs demonstrated by `examples/iframe.rs`.
 
 use chromiumoxide::browser::{Browser, BrowserConfig};
 use futures::StreamExt;
