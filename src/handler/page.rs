@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use futures::channel::mpsc::{Receiver, Sender, channel};
 use futures::channel::oneshot::channel as oneshot_channel;
+use futures::future::BoxFuture;
 use futures::stream::Fuse;
-use futures::{SinkExt, StreamExt};
+use futures::{FutureExt, SinkExt, StreamExt};
 
 use chromiumoxide_cdp::cdp::browser_protocol::browser::{GetVersionParams, GetVersionReturns};
 use chromiumoxide_cdp::cdp::browser_protocol::dom::{
@@ -23,17 +24,19 @@ use chromiumoxide_cdp::cdp::browser_protocol::page::{
 };
 use chromiumoxide_cdp::cdp::browser_protocol::target::{ActivateTargetParams, SessionId, TargetId};
 use chromiumoxide_cdp::cdp::js_protocol::runtime::{
-    CallFunctionOnParams, CallFunctionOnReturns, EvaluateParams, ExecutionContextId, RemoteObjectId,
+    CallFunctionOnParams, EvaluateParams, ExecutionContextId,
 };
 use chromiumoxide_types::{Command, CommandResponse};
 
 use crate::cmd::{CommandMessage, to_command_response};
 use crate::error::{CdpError, Result};
+use crate::frame::Frame;
 use crate::handler::commandfuture::CommandFuture;
 use crate::handler::domworld::DOMWorldKind;
 use crate::handler::httpfuture::HttpFuture;
-use crate::handler::target::{GetExecutionContext, TargetMessage};
-use crate::handler::target_message_future::TargetMessageFuture;
+use crate::handler::target::{
+    FrameBoundary, FrameInfo, GetExecutionContext, InternalTargetMessage, TargetMessage,
+};
 use crate::js::EvaluationResult;
 use crate::layout::Point;
 use crate::page::ScreenshotParams;
@@ -42,20 +45,24 @@ use crate::{ArcHttpRequest, keys, utils};
 #[derive(Debug)]
 pub struct PageHandle {
     pub(crate) rx: Fuse<Receiver<TargetMessage>>,
+    pub(crate) internal_rx: Fuse<Receiver<InternalTargetMessage>>,
     page: Arc<PageInner>,
 }
 
 impl PageHandle {
     pub fn new(target_id: TargetId, session_id: SessionId, opener_id: Option<TargetId>) -> Self {
         let (commands, rx) = channel(1);
+        let (internal_commands, internal_rx) = channel(1);
         let page = PageInner {
             target_id,
             session_id,
             opener_id,
             sender: commands,
+            internal_sender: internal_commands,
         };
         Self {
             rx: rx.fuse(),
+            internal_rx: internal_rx.fuse(),
             page: Arc::new(page),
         }
     }
@@ -71,6 +78,7 @@ pub(crate) struct PageInner {
     session_id: SessionId,
     opener_id: Option<TargetId>,
     sender: Sender<TargetMessage>,
+    internal_sender: Sender<InternalTargetMessage>,
 }
 
 impl PageInner {
@@ -79,22 +87,53 @@ impl PageInner {
         execute(cmd, self.sender.clone(), Some(self.session_id.clone())).await
     }
 
+    /// Execute a command on an explicitly captured CDP session.
+    ///
+    /// Element handles use this path so their DOM and Runtime object ids never
+    /// silently fall back to the page's main session after an OOP frame swap.
+    pub(crate) async fn execute_with_session<T: Command>(
+        &self,
+        cmd: T,
+        session_id: &SessionId,
+    ) -> Result<CommandResponse<T::Response>> {
+        let (tx, rx) = oneshot_channel();
+        let method = cmd.identifier();
+        let command = CommandMessage::with_session(cmd, tx, Some(session_id.clone()))?;
+        self.internal_sender
+            .clone()
+            .send(InternalTargetMessage::SessionCommand {
+                session_id: session_id.clone(),
+                command,
+            })
+            .await?;
+        let response = rx.await??;
+        to_command_response::<T>(response, method)
+    }
+
     /// Create a PDL command future
     pub(crate) fn command_future<T: Command>(&self, cmd: T) -> Result<CommandFuture<T>> {
         CommandFuture::new(cmd, self.sender.clone(), Some(self.session_id.clone()))
     }
 
     /// This creates navigation future with the final http response when the page is loaded
-    pub(crate) fn wait_for_navigation(&self) -> TargetMessageFuture<ArcHttpRequest> {
-        TargetMessageFuture::<ArcHttpRequest>::wait_for_navigation(self.sender.clone())
+    pub(crate) fn wait_for_navigation(&self) -> BoxFuture<'static, Result<ArcHttpRequest>> {
+        let mut sender = self.internal_sender.clone();
+        async move {
+            let (tx, rx) = oneshot_channel();
+            sender
+                .send(InternalTargetMessage::WaitForNavigationResult { tx })
+                .await?;
+            rx.await?
+        }
+        .boxed()
     }
 
     /// This creates HTTP future with navigation and responds with the final
     /// http response when the page is loaded
     pub(crate) fn http_future<T: Command>(&self, cmd: T) -> Result<HttpFuture<T>> {
-        Ok(HttpFuture::new(
-            self.sender.clone(),
+        Ok(HttpFuture::with_navigation(
             self.command_future(cmd)?,
+            self.wait_for_navigation(),
         ))
     }
 
@@ -117,13 +156,87 @@ impl PageInner {
         &self.sender
     }
 
+    /// Sender for operations whose correctness depends on a captured frame or
+    /// child-session identity. It is intentionally separate from the legacy
+    /// public message channel.
+    pub(crate) fn internal_sender(&self) -> &Sender<InternalTargetMessage> {
+        &self.internal_sender
+    }
+
+    pub(crate) async fn frame_info(&self, frame_id: FrameId) -> Result<Option<FrameInfo>> {
+        let (tx, rx) = oneshot_channel();
+        self.internal_sender
+            .clone()
+            .send(InternalTargetMessage::GetFrameInfo { frame_id, tx })
+            .await?;
+        rx.await?
+    }
+
+    /// Snapshot the cross-session edges between a frame and the page root.
+    pub(crate) async fn frame_boundary_chain(
+        &self,
+        frame_id: FrameId,
+        expected_session_id: SessionId,
+    ) -> Result<Vec<FrameBoundary>> {
+        let (tx, rx) = oneshot_channel();
+        self.internal_sender
+            .clone()
+            .send(InternalTargetMessage::GetFrameBoundaryChain {
+                frame_id,
+                expected_session_id,
+                tx,
+            })
+            .await?;
+        rx.await?
+    }
+
+    pub(crate) fn frame_from_info(self: &Arc<Self>, info: FrameInfo) -> Frame {
+        Frame::from_info(Arc::clone(self), info)
+    }
+
+    pub(crate) async fn frame_by_id(self: &Arc<Self>, frame_id: FrameId) -> Result<Option<Frame>> {
+        Ok(self
+            .frame_info(frame_id)
+            .await?
+            .map(|info| self.frame_from_info(info)))
+    }
+
+    pub(crate) async fn all_frames(self: &Arc<Self>) -> Result<Vec<Frame>> {
+        let (tx, rx) = oneshot_channel();
+        self.internal_sender
+            .clone()
+            .send(InternalTargetMessage::GetAllFrames { tx })
+            .await?;
+        Ok(rx
+            .await?
+            .into_iter()
+            .map(|info| self.frame_from_info(info))
+            .collect())
+    }
+
+    pub(crate) async fn main_frame(self: &Arc<Self>) -> Result<Option<Frame>> {
+        let (tx, rx) = oneshot_channel();
+        self.sender
+            .clone()
+            .send(TargetMessage::MainFrame(tx))
+            .await?;
+        let Some(frame_id) = rx.await? else {
+            return Ok(None);
+        };
+        self.frame_by_id(frame_id).await
+    }
+
     /// Returns the first element in the node which matches the given CSS
     /// selector.
     pub async fn find_element(&self, selector: impl Into<String>, node: NodeId) -> Result<NodeId> {
-        Ok(self
+        let node_id = self
             .execute(QuerySelectorParams::new(node, selector))
             .await?
-            .node_id)
+            .node_id;
+        if *node_id.inner() == 0 {
+            return Err(CdpError::NotFound);
+        }
+        Ok(node_id)
     }
 
     /// Activates (focuses) the target.
@@ -273,28 +386,6 @@ impl PageInner {
         self.execute(cmd.r#type(DispatchKeyEventType::KeyUp).build().unwrap())
             .await?;
         Ok(self)
-    }
-
-    /// Calls function with given declaration on the remote object with the
-    /// matching id
-    pub async fn call_js_fn(
-        &self,
-        function_declaration: impl Into<String>,
-        await_promise: bool,
-        remote_object_id: RemoteObjectId,
-    ) -> Result<CallFunctionOnReturns> {
-        let resp = self
-            .execute(
-                CallFunctionOnParams::builder()
-                    .object_id(remote_object_id)
-                    .function_declaration(function_declaration)
-                    .generate_preview(true)
-                    .await_promise(await_promise)
-                    .build()
-                    .unwrap(),
-            )
-            .await?;
-        Ok(resp.result)
     }
 
     pub async fn evaluate_expression(

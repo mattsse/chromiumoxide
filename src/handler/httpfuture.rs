@@ -1,6 +1,6 @@
 use futures::FutureExt;
 use futures::channel::mpsc;
-use futures::future::{Fuse, FusedFuture};
+use futures::future::{BoxFuture, Fuse, FusedFuture};
 use pin_project_lite::pin_project;
 use std::future::Future;
 use std::pin::Pin;
@@ -19,7 +19,7 @@ pin_project! {
         #[pin]
         command: Fuse<CommandFuture<T>>,
         #[pin]
-        navigation: TargetMessageFuture<ArcHttpRequest>,
+        navigation: BoxFuture<'static, Result<ArcHttpRequest>>,
     }
 }
 
@@ -27,7 +27,17 @@ impl<T: Command> HttpFuture<T> {
     pub fn new(sender: mpsc::Sender<TargetMessage>, command: CommandFuture<T>) -> Self {
         Self {
             command: command.fuse(),
-            navigation: TargetMessageFuture::<T>::wait_for_navigation(sender),
+            navigation: TargetMessageFuture::<T>::wait_for_navigation(sender).boxed(),
+        }
+    }
+
+    pub(crate) fn with_navigation(
+        command: CommandFuture<T>,
+        navigation: BoxFuture<'static, Result<ArcHttpRequest>>,
+    ) -> Self {
+        Self {
+            command: command.fuse(),
+            navigation,
         }
     }
 }
