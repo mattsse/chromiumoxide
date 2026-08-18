@@ -657,12 +657,15 @@ pub struct FrameNavigationRequest {
 }
 
 impl FrameNavigationRequest {
+    /// Create a navigation request bounded by the crate default timeout. Prefer
+    /// [`FrameNavigationRequest::with_timeout`] when the configured timeout is available.
     pub fn new(id: NavigationId, req: Request) -> Self {
-        Self {
-            id,
-            req,
-            timeout: Duration::from_millis(REQUEST_TIMEOUT),
-        }
+        Self::with_timeout(id, req, Duration::from_millis(REQUEST_TIMEOUT))
+    }
+
+    /// Create a navigation request bounded by `timeout`.
+    pub fn with_timeout(id: NavigationId, req: Request, timeout: Duration) -> Self {
+        Self { id, req, timeout }
     }
 
     /// This will set the id of the frame into the `params` `frameId` field.
@@ -692,5 +695,32 @@ impl AsRef<str> for LifecycleEvent {
             LifecycleEvent::NetworkIdle => "networkIdle",
             LifecycleEvent::NetworkAlmostIdle => "networkAlmostIdle",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The default constructor applies the crate default; `with_timeout` is what
+    /// lets the handler pass `BrowserConfig::request_timeout` through.
+    #[test]
+    fn navigation_request_timeout() {
+        let req = || {
+            Request::new(
+                MethodId::from(page::NavigateParams::IDENTIFIER),
+                serde_json::json!({ "url": "https://example.com" }),
+            )
+        };
+        let configured = Duration::from_secs(90);
+
+        assert_eq!(
+            FrameNavigationRequest::new(NavigationId(0), req()).timeout,
+            Duration::from_millis(REQUEST_TIMEOUT)
+        );
+        assert_eq!(
+            FrameNavigationRequest::with_timeout(NavigationId(0), req(), configured).timeout,
+            configured
+        );
     }
 }
