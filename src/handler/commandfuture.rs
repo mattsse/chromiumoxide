@@ -35,10 +35,27 @@ pin_project! {
 }
 
 impl<T: Command> CommandFuture<T> {
+    /// Create a command future bounded by the crate default timeout. Prefer
+    /// [`CommandFuture::with_timeout`] when the configured timeout is available.
     pub fn new(
         cmd: T,
         target_sender: mpsc::Sender<TargetMessage>,
         session: Option<SessionId>,
+    ) -> Result<Self> {
+        Self::with_timeout(
+            cmd,
+            target_sender,
+            session,
+            std::time::Duration::from_millis(crate::handler::REQUEST_TIMEOUT),
+        )
+    }
+
+    /// Create a command future bounded by `timeout`.
+    pub fn with_timeout(
+        cmd: T,
+        target_sender: mpsc::Sender<TargetMessage>,
+        session: Option<SessionId>,
+        timeout: std::time::Duration,
     ) -> Result<Self> {
         let (tx, rx_command) = oneshot_channel::<Result<Response>>();
         let method = cmd.identifier();
@@ -47,9 +64,7 @@ impl<T: Command> CommandFuture<T> {
             cmd, tx, session,
         )?));
 
-        let delay = futures_timer::Delay::new(std::time::Duration::from_millis(
-            crate::handler::REQUEST_TIMEOUT,
-        ));
+        let delay = futures_timer::Delay::new(timeout);
 
         Ok(Self {
             target_sender,
