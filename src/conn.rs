@@ -60,11 +60,7 @@ impl Connection {
     ///
     /// CDP events read while waiting are forwarded through the event channel
     /// (silently dropped if the receiver has been dropped).
-    pub fn send<T: Command>(
-        &mut self,
-        cmd: T,
-        session_id: Option<String>,
-    ) -> Result<T::Response> {
+    pub fn send<T: Command>(&mut self, cmd: T, session_id: Option<String>) -> Result<T::Response> {
         let call_id = self.next_call_id();
         let call = MethodCall {
             id: call_id,
@@ -79,9 +75,8 @@ impl Connection {
             match self.ws.read()? {
                 WsMessage::Text(text) => {
                     let parsed: CdpMessage<CdpJsonEventMessage> =
-                        serde_json::from_str(text.as_str()).map_err(|e| {
-                            CdpError::InvalidMessage(text.as_str().to_string(), e)
-                        })?;
+                        serde_json::from_str(text.as_str())
+                            .map_err(|e| CdpError::InvalidMessage(text.as_str().to_string(), e))?;
                     match parsed {
                         CdpMessage::Response(resp) => {
                             if resp.id != call_id {
@@ -93,8 +88,7 @@ impl Connection {
                             if let Some(err) = resp.error {
                                 return Err(err.into());
                             }
-                            let result =
-                                resp.result.unwrap_or(serde_json::Value::Null);
+                            let result = resp.result.unwrap_or(serde_json::Value::Null);
                             return Ok(T::response_from_value(result)?);
                         }
                         CdpMessage::Event(ev) => {

@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo check
+      - run: cargo check --workspace
 
   fmt:
     name: Rustfmt
@@ -35,7 +35,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - run: cargo clippy --all -- -D warnings
+      - run: cargo clippy --workspace --all-targets -- -D warnings
 
   msrv:
     name: MSRV
@@ -44,10 +44,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@1.85.0
-      - run: cargo check --lib
+      - run: cargo check --workspace --lib
 
   test:
-    name: Test Core
+    name: Test
     needs: [fmt, clippy, msrv]
     strategy:
       matrix:
@@ -56,25 +56,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test --lib
-
-  test-integration:
-    name: Test Integration
-    needs: [fmt, clippy, msrv]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - run: RUST_TEST_THREADS=1 cargo test --test '*'
-
-  test-fetcher:
-    name: Test Fetcher
-    needs: [fmt, clippy, msrv]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - run: RUST_TEST_THREADS=1 cargo test -p chromiumoxide_fetcher
+      - run: cargo test --workspace
 
   check-examples:
     name: Check Examples
@@ -83,5 +65,4 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
-      - name: Check examples
-        run: cargo check --examples --features fetcher,zip8,rustls
+      - run: cargo check --examples
