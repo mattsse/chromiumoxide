@@ -12,14 +12,6 @@ use chromiumoxide_types::{
 
 use crate::error::{CdpError, Result};
 
-/// A blocking WebSocket connection speaking the Chrome DevTools Protocol.
-///
-/// Correlates outgoing [`MethodCall`]s with their [`chromiumoxide_types::Response`]
-/// by [`CallId`]. Any server-pushed CDP events observed while a `send` is
-/// in flight are forwarded to the event channel returned by [`Connection::connect`].
-///
-/// Single-threaded, single-in-flight: this API assumes at most one `send` is
-/// executing at a time.
 #[derive(Debug)]
 pub struct Connection {
     ws: WebSocket<MaybeTlsStream<TcpStream>>,
@@ -28,9 +20,6 @@ pub struct Connection {
 }
 
 impl Connection {
-    /// Blocking WebSocket connect. Returns the connection together with the
-    /// receiver end of a channel that receives every unsolicited CDP event
-    /// observed while [`Connection::send`] is reading frames.
     pub fn connect(
         url: impl IntoClientRequest,
     ) -> Result<(Self, mpsc::Receiver<CdpJsonEventMessage>)> {
@@ -56,10 +45,6 @@ impl Connection {
         id
     }
 
-    /// Send a command and block until its matching response arrives.
-    ///
-    /// CDP events read while waiting are forwarded through the event channel
-    /// (silently dropped if the receiver has been dropped).
     pub fn send<T: Command>(&mut self, cmd: T, session_id: Option<String>) -> Result<T::Response> {
         let call_id = self.next_call_id();
         let call = MethodCall {
@@ -108,7 +93,6 @@ impl Connection {
         }
     }
 
-    /// Close the WebSocket cleanly.
     pub fn close(mut self) -> Result<()> {
         self.ws.close(None)?;
         Ok(())
