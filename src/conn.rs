@@ -1,160 +1,122 @@
-use std::collections::VecDeque;
-use std::marker::PhantomData;
-use std::pin::Pin;
-use std::task::ready;
+use std::net::TcpStream;
+use std::sync::mpsc;
 
-use async_tungstenite::tungstenite::Message as WsMessage;
-use async_tungstenite::{WebSocketStream, tungstenite::protocol::WebSocketConfig};
-use futures::stream::Stream;
-use futures::task::{Context, Poll};
-use futures::{SinkExt, StreamExt};
+use tungstenite::client::{IntoClientRequest, connect_with_config};
+use tungstenite::protocol::WebSocketConfig;
+use tungstenite::stream::MaybeTlsStream;
+use tungstenite::{Message as WsMessage, WebSocket};
 
-use async_tungstenite::tokio::ConnectStream;
-use chromiumoxide_cdp::cdp::browser_protocol::target::SessionId;
-use chromiumoxide_types::{CallId, EventMessage, Message, MethodCall, MethodId};
+use chromiumoxide_types::{
+    CallId, CdpJsonEventMessage, Command, Message as CdpMessage, MethodCall,
+};
 
-use crate::error::CdpError;
-use crate::error::Result;
+use crate::error::{CdpError, Result};
 
-/// Exchanges the messages with the websocket
-#[must_use = "streams do nothing unless polled"]
+/// A blocking WebSocket connection speaking the Chrome DevTools Protocol.
+///
+/// Correlates outgoing [`MethodCall`]s with their [`chromiumoxide_types::Response`]
+/// by [`CallId`]. Any server-pushed CDP events observed while a `send` is
+/// in flight are forwarded to the event channel returned by [`Connection::connect`].
+///
+/// Single-threaded, single-in-flight: this API assumes at most one `send` is
+/// executing at a time.
 #[derive(Debug)]
-pub struct Connection<T: EventMessage> {
-    /// Queue of commands to send.
-    pending_commands: VecDeque<MethodCall>,
-    /// The websocket of the chromium instance
-    ws: WebSocketStream<ConnectStream>,
-    /// The identifier for a specific command
+pub struct Connection {
+    ws: WebSocket<MaybeTlsStream<TcpStream>>,
     next_id: usize,
-    needs_flush: bool,
-    /// The message that is currently being proceessed
-    pending_flush: Option<MethodCall>,
-    _marker: PhantomData<T>,
+    event_tx: mpsc::Sender<CdpJsonEventMessage>,
 }
 
-impl<T: EventMessage + Unpin> Connection<T> {
-    pub async fn connect(debug_ws_url: impl AsRef<str>) -> Result<Self> {
+impl Connection {
+    /// Blocking WebSocket connect. Returns the connection together with the
+    /// receiver end of a channel that receives every unsolicited CDP event
+    /// observed while [`Connection::send`] is reading frames.
+    pub fn connect(
+        url: impl IntoClientRequest,
+    ) -> Result<(Self, mpsc::Receiver<CdpJsonEventMessage>)> {
         let config = WebSocketConfig::default()
             .max_message_size(None)
             .max_frame_size(None);
+        let (ws, _resp) = connect_with_config(url, Some(config), 3)?;
 
-        let (ws, _) = async_tungstenite::tokio::connect_async_with_config(
-            debug_ws_url.as_ref(),
-            Some(config),
-        )
-        .await?;
-
-        Ok(Self {
-            pending_commands: Default::default(),
-            ws,
-            next_id: 0,
-            needs_flush: false,
-            pending_flush: None,
-            _marker: Default::default(),
-        })
+        let (event_tx, event_rx) = mpsc::channel();
+        Ok((
+            Self {
+                ws,
+                next_id: 0,
+                event_tx,
+            },
+            event_rx,
+        ))
     }
-}
 
-impl<T: EventMessage> Connection<T> {
     fn next_call_id(&mut self) -> CallId {
         let id = CallId::new(self.next_id);
         self.next_id = self.next_id.wrapping_add(1);
         id
     }
 
-    /// Queue in the command to send over the socket and return the id for this
-    /// command
-    pub fn submit_command(
+    /// Send a command and block until its matching response arrives.
+    ///
+    /// CDP events read while waiting are forwarded through the event channel
+    /// (silently dropped if the receiver has been dropped).
+    pub fn send<T: Command>(
         &mut self,
-        method: MethodId,
-        session_id: Option<SessionId>,
-        params: serde_json::Value,
-    ) -> serde_json::Result<CallId> {
-        let id = self.next_call_id();
+        cmd: T,
+        session_id: Option<String>,
+    ) -> Result<T::Response> {
+        let call_id = self.next_call_id();
         let call = MethodCall {
-            id,
-            method,
-            session_id: session_id.map(Into::into),
-            params,
+            id: call_id,
+            method: cmd.identifier(),
+            session_id,
+            params: serde_json::to_value(&cmd)?,
         };
-        self.pending_commands.push_back(call);
-        Ok(id)
-    }
-
-    /// flush any processed message and start sending the next over the conn
-    /// sink
-    fn start_send_next(&mut self, cx: &mut Context<'_>) -> Result<()> {
-        if self.needs_flush {
-            if let Poll::Ready(Ok(())) = self.ws.poll_flush_unpin(cx) {
-                self.needs_flush = false;
-            }
-        }
-        if self.pending_flush.is_none() && !self.needs_flush {
-            if let Some(cmd) = self.pending_commands.pop_front() {
-                tracing::trace!("Sending {:?}", cmd);
-                let msg = serde_json::to_string(&cmd)?;
-                self.ws.start_send_unpin(msg.into())?;
-                self.pending_flush = Some(cmd);
-            }
-        }
-        Ok(())
-    }
-}
-
-impl<T: EventMessage + Unpin> Stream for Connection<T> {
-    type Item = Result<Message<T>>;
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let pin = self.get_mut();
+        let payload = serde_json::to_string(&call)?;
+        self.ws.send(WsMessage::text(payload))?;
 
         loop {
-            // queue in the next message if not currently flushing
-            if let Err(err) = pin.start_send_next(cx) {
-                return Poll::Ready(Some(Err(err)));
-            }
-
-            // send the message
-            if let Some(call) = pin.pending_flush.take() {
-                if pin.ws.poll_ready_unpin(cx).is_ready() {
-                    pin.needs_flush = true;
-                    // try another flush
-                    continue;
-                } else {
-                    pin.pending_flush = Some(call);
+            match self.ws.read()? {
+                WsMessage::Text(text) => {
+                    let parsed: CdpMessage<CdpJsonEventMessage> =
+                        serde_json::from_str(text.as_str()).map_err(|e| {
+                            CdpError::InvalidMessage(text.as_str().to_string(), e)
+                        })?;
+                    match parsed {
+                        CdpMessage::Response(resp) => {
+                            if resp.id != call_id {
+                                return Err(CdpError::ResponseIdMismatch {
+                                    expected: call_id,
+                                    got: resp.id,
+                                });
+                            }
+                            if let Some(err) = resp.error {
+                                return Err(err.into());
+                            }
+                            let result =
+                                resp.result.unwrap_or(serde_json::Value::Null);
+                            return Ok(T::response_from_value(result)?);
+                        }
+                        CdpMessage::Event(ev) => {
+                            let _ = self.event_tx.send(ev);
+                        }
+                    }
+                }
+                WsMessage::Ping(payload) => {
+                    self.ws.send(WsMessage::Pong(payload))?;
+                }
+                WsMessage::Pong(_) => {}
+                WsMessage::Close(_) => return Err(CdpError::ConnectionClosed),
+                other @ (WsMessage::Binary(_) | WsMessage::Frame(_)) => {
+                    return Err(CdpError::UnexpectedWsMessage(other));
                 }
             }
-
-            break;
         }
+    }
 
-        // read from the ws
-        match ready!(pin.ws.poll_next_unpin(cx)) {
-            Some(Ok(WsMessage::Text(text))) => {
-                let ready = match serde_json::from_str::<Message<T>>(&text) {
-                    Ok(msg) => {
-                        tracing::trace!("Received {:?}", msg);
-                        Ok(msg)
-                    }
-                    Err(err) => {
-                        let msg = text.as_str().to_string();
-                        tracing::debug!(target: "chromiumoxide::conn::raw_ws::parse_errors", msg, "Failed to parse raw WS message {}", err);
-                        Err(CdpError::InvalidMessage(text.as_str().to_string(), err))
-                    }
-                };
-                Poll::Ready(Some(ready))
-            }
-            Some(Ok(WsMessage::Close(_))) => Poll::Ready(None),
-            // ignore ping and pong
-            Some(Ok(WsMessage::Ping(_))) | Some(Ok(WsMessage::Pong(_))) => {
-                cx.waker().wake_by_ref();
-                Poll::Pending
-            }
-            Some(Ok(msg)) => Poll::Ready(Some(Err(CdpError::UnexpectedWsMessage(msg)))),
-            Some(Err(err)) => Poll::Ready(Some(Err(CdpError::Ws(err)))),
-            None => {
-                // ws connection closed
-                Poll::Ready(None)
-            }
-        }
+    /// Close the WebSocket cleanly.
+    pub fn close(mut self) -> Result<()> {
+        self.ws.close(None)?;
+        Ok(())
     }
 }

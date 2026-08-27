@@ -2,79 +2,27 @@
 name = "chromiumoxide"
 version = "0.9.1"
 rust-version = "1.85"
-autotests = false
 authors = ["Matthias Seitz <matthias.seitz@outlook.de>"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 homepage = "https://github.com/mattsse/chromiumoxide"
 repository = "https://github.com/mattsse/chromiumoxide"
-description = "Library for interacting with a chrome instance with the chrome devtools protocol"
-keywords = ["chrome", "chromedriver", "puppeteer", "automation"]
-categories = ["web-programming", "api-bindings", "development-tools::testing"]
+description = "Blocking CDP wire client: PDL-generated types + synchronous WebSocket transport"
+keywords = ["chrome", "chromedriver", "cdp", "devtools"]
+categories = ["web-programming", "api-bindings"]
 
 [dependencies]
-async-tungstenite = { version = "0.32", features = ["tokio-runtime"] }
 serde = { version = "1", features = ["derive"] }
-futures = "0.3"
+serde_json = "1"
+thiserror = "2"
+tungstenite = "0.28"
 chromiumoxide_types = { path = "chromiumoxide_types", version = "0.9" }
 chromiumoxide_cdp = { path = "chromiumoxide_cdp", version = "0.9" }
-chromiumoxide_fetcher = { path = "chromiumoxide_fetcher", version = "0.9", default-features = false, optional = true }
-serde_json = "1"
-which = "8"
-thiserror = "2"
-url = "2"
-base64 = "0.22"
-fnv = "1"
-futures-timer = "3"
-tokio = { version = "1", features = [
-  "rt",
-  "rt-multi-thread",
-  "time",
-  "fs",
-  "macros",
-  "process",
-] }
-tracing = "0.1"
-pin-project-lite = "0.2"
-dunce = "1"
-bytes = { version = "1", features = ["serde"], optional = true }
-reqwest = { version = "0.13", default-features = false }
-
-[target.'cfg(windows)'.dependencies]
-windows-registry = "0.6"
-
-[dev-dependencies]
-quote = "1"
-proc-macro2 = "1"
-chrono = "0.4.1"
-tracing-subscriber = "0.3"
-tokio = { version = "1", features = ["rt-multi-thread", "time", "macros"] }
-
-[features]
-default = ["bytes"]
-fetcher = ["chromiumoxide_fetcher"]
-bytes = ["dep:bytes"]
-
-rustls = ["chromiumoxide_fetcher/rustls"]
-native-tls = ["chromiumoxide_fetcher/native-tls"]
-
-zip0 = ["chromiumoxide_fetcher/zip0"]
-zip8 = ["chromiumoxide_fetcher/zip8"]
-
-[[example]]
-name = "fetcher"
-required-features = ["fetcher", "zip8", "rustls"]
-
-[[test]]
-name = "chromiumoxide_tests"
-path = "tests/lib.rs"
-harness = true
 
 [workspace]
 members = [
   "chromiumoxide_pdl",
   "chromiumoxide_types",
   "chromiumoxide_cdp",
-  "chromiumoxide_fetcher",
 ]

@@ -14,9 +14,7 @@ include = ["src/**/*", "*.pdl", "LICENSE-*"]
 
 [dev-dependencies]
 chromiumoxide_pdl = { path = "../chromiumoxide_pdl", version = "0.9" }
-reqwest = { version = "0.13", features = ["rustls"], default-features = false }
 tempfile = "3.10"
-tokio = { version = "1", features = ["rt", "fs", "process", "macros"] }
 
 [dependencies]
 chromiumoxide_pdl = { path = "../chromiumoxide_pdl", version = "0.9" }
