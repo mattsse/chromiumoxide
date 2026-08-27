@@ -4,7 +4,7 @@
 //!
 //! ```sh
 //! chromium --headless=new --remote-debugging-port=9222
-//! curl -s http://localhost:9222/json/version | jq -r .webSocketDebuggerUrl
+//! curl -s http://127.0.0.1:9222/json/version | jq -r .webSocketDebuggerUrl
 //! ```
 //!
 //! Then pass that URL as the first argument:
