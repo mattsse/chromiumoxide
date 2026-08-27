@@ -15,7 +15,7 @@ use crate::build::event::{EventBuilder, EventType};
 use crate::build::types::*;
 use crate::pdl::parser::parse_pdl;
 use crate::pdl::resolver::resolve_pdl;
-use crate::pdl::{DataType, Domain, Param, Protocol, Type, Variant};
+use crate::pdl::{DataType, Domain, Item, Param, Protocol, Type, Variant};
 
 /// Compile `.pdl` files into Rust files during a Cargo build.
 ///
@@ -58,6 +58,9 @@ pub struct Generator {
     with_experimental: bool,
     with_deprecated: bool,
     allowed_deprecated_type: HashSet<String>,
+    /// If set, only these domains (plus their transitive dependencies) are
+    /// emitted.
+    allowed_domains: Option<HashSet<String>>,
     out_dir: Option<PathBuf>,
     protocol_mods: Vec<String>,
     domains: HashMap<String, usize>,
@@ -81,6 +84,7 @@ impl Default for Generator {
             with_experimental: true,
             with_deprecated: false,
             allowed_deprecated_type: HashSet::new(),
+            allowed_domains: None,
             out_dir: None,
             protocol_mods: Vec::new(),
             domains: Default::default(),
@@ -135,6 +139,21 @@ impl Generator {
         self
     }
 
+    /// Restricts code generation to the given domains and their transitive
+    /// dependencies.
+    ///
+    /// Dependencies are discovered from `depends on` declarations and from any
+    /// cross-domain `Ref` types found in the whitelisted domains, applied
+    /// until a fixed point.
+    pub fn only_domains<I, S>(&mut self, names: I) -> &mut Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.allowed_domains = Some(names.into_iter().map(Into::into).collect());
+        self
+    }
+
     /// Configures the name of the module and file generated.
     pub fn target_mod(&mut self, mod_name: impl Into<String>) -> &mut Self {
         self.target_mod = Some(mod_name.into());
@@ -184,9 +203,21 @@ impl Generator {
 
         let mut protocols = vec![];
 
-        for (idx, input) in inputs.iter().enumerate() {
+        for input in inputs.iter() {
             let pdl = parse_pdl(input).map_err(|e| Error::other(e.message))?;
+            protocols.push(pdl);
+        }
 
+        if let Some(allowed) = &self.allowed_domains {
+            let full = transitive_domain_closure(&protocols, allowed);
+            for protocol in &mut protocols {
+                protocol
+                    .domains
+                    .retain(|d| full.contains(d.name.as_ref()));
+            }
+        }
+
+        for (idx, pdl) in protocols.iter().enumerate() {
             self.domains
                 .extend(pdl.domains.iter().map(|d| (d.name.to_string(), idx)));
 
@@ -197,8 +228,6 @@ impl Generator {
                     .flat_map(|d| d.types.iter().filter(|d| d.is_enum()))
                     .map(|e| e.raw_name.to_string()),
             );
-
-            protocols.push(pdl);
         }
 
         let mut modules = TokenStream::default();
@@ -1004,6 +1033,78 @@ fn generate_enum_str_fns(name: &Ident, vars: &[Ident], str_vals: &[Vec<String>])
                 }
             }
         }
+    }
+}
+
+/// Computes the transitive closure of domains required to satisfy the
+/// whitelist: follows `depends on` declarations and any cross-domain `Ref`
+/// types found in the reachable domains, until a fixed point.
+fn transitive_domain_closure(
+    protocols: &[Protocol<'_>],
+    seed: &HashSet<String>,
+) -> HashSet<String> {
+    let mut by_name: HashMap<&str, &Domain<'_>> = HashMap::new();
+    for p in protocols {
+        for d in &p.domains {
+            by_name.insert(d.name.as_ref(), d);
+        }
+    }
+
+    let mut result: HashSet<String> = seed.clone();
+    let mut queue: Vec<String> = seed.iter().cloned().collect();
+
+    while let Some(name) = queue.pop() {
+        let Some(domain) = by_name.get(name.as_str()) else {
+            continue;
+        };
+        for dep in &domain.dependencies {
+            if result.insert(dep.to_string()) {
+                queue.push(dep.to_string());
+            }
+        }
+        collect_domain_refs(domain, &mut |referenced| {
+            if result.insert(referenced.to_string()) {
+                queue.push(referenced.to_string());
+            }
+        });
+    }
+
+    result
+}
+
+fn collect_domain_refs(domain: &Domain<'_>, out: &mut dyn FnMut(&str)) {
+    for ty in &domain.types {
+        collect_type_refs(&ty.extends, out);
+        if let Some(Item::Properties(params)) = &ty.item {
+            for p in params {
+                collect_type_refs(&p.r#type, out);
+            }
+        }
+    }
+    for cmd in &domain.commands {
+        for p in &cmd.parameters {
+            collect_type_refs(&p.r#type, out);
+        }
+        for p in &cmd.returns {
+            collect_type_refs(&p.r#type, out);
+        }
+    }
+    for ev in &domain.events {
+        for p in &ev.parameters {
+            collect_type_refs(&p.r#type, out);
+        }
+    }
+}
+
+fn collect_type_refs(ty: &Type<'_>, out: &mut dyn FnMut(&str)) {
+    match ty {
+        Type::Ref(name) => {
+            if let Some((domain, _)) = name.split_once('.') {
+                out(domain);
+            }
+        }
+        Type::ArrayOf(inner) => collect_type_refs(inner, out),
+        _ => {}
     }
 }
 

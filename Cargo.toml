@@ -15,7 +15,7 @@ categories = ["web-programming", "api-bindings"]
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-thiserror = "2"
+anyhow = "1"
 tungstenite = "0.28"
 chromiumoxide_types = { path = "chromiumoxide_types", version = "0.9" }
 chromiumoxide_cdp = { path = "chromiumoxide_cdp", version = "0.9" }

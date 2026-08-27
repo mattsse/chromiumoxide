@@ -10,7 +10,9 @@ use chromiumoxide_types::{
     CallId, CdpJsonEventMessage, Command, Message as CdpMessage, MethodCall,
 };
 
-use crate::error::{CdpError, Result};
+use anyhow::{anyhow, bail};
+
+use crate::error::Result;
 
 #[derive(Debug)]
 pub struct Connection {
@@ -60,15 +62,17 @@ impl Connection {
             match self.ws.read()? {
                 WsMessage::Text(text) => {
                     let parsed: CdpMessage<CdpJsonEventMessage> =
-                        serde_json::from_str(text.as_str())
-                            .map_err(|e| CdpError::InvalidMessage(text.as_str().to_string(), e))?;
+                        serde_json::from_str(text.as_str()).map_err(|e| {
+                            anyhow!("Failed to parse ws text frame '{}': {e}", text.as_str())
+                        })?;
                     match parsed {
                         CdpMessage::Response(resp) => {
                             if resp.id != call_id {
-                                return Err(CdpError::ResponseIdMismatch {
-                                    expected: call_id,
-                                    got: resp.id,
-                                });
+                                bail!(
+                                    "Response id {got} did not match in-flight request id {expected}; concurrent send() is not supported.",
+                                    expected = call_id,
+                                    got = resp.id,
+                                );
                             }
                             if let Some(err) = resp.error {
                                 return Err(err.into());
@@ -85,9 +89,9 @@ impl Connection {
                     self.ws.send(WsMessage::Pong(payload))?;
                 }
                 WsMessage::Pong(_) => {}
-                WsMessage::Close(_) => return Err(CdpError::ConnectionClosed),
+                WsMessage::Close(_) => bail!("The websocket connection was closed by the peer."),
                 other @ (WsMessage::Binary(_) | WsMessage::Frame(_)) => {
-                    return Err(CdpError::UnexpectedWsMessage(other));
+                    bail!("Received unexpected ws message: {other:?}");
                 }
             }
         }
