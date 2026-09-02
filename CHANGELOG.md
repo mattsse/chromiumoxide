@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Derive `Clone` for `Element`, `ScreenshotParams` and `ScreenshotParamsBuilder`
+- `HandlerConfig::request_timeout` now also bounds each `Page` command future. Previously every command was cut off after a hard-coded 30 seconds (`handler::REQUEST_TIMEOUT`) regardless of the configured value, so a `Runtime.evaluate` awaiting a promise that settles later than that always failed with `CdpError::Timeout`.
 
 ## [0.9.1] 2026-02-25
 

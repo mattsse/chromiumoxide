@@ -31,6 +31,7 @@ use crate::handler::viewport::Viewport;
 use crate::page::Page;
 
 /// Standard timeout in MS
+/// Default per-command timeout in milliseconds; see `HandlerConfig::request_timeout`.
 pub const REQUEST_TIMEOUT: u64 = 30_000;
 
 pub mod browser;

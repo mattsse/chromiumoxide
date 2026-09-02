@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use futures::channel::mpsc::{Receiver, Sender, channel};
 use futures::channel::oneshot::channel as oneshot_channel;
@@ -46,13 +47,19 @@ pub struct PageHandle {
 }
 
 impl PageHandle {
-    pub fn new(target_id: TargetId, session_id: SessionId, opener_id: Option<TargetId>) -> Self {
+    pub fn new(
+        target_id: TargetId,
+        session_id: SessionId,
+        opener_id: Option<TargetId>,
+        request_timeout: Duration,
+    ) -> Self {
         let (commands, rx) = channel(1);
         let page = PageInner {
             target_id,
             session_id,
             opener_id,
             sender: commands,
+            request_timeout,
         };
         Self {
             rx: rx.fuse(),
@@ -71,6 +78,8 @@ pub(crate) struct PageInner {
     session_id: SessionId,
     opener_id: Option<TargetId>,
     sender: Sender<TargetMessage>,
+    /// How long a single command may wait for its response, from `HandlerConfig::request_timeout`.
+    request_timeout: Duration,
 }
 
 impl PageInner {
@@ -81,7 +90,12 @@ impl PageInner {
 
     /// Create a PDL command future
     pub(crate) fn command_future<T: Command>(&self, cmd: T) -> Result<CommandFuture<T>> {
-        CommandFuture::new(cmd, self.sender.clone(), Some(self.session_id.clone()))
+        CommandFuture::new(
+            cmd,
+            self.sender.clone(),
+            Some(self.session_id.clone()),
+            self.request_timeout,
+        )
     }
 
     /// This creates navigation future with the final http response when the page is loaded

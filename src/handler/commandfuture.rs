@@ -7,6 +7,7 @@ use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use std::time::Duration;
 
 use crate::cmd::{CommandMessage, to_command_response};
 use crate::error::Result;
@@ -22,7 +23,8 @@ pin_project! {
         target_sender: mpsc::Sender<TargetMessage>,
         // We need delay to be pinned because it's a future
         // and we need to be able to poll it
-        // it is used to timeout the command if page was closed while waiting for response
+        // it is used to timeout the command if page was closed while waiting for response.
+        // The duration is the handler's configured `request_timeout`.
         #[pin]
         delay: futures_timer::Delay,
 
@@ -39,6 +41,7 @@ impl<T: Command> CommandFuture<T> {
         cmd: T,
         target_sender: mpsc::Sender<TargetMessage>,
         session: Option<SessionId>,
+        request_timeout: Duration,
     ) -> Result<Self> {
         let (tx, rx_command) = oneshot_channel::<Result<Response>>();
         let method = cmd.identifier();
@@ -47,9 +50,7 @@ impl<T: Command> CommandFuture<T> {
             cmd, tx, session,
         )?));
 
-        let delay = futures_timer::Delay::new(std::time::Duration::from_millis(
-            crate::handler::REQUEST_TIMEOUT,
-        ));
+        let delay = futures_timer::Delay::new(request_timeout);
 
         Ok(Self {
             target_sender,
