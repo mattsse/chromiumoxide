@@ -524,6 +524,16 @@ impl Page {
         Element::from_nodes(&self.inner, &node_ids).await
     }
 
+    /// Returns an [`Element`] for the given DOM [`NodeId`].
+    ///
+    /// The `NodeId` must belong to this page's current document.
+    ///
+    /// Note that DOM node IDs become invalid when the document is updated,
+    /// for example after a navigation.
+    pub async fn element_from_node_id(&self, node_id: NodeId) -> Result<Element> {
+        Element::new(Arc::clone(&self.inner), node_id).await
+    }
+
     /// Describes node given its id
     pub async fn describe_node(&self, node_id: NodeId) -> Result<Node> {
         let resp = self
