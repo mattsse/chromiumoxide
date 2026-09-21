@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Add `add_init_script` to `Page` for scripts before navigation
+
 ### Changed
 
 - Derive `Clone` for `Element`, `ScreenshotParams` and `ScreenshotParamsBuilder`
@@ -37,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add `add_init_script` to `Page` for scripts before navigation
+- Add `Page::element_from_node_id` to create an `Element` from a DOM `NodeId`
 - Add `click_with` to `Page` and `Element` for custom click behavior
 
 ## [0.8.0] 2025-11-28
