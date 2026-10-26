@@ -407,6 +407,7 @@ impl Handler {
         let CdpEventMessage { params, method, .. } = event;
         match params.clone() {
             CdpEvent::TargetTargetCreated(ev) => self.on_target_created(*ev),
+            CdpEvent::TargetTargetInfoChanged(ev) => self.on_target_info_changed(*ev),
             CdpEvent::TargetAttachedToTarget(ev) => self.on_attached_to_target(ev),
             CdpEvent::TargetTargetDestroyed(ev) => self.on_target_destroyed(ev),
             CdpEvent::TargetDetachedFromTarget(ev) => self.on_detached_from_target(ev),
@@ -422,15 +423,21 @@ impl Handler {
     ///
     /// Creates a new `Target` instance and keeps track of it
     fn on_target_created(&mut self, event: EventTargetCreated) {
-        let browser_ctx = event
-            .target_info
+        let target = self.new_target(event.target_info);
+        self.target_ids.push(target.target_id().clone());
+        self.targets.insert(target.target_id().clone(), target);
+    }
+
+    /// The record of a newly seen target, before it is attached to.
+    fn new_target(&self, target_info: TargetInfo) -> Target {
+        let browser_ctx = target_info
             .browser_context_id
             .clone()
             .map(BrowserContext::from)
             .filter(|id| self.browser_contexts.contains(id))
             .unwrap_or_else(|| self.default_browser_context.clone());
-        let target = Target::new(
-            event.target_info,
+        Target::new(
+            target_info,
             TargetConfig {
                 ignore_https_errors: self.config.ignore_https_errors,
                 request_timeout: self.config.request_timeout,
@@ -439,8 +446,34 @@ impl Handler {
                 cache_enabled: self.config.cache_enabled,
             },
             browser_ctx,
-        );
-        self.target_ids.push(target.target_id().clone());
+        )
+    }
+
+    /// Fired when a target's info changed, e.g. its type.
+    ///
+    /// CEF (Chromium Embedded Framework) announces each browser it creates as
+    /// a target of type `other` (`Target.targetCreated`, empty URL) and turns
+    /// it into a `page` only a moment later, by `Target.targetInfoChanged`.
+    /// A target is recorded with the type it was created with and only pages
+    /// are attached to, so such a page was never attached and
+    /// `Browser::get_page` never found it. A target that has become a page
+    /// and has no session yet is therefore recorded anew, as a page, which
+    /// attaches to it with a flattened session as for a page announced as
+    /// one. A target attached to already is left as it is.
+    fn on_target_info_changed(&mut self, event: EventTargetInfoChanged) {
+        let info = event.target_info;
+        let Some(target) = self.targets.get(&info.target_id) else {
+            return;
+        };
+        if target.is_page()
+            || target.session_id().is_some()
+            || !self::target::TargetType::new(&info.r#type).is_page()
+        {
+            return;
+        }
+        // Its ID is in `target_ids` already: replace the record only, so the
+        // target is not polled twice per round.
+        let target = self.new_target(info);
         self.targets.insert(target.target_id().clone(), target);
     }
 

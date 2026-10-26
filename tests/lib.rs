@@ -7,6 +7,7 @@ mod basic;
 mod config;
 mod page;
 mod stealth;
+mod target_info_changed;
 
 pub async fn test<T>(test: T)
 where
