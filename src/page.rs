@@ -312,15 +312,25 @@ impl Page {
     /// ```
     pub async fn event_listener<T: IntoEventKind>(&self) -> Result<EventStream<T>> {
         let (tx, rx) = unbounded();
-        self.inner
-            .sender()
-            .clone()
-            .send(TargetMessage::AddEventListener(
-                EventListenerRequest::new::<T>(tx),
-            ))
+        self.add_event_listener(EventListenerRequest::new::<T>(tx))
             .await?;
 
         Ok(EventStream::new(rx))
+    }
+
+    /// Registers a subscription built by the caller, which is how several methods are received
+    /// through one channel: build an `EventListenerRequest` per method from the same sender, and
+    /// their events arrive in the order this page's session delivered them. Separate subscriptions
+    /// do not have that order, so a consumer that correlates events of different methods (a
+    /// request's `Network.responseReceived` with its `Network.loadingFinished`, say) wants this.
+    pub async fn add_event_listener(&self, subscription: EventListenerRequest) -> Result<()> {
+        self.inner
+            .sender()
+            .clone()
+            .send(TargetMessage::AddEventListener(subscription))
+            .await?;
+
+        Ok(())
     }
 
     pub async fn expose_function(

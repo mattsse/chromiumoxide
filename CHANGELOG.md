@@ -7,9 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Page::add_event_listener`, which registers a caller-built `EventListenerRequest` and so lets
+  several event methods be received through one channel, in order
+
 ### Changed
 
 - Derive `Clone` for `Element`, `ScreenshotParams` and `ScreenshotParamsBuilder`
+
+### Fixed
+
+- Events of different methods subscribed through one channel are no longer regrouped by method, so
+  they arrive in the order the session delivered them in
 
 ## [0.9.1] 2026-02-25
 
