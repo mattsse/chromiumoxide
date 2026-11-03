@@ -1,12 +1,12 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::fmt;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use futures::channel::mpsc::{SendError, UnboundedReceiver, UnboundedSender};
-use futures::{Sink, Stream};
+use futures::Stream;
+use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use chromiumoxide_cdp::cdp::{Event, EventKind, IntoEventKind};
 use chromiumoxide_types::MethodId;
@@ -27,11 +27,7 @@ impl EventListeners {
             kind,
         } = req;
         let subs = self.listeners.entry(method).or_default();
-        subs.push(EventListener {
-            listener,
-            kind,
-            queued_events: Default::default(),
-        });
+        subs.push(EventListener { listener, kind });
     }
 
     /// Queue in a event that should be send to all listeners
@@ -76,21 +72,11 @@ impl EventListeners {
         Ok(())
     }
 
-    /// Drains all queued events and does the housekeeping when the receiver
-    /// part of a subscription is dropped
-    pub fn poll(&mut self, cx: &mut Context<'_>) {
+    /// Does the housekeeping when the receiver part of a subscription is dropped. Events are not
+    /// queued here, so there is nothing to drain: see `EventListener::start_send`.
+    pub fn poll(&mut self, _cx: &mut Context<'_>) {
         for subscriptions in self.listeners.values_mut() {
-            for n in (0..subscriptions.len()).rev() {
-                let mut sub = subscriptions.swap_remove(n);
-                match sub.poll(cx) {
-                    Poll::Ready(Err(err)) => {
-                        if !err.is_disconnected() {
-                            subscriptions.push(sub)
-                        }
-                    }
-                    _ => subscriptions.push(sub),
-                }
-            }
+            subscriptions.retain(|sub| !sub.is_disconnected());
         }
     }
 }
@@ -124,40 +110,26 @@ impl fmt::Debug for EventListenerRequest {
 pub struct EventListener {
     /// the sender half of the event channel
     listener: UnboundedSender<Arc<dyn Event>>,
-    /// currently queued events
-    queued_events: VecDeque<Arc<dyn Event>>,
     /// For what kind of event this event is for
     kind: EventKind,
 }
 
 impl EventListener {
-    /// queue in a new event
+    /// Sends an event to the subscription's channel.
+    ///
+    /// The event goes out here rather than onto a queue drained by a later `poll`. The channel is
+    /// unbounded, so `Sink::poll_ready` for it never returns `Poll::Pending` and such a queue can
+    /// neither apply backpressure nor stay short; all it does is hold a burst of events and
+    /// release it grouped by method, which loses the order the session delivered them in. A
+    /// consumer that correlates events of different methods (a request's
+    /// `Network.responseReceived` with its `Network.loadingFinished`, say) needs that order.
     pub fn start_send(&mut self, event: Arc<dyn Event>) {
-        self.queued_events.push_back(event)
+        let _ = self.listener.unbounded_send(event);
     }
 
-    /// Drains all queued events and begins the process of sending them to the
-    /// sink.
-    pub fn poll(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), SendError>> {
-        loop {
-            match Sink::poll_ready(Pin::new(&mut self.listener), cx) {
-                Poll::Ready(Ok(_)) => {}
-                Poll::Ready(Err(err)) => {
-                    // disconnected
-                    return Poll::Ready(Err(err));
-                }
-                Poll::Pending => {
-                    return Poll::Pending;
-                }
-            }
-            if let Some(event) = self.queued_events.pop_front() {
-                if let Err(err) = Sink::start_send(Pin::new(&mut self.listener), event) {
-                    return Poll::Ready(Err(err));
-                }
-            } else {
-                return Poll::Ready(Ok(()));
-            }
-        }
+    /// Whether the receiving half of the subscription is gone.
+    pub fn is_disconnected(&self) -> bool {
+        self.listener.is_closed()
     }
 }
 
@@ -212,7 +184,9 @@ mod tests {
     use futures::{SinkExt, StreamExt};
 
     use chromiumoxide_cdp::cdp::CustomEvent;
-    use chromiumoxide_cdp::cdp::browser_protocol::animation::EventAnimationCanceled;
+    use chromiumoxide_cdp::cdp::browser_protocol::animation::{
+        EventAnimationCanceled, EventAnimationCreated,
+    };
     use chromiumoxide_types::MethodType;
 
     use super::*;
@@ -290,5 +264,34 @@ mod tests {
 
         let next = stream.next().await.unwrap();
         assert_eq!(&*next, &event);
+    }
+
+    #[test]
+    fn one_subscription_keeps_the_order_events_were_sent_in() {
+        // Events of two methods reach one sender, so the order they were sent in is the order the
+        // session delivered them in. A subscription set draws its own order over the methods once
+        // and keeps it, so the question is how many of them draw a bad one, not how often one
+        // misbehaves: a fresh set per attempt.
+        for attempt in 0..200 {
+            let (tx, mut rx) = futures::channel::mpsc::unbounded();
+            let mut listeners = EventListeners::default();
+            listeners.add_listener(EventListenerRequest::new::<EventAnimationCreated>(
+                tx.clone(),
+            ));
+            listeners.add_listener(EventListenerRequest::new::<EventAnimationCanceled>(tx));
+
+            listeners.start_send(EventAnimationCreated { id: "id".into() });
+            listeners.start_send(EventAnimationCanceled { id: "id".into() });
+            listeners.poll(&mut Context::from_waker(&futures::task::noop_waker()));
+
+            let first = rx.try_recv().expect("an event was queued");
+            assert!(
+                first
+                    .into_any_arc()
+                    .downcast::<EventAnimationCreated>()
+                    .is_ok(),
+                "attempt {attempt}: an animation is created before it is cancelled"
+            );
+        }
     }
 }
