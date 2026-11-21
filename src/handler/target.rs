@@ -328,6 +328,7 @@ impl Target {
             TargetInit::AttachToTarget => {
                 self.init_state = TargetInit::InitializingFrame(FrameManager::init_commands(
                     self.config.request_timeout,
+                    self.config.runtime_enable,
                 ));
                 let params = AttachToTargetParams::builder()
                     .target_id(self.target_id().clone())
@@ -602,6 +603,8 @@ pub struct TargetConfig {
     pub viewport: Option<Viewport>,
     pub request_intercept: bool,
     pub cache_enabled: bool,
+    /// See `HandlerConfig::runtime_enable`.
+    pub runtime_enable: bool,
 }
 
 impl Default for TargetConfig {
@@ -612,6 +615,7 @@ impl Default for TargetConfig {
             viewport: Default::default(),
             request_intercept: false,
             cache_enabled: true,
+            runtime_enable: true,
         }
     }
 }

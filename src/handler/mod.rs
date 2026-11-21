@@ -437,6 +437,7 @@ impl Handler {
                 viewport: self.config.viewport.clone(),
                 request_intercept: self.config.request_intercept,
                 cache_enabled: self.config.cache_enabled,
+                runtime_enable: self.config.runtime_enable,
             },
             browser_ctx,
         );
@@ -669,6 +670,15 @@ pub struct HandlerConfig {
     pub request_intercept: bool,
     /// Whether to enable cache
     pub cache_enabled: bool,
+    /// Whether page targets send `Runtime.enable` during initialization.
+    ///
+    /// While the Runtime domain is enabled, Chrome serializes every console
+    /// call for the client, which pages can observe (console calls get several
+    /// times slower). Disabling it keeps `Runtime.evaluate` working, but
+    /// execution-context tracking (`Page::execution_context`) stays empty, so
+    /// evaluations without an explicit context run in the main frame's default
+    /// world.
+    pub runtime_enable: bool,
 }
 
 impl Default for HandlerConfig {
@@ -681,6 +691,7 @@ impl Default for HandlerConfig {
             request_timeout: Duration::from_millis(REQUEST_TIMEOUT),
             request_intercept: false,
             cache_enabled: true,
+            runtime_enable: true,
         }
     }
 }
