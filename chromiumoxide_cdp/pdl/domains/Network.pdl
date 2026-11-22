@@ -1827,7 +1827,10 @@ domain Network
     properties
       boolean initiatorIsSecureContext
       IPAddressSpace initiatorIPAddressSpace
-      PrivateNetworkRequestPolicy privateNetworkRequestPolicy
+      # Chrome 157 sends localNetworkAccessRequestPolicy instead; keeping this required dropped
+      # every requestWillBeSentExtraInfo event. A string keeps future policy values readable.
+      optional PrivateNetworkRequestPolicy privateNetworkRequestPolicy
+      optional string localNetworkAccessRequestPolicy
 
   # Fired when additional information about a requestWillBeSent event is available from the
   # network stack. Not every requestWillBeSent event will have an additional
