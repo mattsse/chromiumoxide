@@ -211,30 +211,33 @@ impl FrameManager {
         }
     }
 
-    /// The commands to execute in order to initialize this frame manager
-    pub fn init_commands(timeout: Duration) -> CommandChain {
+    /// The commands to execute in order to initialize this frame manager.
+    ///
+    /// `runtime_enable` controls whether `Runtime.enable` is part of the chain;
+    /// see `HandlerConfig::runtime_enable`.
+    pub fn init_commands(timeout: Duration, runtime_enable: bool) -> CommandChain {
         let enable = page::EnableParams::default();
         let get_tree = page::GetFrameTreeParams::default();
         let set_lifecycle = page::SetLifecycleEventsEnabledParams::new(true);
-        let enable_runtime = runtime::EnableParams::default();
-        CommandChain::new(
-            vec![
-                (enable.identifier(), serde_json::to_value(enable).unwrap()),
-                (
-                    get_tree.identifier(),
-                    serde_json::to_value(get_tree).unwrap(),
-                ),
-                (
-                    set_lifecycle.identifier(),
-                    serde_json::to_value(set_lifecycle).unwrap(),
-                ),
-                (
-                    enable_runtime.identifier(),
-                    serde_json::to_value(enable_runtime).unwrap(),
-                ),
-            ],
-            timeout,
-        )
+        let mut commands = vec![
+            (enable.identifier(), serde_json::to_value(enable).unwrap()),
+            (
+                get_tree.identifier(),
+                serde_json::to_value(get_tree).unwrap(),
+            ),
+            (
+                set_lifecycle.identifier(),
+                serde_json::to_value(set_lifecycle).unwrap(),
+            ),
+        ];
+        if runtime_enable {
+            let enable_runtime = runtime::EnableParams::default();
+            commands.push((
+                enable_runtime.identifier(),
+                serde_json::to_value(enable_runtime).unwrap(),
+            ));
+        }
+        CommandChain::new(commands, timeout)
     }
 
     pub fn main_frame(&self) -> Option<&Frame> {
@@ -692,5 +695,46 @@ impl AsRef<str> for LifecycleEvent {
             LifecycleEvent::NetworkIdle => "networkIdle",
             LifecycleEvent::NetworkAlmostIdle => "networkAlmostIdle",
         }
+    }
+}
+
+#[cfg(test)]
+mod runtime_enable_tests {
+    use super::*;
+    use std::task::Poll;
+    use std::time::Instant;
+
+    fn methods(mut chain: CommandChain) -> Vec<String> {
+        let mut out = Vec::new();
+        loop {
+            match chain.poll(Instant::now()) {
+                Poll::Ready(Some(Ok((method, _)))) => {
+                    chain.received_response(method.as_ref());
+                    out.push(method.to_string());
+                }
+                Poll::Ready(None) => return out,
+                other => panic!("unexpected chain state: {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn init_chain_sends_runtime_enable_only_when_requested() {
+        let timeout = Duration::from_secs(1);
+        let with = methods(FrameManager::init_commands(timeout, true));
+        let without = methods(FrameManager::init_commands(timeout, false));
+        assert!(with.iter().any(|m| m == "Runtime.enable"), "{with:?}");
+        assert!(
+            !without.iter().any(|m| m.starts_with("Runtime.")),
+            "{without:?}"
+        );
+        assert_eq!(
+            without,
+            [
+                "Page.enable",
+                "Page.getFrameTree",
+                "Page.setLifecycleEventsEnabled"
+            ]
+        );
     }
 }
