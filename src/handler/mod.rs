@@ -624,7 +624,20 @@ impl Stream for Handler {
                     Ok(Message::Event(ev)) => {
                         pin.on_event(ev);
                     }
-                    Err(err @ CdpError::InvalidMessage(_, _)) => {
+                    Err(CdpError::InvalidMessage(text, err)) => {
+                        // An unparsable response still answers a pending command: fail that
+                        // command now instead of leaving it to wait out its request timeout.
+                        if let Some(id) = response_id(&text) {
+                            pin.on_response(Response {
+                                id,
+                                result: None,
+                                error: Some(chromiumoxide_types::Error {
+                                    code: -32700,
+                                    message: format!("could not parse the response: {err}"),
+                                }),
+                            });
+                        }
+                        let err = CdpError::InvalidMessage(text, err);
                         if pin.config.ignore_invalid_messages {
                             tracing::warn!("WS Invalid message: {}", err);
                         } else {
@@ -650,6 +663,14 @@ impl Stream for Handler {
             }
         }
     }
+}
+
+/// The `id` of a CDP response whose body failed to parse. Chrome writes `id` first; the rest
+/// is not parsed again, since it may be what failed (e.g. nesting past serde_json's limit).
+fn response_id(text: &str) -> Option<CallId> {
+    let digits = text.strip_prefix("{\"id\":")?;
+    let end = digits.find(|c: char| !c.is_ascii_digit())?;
+    digits[..end].parse().ok().map(CallId::new)
 }
 
 /// How to configure the handler
@@ -763,4 +784,30 @@ pub(crate) enum HandlerMessage {
     GetPage(TargetId, OneshotSender<Option<Page>>),
     AddEventListener(EventListenerRequest),
     CloseBrowser(OneshotSender<Result<CloseReturns>>),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn response_id_reads_the_id_of_a_reply_too_deep_to_parse() {
+        let deep = format!(
+            "{{\"id\":42,\"result\":{}{}}}",
+            "{\"a\":".repeat(200),
+            "1".to_owned() + &"}".repeat(200)
+        );
+        assert!(serde_json::from_str::<Message>(&deep).is_err());
+        assert_eq!(response_id(&deep), Some(CallId::new(42)));
+    }
+
+    #[test]
+    fn response_id_ignores_events_and_malformed_ids() {
+        assert_eq!(
+            response_id(r#"{"method":"Page.loadEventFired","params":{}}"#),
+            None
+        );
+        assert_eq!(response_id(r#"{"id":"x"}"#), None);
+        assert_eq!(response_id(r#"{"id":}"#), None);
+    }
 }
